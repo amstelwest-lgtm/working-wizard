@@ -103,6 +103,7 @@ for (const path of [
   "/practice/insights",
   "/practice/marketplace",
   "/practice/playbooks",
+  "/practice/setup",
   "/clients/queries",
 ]) {
   assert(rail.includes(`to: "${path}"`), `${path} is a practice nav route`);
@@ -126,5 +127,80 @@ assert(
 );
 assert(board.includes("listOpenQueries"), "open queries lists notes from the book");
 assert(board.includes("actionIsOverdue"), "the practice board keeps the shared overdue predicate");
+
+assert(rail.includes("Implementation Manager"), "the practice rail names Implementation Manager");
+assert(!read("src/components/owner-door/owner-shell.tsx").includes("/practice/setup"), "owner has no Implementation Manager page");
+
+const { Window } = await import("happy-dom");
+const dom = new Window({ url: "http://127.0.0.1:5000/practice/setup" });
+for (const key of ["window", "document", "navigator", "HTMLElement", "Node", "Event"] as const) {
+  Object.defineProperty(globalThis, key, { configurable: true, writable: true, value: dom[key] });
+}
+dom.matchMedia = (() => ({
+  matches: false,
+  media: "",
+  addEventListener() {},
+  removeEventListener() {},
+  addListener() {},
+  removeListener() {},
+  dispatchEvent() {
+    return false;
+  },
+  onchange: null,
+})) as unknown as typeof dom.matchMedia;
+Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", { configurable: true, writable: true, value: true });
+
+const { createElement, act } = await import("react");
+const { createRoot } = await import("react-dom/client");
+const { RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter } =
+  await import("@tanstack/react-router");
+const { AccountantNav } = await import("../src/components/accountant-nav.tsx");
+const { practiceSections, practiceSelection } = await import("../src/components/practice-rail.tsx");
+
+const onSetup = practiceSelection("/practice/setup", "");
+assert(onSetup.headingId === "practice" && onSetup.subId === "implementation", "the setup route selects Implementation Manager");
+assert(practiceSelection("/practice/playbooks", "").subId === "playbooks", "playbooks stays its own item");
+assert(practiceSelection("/practice", "").subId === null, "the practice home is the heading, not a sub-item");
+
+const rootRoute = createRootRoute({
+  component: () =>
+    createElement(AccountantNav, {
+      label: "Practice",
+      sections: practiceSections(false),
+      selection: onSetup,
+      storageKey: "test-practice-nav",
+    }),
+});
+const setupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/practice/setup",
+  component: () => null,
+});
+const router = createRouter({
+  routeTree: rootRoute.addChildren([setupRoute]),
+  history: createMemoryHistory({ initialEntries: ["/practice/setup"] }),
+});
+await router.load();
+(router as { _rendered?: unknown[] })._rendered ??= [];
+const host = dom.document.createElement("div");
+dom.document.body.appendChild(host);
+const root = createRoot(host);
+await act(async () => {
+  root.render(createElement(RouterProvider, { router }));
+});
+await act(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+
+const current = [...dom.document.querySelectorAll("[data-nav-current='page']")];
+assert(current.length === 1, "one nav row is the current page");
+assert(current[0]?.textContent?.trim() === "Implementation Manager", current[0]?.textContent ?? "");
+assert(current[0]?.getAttribute("href") === "/practice/setup", "the entry links to the Implementation Manager page");
+assert(current[0]?.className.includes("nav-sub-link"), "the entry uses the existing sub-item class");
+const playbooks = [...dom.document.querySelectorAll("[data-sub-id='playbooks']")];
+assert(playbooks.length === 1 && playbooks[0]?.getAttribute("data-nav-current") !== "page", "playbooks is not active on the setup page");
+await act(async () => {
+  root.unmount();
+});
 
 console.log("aqa-practice-nav-test: ok");
