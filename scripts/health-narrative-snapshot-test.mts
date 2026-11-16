@@ -237,7 +237,8 @@ const staleGm = findingSentence({
   liveHealth: live,
   canonicalRatios: { "Gross Margin": 95.4 },
 });
-assert(staleGm.includes(FIGURES_CHANGED_REGENERATE), `stale gross margin: ${staleGm}`);
+assert(staleGm.includes("Refreshed from current figures"), `stale gross margin: ${staleGm}`);
+assert(!staleGm.includes("104.6%"), staleGm);
 
 const accountant1020 = findingSentence({
   title: title1020,

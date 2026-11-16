@@ -5790,6 +5790,8 @@ function ClientView() {
                           <AdvisoryDrafter
                             clientId={client.id}
                             clientName={client.name}
+                            ratios={canonicalRatios}
+                            liveHealth={liveScoreSnapshot}
                             onLogged={() => setDeliveryRefresh((n) => n + 1)}
                           />
                         </section>

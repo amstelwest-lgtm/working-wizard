@@ -23,6 +23,8 @@ import {
 import {
   creditorDaysHealthyBand,
   currentRatioValue,
+  DATA_SIGN_NOTE,
+  dataSignIssue,
   formatQuotedDays,
   healthBandLabel,
   peerMedian,
@@ -85,6 +87,8 @@ export type OverviewBrief = {
   /** Set when the stored period is year-to-date. "30 Sep 2026". */
   yearToDateEnd: string | null;
   grossMargin: number | null;
+  /** Set when cost or payables sign means the gross-margin ratio is not quoted. */
+  dataSignNote: string | null;
   operatingMargin: number | null;
   netMargin: number | null;
   /**
@@ -594,7 +598,20 @@ export function buildOverviewBrief(input: {
     periodEnd: statement?.periodEnd ?? null,
     figuresSource: figuresSourcePhrase(statement?.statementSource),
     yearToDateEnd: storedYearToDateEnd(financials, fyStartMonth, dateMarket),
-    grossMargin: quotedGrossMarginFraction(quotedGross, quotedRevenue),
+    grossMargin: dataSignIssue({
+      cogs: asNumber(financials?.cogs),
+      payables: asNumber(financials?.payables),
+      grossMargin: ratios["Gross Margin"],
+    })
+      ? null
+      : quotedGrossMarginFraction(quotedGross, quotedRevenue),
+    dataSignNote: dataSignIssue({
+      cogs: asNumber(financials?.cogs),
+      payables: asNumber(financials?.payables),
+      grossMargin: ratios["Gross Margin"],
+    })
+      ? DATA_SIGN_NOTE
+      : null,
     operatingMargin: Number.isFinite(ratios["Operating Margin"]) ? ratios["Operating Margin"] : null,
     netMargin: netUsable && Number.isFinite(ratios["Net Margin"]) ? ratios["Net Margin"] : null,
     grossProfit: quotedGross,
@@ -652,11 +669,14 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
     );
   }
   lines.push(overviewRunwayFact(brief) ?? `Cash runway: ${FIGURE_NOT_AVAILABLE}`);
-  lines.push(
-    brief.grossMargin != null
-      ? `Gross margin: ${pct(brief.grossMargin)}`
-      : `Gross margin: ${FIGURE_NOT_AVAILABLE}`,
-  );
+  if (brief.dataSignNote) lines.push(brief.dataSignNote);
+  else {
+    lines.push(
+      brief.grossMargin != null
+        ? `Gross margin: ${pct(brief.grossMargin)}`
+        : `Gross margin: ${FIGURE_NOT_AVAILABLE}`,
+    );
+  }
   if (brief.operatingMargin != null) lines.push(`Operating margin: ${pct(brief.operatingMargin)}`);
   if (brief.netMargin != null) lines.push(`Net margin: ${pct(brief.netMargin)}`);
   if (brief.debtorDays != null) {

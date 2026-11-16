@@ -42,6 +42,7 @@ import {
 } from "../../../src/lib/health-snapshot.ts";
 import { earlierStatementNote } from "../../../src/lib/statement-import-plan.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
+import { cachedFindingRejected } from "../../../src/lib/ratios.ts";
 import { overviewRatios } from "../../../src/lib/health-score.ts";
 import { periodMonthsOf } from "../../../src/lib/ratios.ts";
 import { supersedeOlderFindings } from "../_shared/agent-findings-supersede.ts";
@@ -384,7 +385,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data: recent, error: recentError } = await ctx.db
     .from("agent_findings")
-    .select("id, kind, title, severity, evidence, last_seen, created_at, superseded_by")
+    .select("id, kind, title, detail, severity, evidence, last_seen, created_at, superseded_by")
     .eq("client_id", ctx.clientId)
     .eq("agent", "analyst")
     .gte("last_seen", since)
@@ -414,9 +415,18 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
       };
     }),
   });
-  if (duplicate) {
+  const duplicateRow = duplicate
+    ? ((recent ?? []) as Array<Record<string, unknown>>).find((row) => String(row.id) === duplicate.id)
+    : undefined;
+  const duplicateRejected =
+    duplicateRow != null &&
+    cachedFindingRejected(
+      `${String(duplicateRow.title ?? "")} ${String(duplicateRow.detail ?? "")}`,
+      asRecord(duplicateRow.evidence)?.figures,
+    );
+  if (duplicate && !duplicateRejected) {
     const seenAt = new Date().toISOString();
-    const kept = ((recent ?? []) as Array<Record<string, unknown>>).find((row) => String(row.id) === duplicate.id);
+    const kept = duplicateRow;
     const { error: touchError } = await ctx.db
       .from("agent_findings")
       .update(refreshedFindingUpdate({
@@ -460,6 +470,13 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     .maybeSingle();
   if (error || !data?.id) return { error: error?.message || "The finding was not saved." };
   await supersedeAnalystFindings(ctx, String(data.id), recordTitle, kind);
+  if (duplicateRejected && duplicate) {
+    await ctx.db
+      .from("agent_findings")
+      .update({ superseded_by: String(data.id) })
+      .eq("id", duplicate.id)
+      .is("superseded_by", null);
+  }
   for (const key of recordKeys) ctx.recordedKeys.add(key);
 
   const { error: messageError } = await ctx.db.from("agent_messages").insert({

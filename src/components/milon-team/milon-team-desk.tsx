@@ -42,6 +42,7 @@ import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
 import { draftFindingLabel, ownerRunPhase, ownerRunPhaseLabel, ownerRunPhaseMuted } from "@/hooks/owner-agent-ui";
 import { OwnerDraftCard, type ApprovedDraftTarget } from "@/components/owner-draft-card";
 import { SourceCheckChip } from "@/components/source-check-chip";
+import { cachedFindingRejected } from "@/lib/ratios";
 import { HealthNarrativeLine } from "@/components/health-narrative-line";
 import { healthSnapshotHash, renderHealthNarrative } from "@/lib/health-snapshot";
 import type { AgentKey, TeamBriefingItem, TeamJob } from "@/lib/milon-team-feed";
@@ -322,6 +323,11 @@ export function MilonTeamDesk({
   const handoffHistoryHidden = collapsedFindings.length < findingRowsIn.length;
   const findingRows = findings.filter((item) => shownIds.has(item.row.id)).map(({ row, sentence }) => {
     const draft = draftFindingLabel(row);
+    const rejected = cachedFindingRejected(
+      `${row.title} ${row.detail ?? ""}`,
+      findingFigureEntries(row.evidence),
+      canonicalRatios,
+    );
     const checked = figuresCheckedLine(
       feed.healthQuote?.periodLabel ?? findingPeriod(row),
       findingSeenAt(row),
@@ -331,8 +337,12 @@ export function MilonTeamDesk({
     const when = formatAsOf(row.created_at, clock, live?.market ?? marketForClient(null));
     const meta = (
       <div className="milon-desk-meta">
-        {draft || row.status === "approved" ? (
-          <SourceCheckChip writtenAt={row.created_at} figuresUpdatedAt={feed.figuresUpdatedAt} />
+        {draft || row.status === "approved" || rejected ? (
+          <SourceCheckChip
+            writtenAt={row.created_at}
+            figuresUpdatedAt={feed.figuresUpdatedAt}
+            forceStale={rejected}
+          />
         ) : null}
         {checked ? (
           <span className="milon-desk-why">{checked}</span>

@@ -72,7 +72,7 @@ assert(flags!.includes("93"), flags!);
 assert(!flags!.includes("161.6"), flags!);
 const diagnosed = findingSentence({ title: "creditor days -248, inventory days -93" });
 assert(!diagnosed.includes("-248") && !diagnosed.includes("-93"), diagnosed);
-assert(diagnosed.includes("not meaningful"), diagnosed);
+assert(diagnosed.includes("Refreshed from current figures"), diagnosed);
 assert(
   ratioSentence("Creditor Days", "Creditor Days -248 days") === "Creditor Days is not meaningful.",
   ratioSentence("Creditor Days", "Creditor Days -248 days"),
@@ -126,7 +126,7 @@ assert(
   Number.isNaN(ratios["Working Capital Days"]) && Number.isNaN(cycle.workingCapitalDays),
   "ratios and the cycle both leave working-capital days not meaningful",
 );
-assert(Math.abs((ratios["Gross Margin"] ?? 0) - 1_159_000 / 1_215_000) < 0.002, "GM matches the waterfall");
+assert(Number.isNaN(ratios["Gross Margin"]), "a negative cost of sales is not quoted as gross margin");
 const actual = ratioActualLine(
   "Working Capital Days",
   {

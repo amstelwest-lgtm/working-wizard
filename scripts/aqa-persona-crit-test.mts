@@ -4,7 +4,7 @@
  */
 import { readFileSync } from "node:fs";
 import { periodProfitBridge } from "../src/lib/period-profit";
-import { computeRatios } from "../src/lib/ratios";
+import { computeRatios, dataSignIssue } from "../src/lib/ratios";
 import { stripMilonProjection } from "../src/lib/milon-projection";
 import { groundInterventionStep, groundPlaybookSteps } from "../src/lib/intervention-grounding";
 import { clientIndustryDisplay } from "../src/lib/profile-signals";
@@ -114,7 +114,8 @@ const ratios = computeRatios({
   ebt: "25",
   periodMonths: "12",
 });
-assert(Math.abs((ratios["Gross Margin"] ?? 0) - 0.6) < 0.001, `analyst GM is 60%, got ${ratios["Gross Margin"]}`);
+assert(Number.isNaN(ratios["Gross Margin"]), `a credit-signed cost is not quoted as gross margin, got ${ratios["Gross Margin"]}`);
+assert(dataSignIssue({ cogs: -40 }), "the credit sign is flagged");
 
 assert(firmUsageLimit("trialing", "starter", 0) === 5, "Starter trial usage limit is 5");
 assert(firmUsageLimit("active", "starter", 0) === 5, "Starter usage limit is 5");

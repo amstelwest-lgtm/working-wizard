@@ -3,6 +3,8 @@ import { sourceCheckForDeliverable } from "@/lib/draft-figures";
 type SourceCheckChipProps = {
   writtenAt: string | null | undefined;
   figuresUpdatedAt: string | null | undefined;
+  /** A rejected cached finding uses the same stale chip. No new column. */
+  forceStale?: boolean;
   /** milon-desk-source on team feed; home-attn__chip on Needs attention. */
   className?: string;
 };
@@ -11,9 +13,12 @@ type SourceCheckChipProps = {
 export function SourceCheckChip({
   writtenAt,
   figuresUpdatedAt,
+  forceStale = false,
   className = "milon-desk-source",
 }: SourceCheckChipProps) {
-  const { state, label } = sourceCheckForDeliverable(writtenAt, figuresUpdatedAt);
+  const checked = sourceCheckForDeliverable(writtenAt, figuresUpdatedAt);
+  const state = forceStale ? "stale" : checked.state;
+  const label = forceStale ? "Stale · needs recon" : checked.label;
   return (
     <span
       className={className}
