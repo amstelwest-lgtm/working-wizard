@@ -22,12 +22,15 @@ import {
   actionIsOverdue,
   actionOverdueInput,
   countActionPlan,
+  keptOpenPlanRows,
   displayedPlanPeriod,
   displayedPlanTarget,
   formatActionPlanCounts,
   overdueActionsLabel,
 } from "../src/lib/action-plan-counts";
 import { deriveActionHealth } from "../src/lib/action-item-health";
+import { homeActionNeeds } from "../src/lib/owner-needs";
+import { openPlanTitles } from "../src/lib/open-plan-home";
 import { actionPlanPillarTiles } from "../src/lib/strategic-moves";
 
 function assert(cond: boolean, msg: string) {
@@ -65,6 +68,37 @@ assert(
     complete: 3,
   }) === "6 actions · 3 open, including 1 overdue · 3 done",
   "done stays out of the open count and overdue is inside it",
+);
+const planRows = [
+  { id: "a", title: "Collect the deposit", status: "open", dueDate: "2026-01-01", createdAt: "2026-01-01" },
+  { id: "b", title: "File the VAT return", status: "open", dueDate: "2026-01-01", createdAt: "2026-01-01" },
+  { id: "c", title: "Bring debt-to-equity under the target", status: "open", dueDate: "2026-01-01", createdAt: "2026-01-01" },
+  {
+    id: "d",
+    title: "Target a D/E below 1× for conservative businesses, below 2× for growth",
+    status: "open",
+    dueDate: "2026-01-01",
+    createdAt: "2026-01-02",
+  },
+];
+const kept = keptOpenPlanRows(planRows);
+const shared = countActionPlan(
+  kept.map((row) => actionOverdueInput(row, "2026-11-16")),
+  "2026-11-16",
+);
+const home = homeActionNeeds({
+  known: true,
+  titles: kept.map((row) => row.title),
+  overdue: shared.overdue,
+});
+const planLine = formatActionPlanCounts(shared);
+assert(kept.length === 3 && !kept.some((row) => row.id === "d"), "the second D/E action is not a second row");
+assert(shared.open === 3 && shared.overdue === 3, `shared counts ${shared.open} open, ${shared.overdue} overdue`);
+assert(home.heading === "3 open, 3 overdue", home.heading);
+assert(planLine.includes("3 open") && planLine.includes("3 overdue"), planLine);
+assert(
+  openPlanTitles(planRows).filter((title) => /debt-to-equity/i.test(title)).length === 1,
+  "the owner list keeps one debt-to-equity action",
 );
 const today = "2026-10-19";
 assert(

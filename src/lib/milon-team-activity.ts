@@ -8,7 +8,7 @@ import { formatDate, formatMoney, type DateMarket, type MoneyMarket } from "./ma
 import { ZA_MARKET } from "./market/resolve";
 import { formatAsOf, formatLastRun, type AgentHeaderStatus } from "./milon-team";
 import type { AgentKey, TeamActivityEvent, TeamBriefingItem } from "./milon-team-feed";
-import { correctedGrossMarginFraction, metricDirection, workingCapitalFromDayParts } from "./ratios";
+import { correctedGrossMarginFraction, metricDirection, quoteUnusableDayCounts, workingCapitalFromDayParts } from "./ratios";
 import { canonicalScoreProse, type LiveHealthQuote } from "./score-prose";
 import {
   badgeMonthFromPeriod,
@@ -571,7 +571,7 @@ export function formatFindingProse(
     : repaired;
   const bag: Record<string, number> = {};
   for (const entry of figureEntries(figures)) bag[entry.key] = entry.value;
-  return repairDraftMetricUnits(quoteLiveScoreOnly(grounded, liveOverallFromRecord(bag)));
+  return quoteUnusableDayCounts(repairDraftMetricUnits(quoteLiveScoreOnly(grounded, liveOverallFromRecord(bag))));
 }
 
 const METRIC_WORD =
@@ -779,13 +779,19 @@ export function findingSentence(input: {
 }
 
 export function ratioSentence(name: string, detail?: string): string {
-  const source = (detail ?? "").trim();
+  const source = quoteUnusableDayCounts((detail ?? "").trim());
   const pct = source.match(/(-?\d+(?:\.\d+)?)%\s*$/);
   if (pct) return `${name} is ${Number(pct[1]).toFixed(1)}%.`;
   const days = source.match(/(-?\d+(?:\.\d+)?)\s+days\s*$/i);
-  if (days) return `${name} is ${Math.round(Number(days[1]))} days.`;
+  if (days) {
+    const count = Number(days[1]);
+    if (count < 0 && /creditor|inventory|payable|stock|\bdpo\b|\bdio\b/i.test(`${name} ${source}`)) {
+      return `${name} is not meaningful.`;
+    }
+    return `${name} is ${Math.round(count)} days.`;
+  }
   const num = source.match(/(-?\d+(?:\.\d+)?)\s*$/);
-  if (!num) return source || name;
+  if (!num) return source || quoteUnusableDayCounts(name);
   const value = Number(num[1]);
   if (!Number.isFinite(value)) return source || name;
   return `${name} is ${formatSnapshotRatio(name, value)}.`;

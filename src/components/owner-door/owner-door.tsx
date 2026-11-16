@@ -77,6 +77,7 @@ import {
   withoutPersonQueuedRuns,
   type RowAssignment,
 } from "@/lib/open-plan-home";
+import { keptOpenPlanRows } from "@/lib/action-plan-counts";
 import { resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { runBotTransition, ownerBotKey } from "./owner-bot-motion";
@@ -623,13 +624,15 @@ export function OwnerDoor({
         setActionsReady(true);
         return;
       }
-      const openRows = (actions.data ?? []).flatMap((row) => {
-        const title = row.title?.trim() ?? "";
-        if (!title || !row.id) return [];
-        return [
-          { id: row.id, title, email: row.owner_email, ownerName: row.owner_name?.trim() || null },
-        ];
-      });
+      const openRows = keptOpenPlanRows(
+        (actions.data ?? []).flatMap((row) => {
+          const title = row.title?.trim() ?? "";
+          if (!title || !row.id) return [];
+          return [
+            { id: row.id, title, email: row.owner_email, ownerName: row.owner_name?.trim() || null },
+          ];
+        }),
+      );
       const ids = openRows.map((row) => row.id);
       const earlyTitles = openPlanTitles(openRows);
       setActionRows(earlyTitles.map((title) => ({ title, email: null })));
