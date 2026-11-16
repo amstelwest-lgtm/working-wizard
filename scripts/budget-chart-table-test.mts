@@ -18,6 +18,8 @@ import {
   budgetChartAmount,
   budgetChartDomain,
   budgetChartSeries,
+  chartRevenueActuals,
+  CHART_ACTUALS_EVEN_SPLIT,
   budgetLensFromSearch,
   budgetMonthViews,
   budgetPeriodTotalCell,
@@ -108,6 +110,32 @@ const paceViews = budgetMonthViews(doc, [], {
 });
 const marchPace = paceViews.find((row) => row.month === "2026-03");
 assert(marchPace?.actual?.revenue === 10_000, `statement pace revenue ${marchPace?.actual?.revenue}`);
+const chillMonths = ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"];
+const chillYear = 1_215_000;
+const chillPace = chillMonths.map((month) => ({
+  month,
+  actual: { revenue: 405_000 },
+}));
+const chillChart = chartRevenueActuals({
+  views: chillPace,
+  yearRevenue: chillYear,
+  storedMonths: false,
+});
+const chillSum = chillChart.actuals.reduce((total, value) => total + (value ?? 0), 0);
+assert(Math.abs(chillSum - chillYear) < 0.01, `chart actuals sum ${chillSum} against year ${chillYear}`);
+assert(chillChart.caption === CHART_ACTUALS_EVEN_SPLIT, chillChart.caption ?? "missing even-split note");
+const storedChart = chartRevenueActuals({
+  views: [
+    { actual: { revenue: 700_000 } },
+    { actual: { revenue: 515_000 } },
+  ],
+  yearRevenue: chillYear,
+  storedMonths: true,
+});
+const storedSum = storedChart.actuals.reduce((total, value) => total + (value ?? 0), 0);
+assert(Math.abs(storedSum - chillYear) < 0.01, `stored chart actuals sum ${storedSum}`);
+assert(storedChart.actuals[0] === 700_000, "stored months that already sum to the year stay put");
+assert(storedChart.caption == null, "stored months need no even-split note");
 assert(marchPace?.actual?.cogs === 3_750, `statement pace cogs ${marchPace?.actual?.cogs}`);
 const stored = budgetMonthViews(
   doc,

@@ -233,6 +233,29 @@ const ineligibleHit = await readCachedFirmEntitlement(
 assert(trialLoads === 0, "an ineligible cache hit does not read entitlement again");
 assert(ineligibleHit.introTrialEligible === false, "a cache hit can also keep Start trial off");
 
+clearCachedFirmEntitlement();
+let unknownLoads = 0;
+noteFirmEntitlement(
+  "user-1",
+  { entitled: false, reason: "no_active_subscription" },
+  "firm-ben",
+);
+const unknownHit = await readCachedFirmEntitlement(
+  "user-1",
+  async () => {
+    unknownLoads += 1;
+    return { entitled: false, reason: "no_active_subscription", introTrialEligible: true };
+  },
+  false,
+  "firm-ben",
+);
+assert(unknownLoads === 0, "an unknown eligibility cache hit does not read entitlement again");
+assert(unknownHit.introTrialEligible !== true, "unknown introTrialEligible stays omitted, not true");
+assert(
+  lastKnownEntitlementForFirm("user-1", "firm-ben")?.introTrialEligible !== true,
+  "the tab cache does not invent Start trial eligibility",
+);
+
 const echoed = entitlementAfterLiveFailure(
   { entitled: true, reason: "active_subscription" },
   "timeout",

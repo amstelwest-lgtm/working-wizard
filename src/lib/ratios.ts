@@ -448,6 +448,20 @@ export const FLOW_FIELD_KEYS = [
  * Component days are never printed negative. A negative working-capital cycle
  * is flagged — creditors fund it — instead of a bare minus.
  */
+const NEGATIVE_DAY_QUOTE =
+  /\b(creditor days|inventory days|days payable outstanding|days ap|dpo|stock days|dio)\b([^.\n]{0,40}?)(?<![\d.\u2013\u2014])(-\d+(?:\.\d+)?)(\s*days?)?/gi;
+
+/**
+ * Diagnose must not quote creditor or inventory days below zero.
+ * A negative or missing input is not a day count.
+ */
+export function quoteUnusableDayCounts(text: string): string {
+  return text.replace(NEGATIVE_DAY_QUOTE, (_full, label: string, mid: string) => {
+    const glue = mid.replace(/\s+/g, " ");
+    return `${label}${glue}${DAYS_NOT_MEANINGFUL}`;
+  });
+}
+
 export function formatQuotedDays(name: string, days: number): string {
   if (!Number.isFinite(days)) return "—";
   const rounded = Math.round(days);

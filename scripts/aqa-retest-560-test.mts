@@ -2,7 +2,8 @@
  * Retest of #560 on prod 1c5157ad.
  * Run: pnpm test:aqa-retest-560
  */
-import { findingMetricContext } from "../src/lib/milon-team-activity";
+import { findingMetricContext, findingSentence, ratioSentence } from "../src/lib/milon-team-activity";
+import { computedDaysAp, computedDaysInventory } from "../src/lib/deliverable-input-config";
 import { stripMilonProjection } from "../src/lib/milon-projection";
 import { ownerAmount, ownerAnswerTiles, ownerHomeLines, type OwnerBooks } from "../src/lib/owner-answers";
 import { computeRatios, operatingCycleDays } from "../src/lib/ratios";
@@ -69,6 +70,25 @@ assert(!flags!.includes("-93"), flags!);
 assert(flags!.includes("248"), flags!);
 assert(flags!.includes("93"), flags!);
 assert(!flags!.includes("161.6"), flags!);
+const diagnosed = findingSentence({ title: "creditor days -248, inventory days -93" });
+assert(!diagnosed.includes("-248") && !diagnosed.includes("-93"), diagnosed);
+assert(diagnosed.includes("not meaningful"), diagnosed);
+assert(
+  ratioSentence("Creditor Days", "Creditor Days -248 days") === "Creditor Days not meaningful",
+  ratioSentence("Creditor Days", "Creditor Days -248 days"),
+);
+assert(
+  Number.isNaN(
+    computedDaysAp({ revenue: "1215000", cogs: "400000", payables: "-271780", periodMonths: "12" }),
+  ),
+  "negative payables are not creditor days",
+);
+assert(
+  Number.isNaN(
+    computedDaysInventory({ revenue: "1215000", cogs: "400000", inventory: "-101918", periodMonths: "12" }),
+  ),
+  "negative stock is not inventory days",
+);
 
 const cycle = operatingCycleDays({
   revenue: 1_215_000,

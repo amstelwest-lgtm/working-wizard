@@ -3,6 +3,7 @@
  * Each row keeps its own assignee. A bot card shows Working only while
  * that bot has a stored, not-finished hand-off on at least one row.
  */
+import { actionDisplayTitle } from "@/lib/action-title";
 import { agentKeyFromAssignee } from "@/lib/action-handoff";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { handoffAssigneeName, personAssignmentName } from "@/lib/owner-handoff";
@@ -42,14 +43,15 @@ function stamp(value: string | null | undefined): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-/** Titles in plan order. Blank titles drop out. Duplicates stay once. */
+/** Titles in plan order. Blank titles drop out. The same displayed title stays once. */
 export function openPlanTitles(rows: readonly { title?: string | null }[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const row of rows) {
-    const title = row.title?.trim() ?? "";
-    if (!title || seen.has(title)) continue;
-    seen.add(title);
+    const title = actionDisplayTitle(row.title);
+    const key = title.toLowerCase();
+    if (!title || seen.has(key)) continue;
+    seen.add(key);
     out.push(title);
   }
   return out;

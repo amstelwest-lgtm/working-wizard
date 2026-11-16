@@ -60,6 +60,7 @@ import { formatCalendarDay } from "@/lib/market/format";
 import {
   actionOverdueInput,
   countActionPlan,
+  keptOpenPlanRows,
   currentQuarterLabel,
   defaultTargetDate,
   displayedPlanPeriod,
@@ -1574,10 +1575,11 @@ export default function ActionPlanPanel({
       })),
     [items, plan?.target_date],
   );
+  const listed = useMemo(() => keptOpenPlanRows(enriched), [enriched]);
   const planCounts = useMemo(
     () =>
       countActionPlan(
-        items.map((item) =>
+        listed.map((item) =>
           actionOverdueInput({
             status: item.status,
             dueDate: item.due_date,
@@ -1586,7 +1588,7 @@ export default function ActionPlanPanel({
           }),
         ),
       ),
-    [items, plan?.target_date],
+    [listed, plan?.target_date],
   );
   const automation = useMemo(() => {
     const now = new Date();
@@ -1611,7 +1613,7 @@ export default function ActionPlanPanel({
     onAnswer?.(items.map((item) => ({ title: stripMilonProjection(item.title), status: item.status })));
   }, [items, onAnswer, loading]);
   const filtered = useMemo(() => {
-    let list = enriched;
+    let list = listed;
     if (filter === "overdue") list = list.filter((i) => i.health === "overdue");
     else if (filter === "at_risk")
       list = list.filter((i) => i.health === "at_risk" || i.health === "off_track");
@@ -1626,7 +1628,7 @@ export default function ActionPlanPanel({
     else if (sortBy === "status") by.sort((a, b) => a.status.localeCompare(b.status));
     else by.sort((a, b) => a.seq - b.seq);
     return by;
-  }, [enriched, filter, ownerFilter, sortBy]);
+  }, [listed, filter, ownerFilter, sortBy]);
 
   const confidence = useMemo(() => {
     if (!enriched.length || !plan) return null;
@@ -1644,12 +1646,12 @@ export default function ActionPlanPanel({
       not_started: 0,
       complete: 0,
     };
-    enriched.forEach((i) => {
+    listed.forEach((i) => {
       const key = i.health && i.health in c ? i.health : "on_track";
       c[key]++;
     });
     return c;
-  }, [enriched]);
+  }, [listed]);
 
   const emailByOwnerId = useMemo(() => {
     const map: Record<string, string | null> = {};

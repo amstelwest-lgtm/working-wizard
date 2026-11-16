@@ -390,7 +390,7 @@ import {
   type RowAssignment,
 } from "@/lib/open-plan-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, spokenCashStrain, type OwnerBooks } from "@/lib/owner-answers";
-import { actionOverdueInput, countActionPlan } from "@/lib/action-plan-counts";
+import { actionOverdueInput, countActionPlan, keptOpenPlanRows } from "@/lib/action-plan-counts";
 import { homeActionNeeds, openActionSentence, presentHomeDraftBody, presentHomeDraftTitle } from "@/lib/owner-needs";
 import { healthSnapshotFromBooks, readStoredScoreSnapshotHash, renderHealthNarrative } from "@/lib/health-snapshot";
 import { draftStoredFiguresHash, draftStoredHealth, latestFiguresStamp } from "@/lib/draft-figures";
@@ -2137,10 +2137,15 @@ function ClientView() {
       }[];
       const planTarget =
         (planRes.data?.[0] as { target_date?: string | null } | undefined)?.target_date ?? null;
-      const titles = rows.flatMap((row) => {
-        const title = row.title?.trim() ?? "";
-        return title ? [title] : [];
-      });
+      const visible = keptOpenPlanRows(
+        rows.flatMap((row) => {
+          const id = row.id?.trim() ?? "";
+          const title = row.title?.trim() ?? "";
+          if (!id || !title) return [];
+          return [{ ...row, id, title }];
+        }),
+      );
+      const titles = visible.map((row) => row.title);
       setOpenPlanUnavailable(false);
       setOpenPlanTitles(titles);
       const ids = rows.flatMap((row) => (row.id && row.title?.trim() ? [row.id] : []));
@@ -2152,12 +2157,11 @@ function ClientView() {
       const pendings = [...pendingHandoffs.current.values()].filter(
         (pending) => pending.assigneeName && !handoffPaintBlocked(pending.actionItemId, pending.since),
       );
-      const openRows = rows.flatMap((row) => {
-        const title = row.title?.trim() ?? "";
-        return row.id && title
-          ? [{ id: row.id, title, ownerName: row.owner_name?.trim() || null }]
-          : [];
-      });
+      const openRows = visible.map((row) => ({
+        id: row.id,
+        title: row.title,
+        ownerName: row.owner_name?.trim() || null,
+      }));
       const assigned = openRows.map((row) => {
         const stored = assignments.get(row.id) ?? null;
         return rowAssignment({
@@ -2238,21 +2242,17 @@ function ClientView() {
       setOpenPlanTitles(titles);
       setOpenPlanOverdue(
         countActionPlan(
-          rows.flatMap((row) => {
-            const title = row.title?.trim() ?? "";
-            if (!title) return [];
-            return [
-              actionOverdueInput(
-                {
-                  status: row.status,
-                  dueDate: row.due_date,
-                  createdAt: row.created_at ?? null,
-                  planTarget,
-                },
-                today,
-              ),
-            ];
-          }),
+          visible.map((row) =>
+            actionOverdueInput(
+              {
+                status: row.status,
+                dueDate: row.due_date,
+                createdAt: row.created_at ?? null,
+                planTarget,
+              },
+              today,
+            ),
+          ),
           today,
         ).overdue,
       );

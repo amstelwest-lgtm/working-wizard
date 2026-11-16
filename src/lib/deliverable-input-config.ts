@@ -231,7 +231,7 @@ export function computedDaysAp(financials: DayCoverFinancials): number | null {
   const annualRevenue = revenue == null ? 0 : months > 0 && months < 12 ? revenue * (12 / months) : revenue;
   if (annualCogs <= 0) return null;
   const days = Math.round((pay / annualCogs) * 365);
-  if (costDaysNotMeaningful({ revenue: annualRevenue, cogs: annualCogs, days })) return Number.NaN;
+  if (days < 0 || costDaysNotMeaningful({ revenue: annualRevenue, cogs: annualCogs, days })) return Number.NaN;
   return days;
 }
 
@@ -249,7 +249,7 @@ export function computedDaysInventory(financials: DayCoverFinancials): number | 
   const annualRevenue = revenue == null ? 0 : months > 0 && months < 12 ? revenue * (12 / months) : revenue;
   if (annualCogs <= 0) return null;
   const days = Math.round((stock / annualCogs) * 365);
-  if (costDaysNotMeaningful({ revenue: annualRevenue, cogs: annualCogs, days })) return Number.NaN;
+  if (days < 0 || costDaysNotMeaningful({ revenue: annualRevenue, cogs: annualCogs, days })) return Number.NaN;
   return days;
 }
 

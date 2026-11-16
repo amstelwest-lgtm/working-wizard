@@ -5,7 +5,7 @@
  * A suggested due (created + 14 days) is that item's own due date.
  */
 
-import { effectiveActionDue } from "./action-plan-automation.ts";
+import { duplicateActionIds, effectiveActionDue } from "./action-plan-automation.ts";
 
 export type ActionCountInput = {
   status?: string | null;
@@ -72,6 +72,12 @@ export function actionIsOverdue(item: ActionCountInput, today: string | Date = n
   if (isCalendarDay(item.dueDate)) return item.dueDate.slice(0, 10) < day;
   if (isCalendarDay(item.planTarget)) return item.planTarget.slice(0, 10) < day;
   return false;
+}
+
+/** Rows Home and the Action plan both count. A repeated display title stays once. */
+export function keptOpenPlanRows<T extends { id: string; title: string }>(rows: readonly T[]): T[] {
+  const drop = new Set(duplicateActionIds(rows));
+  return rows.filter((row) => row.title.trim().length > 0 && !drop.has(row.id));
 }
 
 export function countActionPlan(
