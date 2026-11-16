@@ -11,7 +11,6 @@ import {
   type AgentKey,
   type MoneyMarket,
 } from "./agent-bus.ts";
-import { presentHandoffFinding } from "./cached-finding-gate.ts";
 import { agentDisplayNameFromKey } from "./milon-team-names.ts";
 import { STARTER_TRIAL_ENDED_CODE, STARTER_TRIAL_ENDED_MESSAGE } from "./starter-trial-constants.ts";
 
@@ -575,8 +574,7 @@ export function handoffResultText(note: string | null | undefined): string | nul
   const at = note.indexOf(mark);
   if (at < 0) return null;
   const body = note.slice(at + mark.length).trim();
-  if (!body) return null;
-  return presentHandoffFinding(body).text;
+  return body || null;
 }
 
 /** Newest finish note on one action. Assignment notes are left for the assignee. */

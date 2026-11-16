@@ -556,11 +556,21 @@ export function operatingCycleDays(input: {
     inventoryDays = Number.NaN;
     creditorDays = Number.NaN;
   }
-  return {
-    debtorDays,
-    inventoryDays,
-    creditorDays,
+  const days = { debtorDays, inventoryDays, creditorDays };
+  const check = validateRatioInputs({
+    cogs: input.cogs,
+    payables: input.payables,
+    revenue,
+    ...days,
     workingCapitalDays: workingCapitalFromDayParts(debtorDays, inventoryDays, creditorDays),
+  });
+  return {
+    debtorDays: check.quotable.debtorDays ? debtorDays : Number.NaN,
+    inventoryDays: check.quotable.inventoryDays ? inventoryDays : Number.NaN,
+    creditorDays: check.quotable.creditorDays ? creditorDays : Number.NaN,
+    workingCapitalDays: check.quotable.workingCapitalDays
+      ? workingCapitalFromDayParts(debtorDays, inventoryDays, creditorDays)
+      : Number.NaN,
   };
 }
 
@@ -583,13 +593,93 @@ export function workingCapitalFromDayParts(
 export const DATA_SIGN_NOTE =
   "Data sign: cost of sales or payables are stored as a credit, so the ratio is not quoted.";
 
-function finiteFigure(figures: Record<string, unknown>, keys: readonly string[]): number | null {
-  for (const key of keys) {
-    const value = figures[key];
-    if (typeof value === "number" && Number.isFinite(value)) return value;
-  }
-  return null;
+export type RatioQuoteKey =
+  | "grossMargin"
+  | "debtorDays"
+  | "creditorDays"
+  | "inventoryDays"
+  | "workingCapitalDays";
+
+export type RatioInputValues = {
+  cogs?: number | null;
+  payables?: number | null;
+  revenue?: number | null;
+  receivables?: number | null;
+  inventory?: number | null;
+  grossMargin?: number | null;
+  debtorDays?: number | null;
+  creditorDays?: number | null;
+  inventoryDays?: number | null;
+  workingCapitalDays?: number | null;
+};
+
+export type RatioValidation = {
+  dataSign: boolean;
+  quotable: Record<RatioQuoteKey, boolean>;
+  /** Known bad. An absent figure is not unquotable. */
+  unquotable: Record<RatioQuoteKey, boolean>;
+};
+
+function finiteNumber(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
+
+function marginFraction(value: number): number {
+  return Math.abs(value) <= 1.5 ? value : value / 100;
+}
+
+/**
+ * One check for the tiles, the Analyst prompt, and the cached-finding gate.
+ * A negative component is not a working-capital sum. A credit-signed cost or
+ * payables line, or a gross margin above 100%, is not quoted. Stored figures
+ * are not changed.
+ */
+export function validateRatioInputs(input: RatioInputValues): RatioValidation {
+  const cogsNeg = finiteNumber(input.cogs) && input.cogs < 0;
+  const payNeg = finiteNumber(input.payables) && input.payables < 0;
+  const gm = finiteNumber(input.grossMargin) ? marginFraction(input.grossMargin) : null;
+  const gmOver = gm != null && gm > 1;
+  const dataSign = cogsNeg || payNeg || gmOver;
+  const dayBad = (value: number | null | undefined) =>
+    (value != null && !finiteNumber(value)) || (finiteNumber(value) && value < 0);
+  const componentBad =
+    cogsNeg ||
+    payNeg ||
+    dayBad(input.debtorDays) ||
+    dayBad(input.creditorDays) ||
+    dayBad(input.inventoryDays);
+  return {
+    dataSign,
+    quotable: {
+      grossMargin: !dataSign && gm != null && gm <= 1,
+      debtorDays: finiteNumber(input.debtorDays) && input.debtorDays >= 0,
+      creditorDays: !payNeg && finiteNumber(input.creditorDays) && input.creditorDays >= 0,
+      inventoryDays: !cogsNeg && finiteNumber(input.inventoryDays) && input.inventoryDays >= 0,
+      workingCapitalDays: !componentBad && finiteNumber(input.workingCapitalDays),
+    },
+    unquotable: {
+      grossMargin: dataSign || (input.grossMargin != null && !finiteNumber(input.grossMargin)),
+      debtorDays: dayBad(input.debtorDays),
+      creditorDays: payNeg || dayBad(input.creditorDays),
+      inventoryDays: cogsNeg || dayBad(input.inventoryDays),
+      workingCapitalDays:
+        componentBad || (input.workingCapitalDays != null && !finiteNumber(input.workingCapitalDays)),
+    },
+  };
+}
+
+/** True when a gross-margin or days ratio must not be quoted. Does not change stored figures. */
+export function dataSignIssue(input: RatioInputValues): boolean {
+  return validateRatioInputs(input).dataSign;
+}
+
+const QUOTE_NAME: Record<RatioQuoteKey, string> = {
+  grossMargin: "Gross Margin",
+  debtorDays: "Debtor Days",
+  creditorDays: "Creditor Days",
+  inventoryDays: "Inventory Days",
+  workingCapitalDays: "Working Capital Days",
+};
 
 function figureBag(figures: unknown): Record<string, unknown> {
   if (Array.isArray(figures)) {
@@ -604,52 +694,116 @@ function figureBag(figures: unknown): Record<string, unknown> {
   return figures as Record<string, unknown>;
 }
 
+function readFigure(bag: Record<string, unknown>, names: readonly string[]): number | null | undefined {
+  for (const name of names) {
+    if (!(name in bag)) continue;
+    const value = bag[name];
+    if (typeof value === "number") return value;
+  }
+  return undefined;
+}
+
+/** Live tile ratios, plus any figures stored on the finding. */
+export function validationForFinding(
+  figures?: unknown,
+  ratios?: Record<string, number | null> | null,
+): RatioValidation {
+  const bag = figureBag(figures);
+  const fromRatios = (name: string) => {
+    const value = ratios?.[name];
+    return typeof value === "number" ? value : undefined;
+  };
+  return validateRatioInputs({
+    cogs: readFigure(bag, ["cogs", "Cogs", "costOfSales"]),
+    payables: readFigure(bag, ["payables", "Payables"]),
+    grossMargin: fromRatios("Gross Margin") ?? readFigure(bag, ["grossMargin", "Gross Margin"]),
+    debtorDays: fromRatios("Debtor Days") ?? readFigure(bag, ["debtorDays", "Debtor Days"]),
+    creditorDays: fromRatios("Creditor Days") ?? readFigure(bag, ["creditorDays", "Creditor Days"]),
+    inventoryDays: fromRatios("Inventory Days") ?? readFigure(bag, ["inventoryDays", "Inventory Days"]),
+    workingCapitalDays:
+      fromRatios("Working Capital Days") ?? readFigure(bag, ["workingCapitalDays", "Working Capital Days"]),
+  });
+}
+
+type CitedMetric = { key: RatioQuoteKey; value: number | null };
+
+/** Sentences, keeping a decimal point inside a number. */
+export function findingSentences(text: string): string[] {
+  const parts: string[] = [];
+  let buf = "";
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i] ?? "";
+    buf += ch;
+    const boundary = ch === "!" || ch === "?" || (ch === "." && !/\d/.test(text[i - 1] ?? "") && !/\d/.test(text[i + 1] ?? ""));
+    if (boundary) {
+      const piece = buf.trim();
+      if (piece) parts.push(piece);
+      buf = "";
+    }
+  }
+  const rest = buf.trim();
+  if (rest) parts.push(rest);
+  return parts.length ? parts : [text];
+}
+
+/** Metrics named in one sentence, with the number cited beside each name. */
+export function citedRatioValues(sentence: string): CitedMetric[] {
+  const specs = [...METRIC_DIRECTIONS].sort((a, b) => b.name.length - a.name.length);
+  const lower = sentence.toLowerCase();
+  const found: CitedMetric[] = [];
+  const seen = new Set<RatioQuoteKey>();
+  for (const spec of specs) {
+    const key = spec.key as RatioQuoteKey;
+    if (!(key in QUOTE_NAME) || seen.has(key)) continue;
+    const name = spec.name.toLowerCase();
+    const head = name.replace(/\s+days$/, "");
+    const nameAt = lower.indexOf(name);
+    const headAt = head !== name ? lower.indexOf(head) : -1;
+    const daysAt = lower.search(/\bdays\b/);
+    const nearDays = headAt >= 0 && daysAt >= 0 && Math.abs(headAt - daysAt) <= 48;
+    if (nameAt < 0 && !nearDays) continue;
+    const at = nameAt >= 0 ? nameAt : headAt;
+    const window = sentence.slice(Math.max(0, at - 40), Math.min(sentence.length, at + name.length + 40));
+    const negative = /\bnegative\b/i.test(sentence.slice(Math.max(0, at - 48), at + name.length));
+    const numMatch = window.match(/-?\d+(?:\.\d+)?/);
+    let value = numMatch ? Number(numMatch[0]) : null;
+    if (negative) value = value == null || value > 0 ? -1 : value;
+    if (value != null && /%/.test(window) && Math.abs(value) > 1.5) value = value / 100;
+    seen.add(key);
+    found.push({ key, value });
+  }
+  return found;
+}
+
+function citedInput(cite: CitedMetric): RatioInputValues {
+  return { [cite.key]: cite.value ?? Number.NaN };
+}
+
+/** A sentence cites a ratio the live tiles will not quote. The sentence itself is not edited. */
+export function sentenceCitesRejectedRatio(
+  sentence: string,
+  figures?: unknown,
+  ratios?: Record<string, number | null> | null,
+): boolean {
+  const citations = citedRatioValues(sentence);
+  if (!citations.length) return false;
+  const live = validationForFinding(figures, ratios);
+  return citations.some((cite) => {
+    if (cite.value != null && validateRatioInputs(citedInput(cite)).unquotable[cite.key]) return true;
+    return live.unquotable[cite.key];
+  });
+}
+
 /**
  * A cached finding cites a ratio the tiles will not quote.
  * This does not edit the stored sentence.
  */
-export function cachedFindingRejected(text: string, figures?: unknown): boolean {
-  const bag = figureBag(figures);
-  const creditor = finiteFigure(bag, ["creditorDays", "Creditor Days"]);
-  const inventory = finiteFigure(bag, ["inventoryDays", "Inventory Days"]);
-  const debtor = finiteFigure(bag, ["debtorDays", "Debtor Days"]);
-  const wc = finiteFigure(bag, ["workingCapitalDays", "Working Capital Days"]);
-  const gross = finiteFigure(bag, ["grossMargin", "Gross Margin"]);
-  if (creditor != null && creditor < 0) return true;
-  if (inventory != null && inventory < 0) return true;
-  if (debtor != null && debtor < 0) return true;
-  if (wc != null && [debtor, inventory, creditor].some((days) => days != null && days < 0)) return true;
-  if (dataSignIssue({ grossMargin: gross })) return true;
-  const lower = text.toLowerCase();
-  if (
-    lower.includes("negative") &&
-    lower.includes("days") &&
-    (lower.includes("creditor") || lower.includes("inventory"))
-  ) {
-    return true;
-  }
-  if (/(creditor|inventory)\s+days\s+(?:of\s+)?-\d/.test(lower)) return true;
-  if (lower.includes("working capital days of 162") || lower.includes("working capital days of 161")) return true;
-  if (lower.includes("104.6%")) return true;
-  if (lower.includes("of not meaningful")) return true;
-  return false;
-}
-
-/** True when a gross-margin or days ratio must not be quoted. Does not change stored figures. */
-export function dataSignIssue(input: {
-  cogs?: number | null;
-  payables?: number | null;
-  grossMargin?: number | null;
-}): boolean {
-  if (typeof input.cogs === "number" && Number.isFinite(input.cogs) && input.cogs < 0) return true;
-  if (typeof input.payables === "number" && Number.isFinite(input.payables) && input.payables < 0) {
-    return true;
-  }
-  if (typeof input.grossMargin === "number" && Number.isFinite(input.grossMargin)) {
-    const fraction = Math.abs(input.grossMargin) <= 1.5 ? input.grossMargin : input.grossMargin / 100;
-    if (fraction > 1) return true;
-  }
-  return false;
+export function cachedFindingRejected(
+  text: string,
+  figures?: unknown,
+  ratios?: Record<string, number | null> | null,
+): boolean {
+  return findingSentences(text).some((sentence) => sentenceCitesRejectedRatio(sentence, figures, ratios));
 }
 
 /**
@@ -688,10 +842,13 @@ export function computeRatios(v: RatioInputs): Record<string, number> {
   const operatingMargin = safe(n.ebit, n.revenue);
   const netMargin = safe(n.netIncome, n.revenue);
   const rawGross = n.revenue !== 0 && Number.isFinite(n.revenue) ? (n.revenue - n.cogs) / n.revenue : Number.NaN;
-  const grossMargin =
-    n.cogs < 0 || n.payables < 0 || (Number.isFinite(rawGross) && rawGross > 1)
-      ? Number.NaN
-      : safe(n.revenue - n.cogs, n.revenue);
+  const grossCheck = validateRatioInputs({
+    cogs: n.cogs,
+    payables: n.payables,
+    revenue: n.revenue,
+    grossMargin: Number.isFinite(rawGross) ? rawGross : null,
+  });
+  const grossMargin = grossCheck.quotable.grossMargin ? rawGross : Number.NaN;
   const assetTurnover = safe(n.revenue, n.totalAssets);
   const equityMultiplier = equityMultiplierRatio(n.totalAssets, n.equity);
   const roa = netMargin * assetTurnover;

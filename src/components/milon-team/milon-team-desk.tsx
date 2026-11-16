@@ -326,6 +326,7 @@ export function MilonTeamDesk({
     const rejected = cachedFindingRejected(
       `${row.title} ${row.detail ?? ""}`,
       findingFigureEntries(row.evidence),
+      canonicalRatios,
     );
     const checked = figuresCheckedLine(
       feed.healthQuote?.periodLabel ?? findingPeriod(row),

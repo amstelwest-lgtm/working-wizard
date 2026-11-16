@@ -763,7 +763,9 @@ export function findingSentence(input: {
   const gated = presentCachedFinding({
     text,
     figures: input.figures,
+    ratios: input.canonicalRatios,
     live: narrativeSnapshot(input.liveHealth),
+    keep: (sentence) => formatFindingProse(sentence, input.figures ?? {}, market, input.canonicalRatios),
   });
   if (gated.stale) {
     return /[.!?]$/.test(gated.text) ? gated.text : `${gated.text}.`;

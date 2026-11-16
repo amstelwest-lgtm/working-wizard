@@ -2,6 +2,9 @@
  * Assignment labels for handing an action to one of the three agents.
  * Nothing here talks to the database or starts a run.
  */
+import { presentCachedFinding } from "./cached-finding-gate.ts";
+import { rewriteDraftMonthStamp } from "./statement-period.ts";
+import type { HealthScoreSnapshot } from "./health-snapshot.ts";
 import { formatEventTime, type DateMarket } from "./market/format.ts";
 import { agentShortName } from "./milon-team.ts";
 import { AGENT_DISPLAY_NAME } from "./milon-team-names.ts";
@@ -484,6 +487,9 @@ export function describeActionHandoff<T extends { note: string | null; at: strin
   findingsReady: boolean;
   market?: HandoffMarket;
   now?: Date | string | number;
+  /** Same live ratios and health paragraph Home uses. */
+  ratios?: Record<string, number | null> | null;
+  liveHealth?: HealthScoreSnapshot | null;
 }): {
   caption: string | null;
   run: { status: string; at?: string | null; agent?: AgentKey } | null;
@@ -527,7 +533,16 @@ export function describeActionHandoff<T extends { note: string | null; at: strin
     live && (live.status === "succeeded" || live.status === "partial") && live.summary.trim()
       ? { text: live.summary.trim(), at: live.at }
       : null;
-  const result = storedResult ?? liveResult;
+  const rawResult = storedResult ?? liveResult;
+  const gated = rawResult
+    ? presentCachedFinding({
+        text: rawResult.text,
+        ratios: input.ratios,
+        live: input.liveHealth,
+        keep: rewriteDraftMonthStamp,
+      })
+    : null;
+  const result = gated ? { text: gated.text, at: rawResult!.at } : null;
   const finding = findingForAction({
     actionItemId: input.actionItemId,
     runs: input.runs,

@@ -34,8 +34,22 @@ import {
   drafterAnswerSentence,
   plainSentDate,
 } from "@/lib/reports-drafter-copy";
-import { presentEmailFinding } from "@/lib/cached-finding-gate";
+import { presentCachedFinding } from "@/lib/cached-finding-gate";
+import type { HealthScoreSnapshot } from "@/lib/health-snapshot";
 import { rewriteDraftMonthStamp } from "@/lib/statement-period";
+
+/** Month stamps stay. Only a sentence that cites a rejected ratio is swapped. */
+export function advisoryOutboundBody(
+  body: string,
+  ratios?: Record<string, number | null> | null,
+  live?: HealthScoreSnapshot | null,
+): string {
+  return presentCachedFinding({
+    text: rewriteDraftMonthStamp(body),
+    ratios,
+    live,
+  }).text;
+}
 
 type Kind = "client_email" | "meeting_agenda" | "exec_summary";
 
@@ -74,10 +88,14 @@ function kindToDelivery(kind: Kind): DeliveryKind {
 export function AdvisoryDrafter({
   clientId,
   clientName,
+  ratios = null,
+  liveHealth = null,
   onLogged,
 }: {
   clientId: string;
   clientName?: string;
+  ratios?: Record<string, number | null> | null;
+  liveHealth?: HealthScoreSnapshot | null;
   onLogged?: () => void;
 }) {
   const { profile, firmId } = useAccountantProfile();
@@ -169,8 +187,8 @@ export function AdvisoryDrafter({
     try {
       const logged = await logShare("copy", result);
       const text = result.subject
-        ? `Subject: ${rewriteDraftMonthStamp(result.subject)}\n\n${presentEmailFinding(logged.body).text}`
-        : presentEmailFinding(logged.body).text;
+        ? `Subject: ${rewriteDraftMonthStamp(result.subject)}\n\n${advisoryOutboundBody(logged.body, ratios, liveHealth)}`
+        : advisoryOutboundBody(logged.body, ratios, liveHealth);
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
@@ -186,7 +204,7 @@ export function AdvisoryDrafter({
     const subject = encodeURIComponent(
       rewriteDraftMonthStamp(result.subject ?? `${clientName ?? "Client"} — advisory`),
     );
-    const body = encodeURIComponent(presentEmailFinding(logged.body).text);
+    const body = encodeURIComponent(advisoryOutboundBody(logged.body, ratios, liveHealth));
     window.open(`mailto:?subject=${subject}&body=${body}`);
   };
 
@@ -194,8 +212,8 @@ export function AdvisoryDrafter({
     if (!result) return;
     const logged = await logShare("whatsapp", result);
     const text = result.subject
-      ? `*${rewriteDraftMonthStamp(result.subject)}*\n\n${presentEmailFinding(logged.body).text}`
-      : presentEmailFinding(logged.body).text;
+      ? `*${rewriteDraftMonthStamp(result.subject)}*\n\n${advisoryOutboundBody(logged.body, ratios, liveHealth)}`
+      : advisoryOutboundBody(logged.body, ratios, liveHealth);
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
@@ -342,7 +360,7 @@ export function AdvisoryDrafter({
             </p>
           )}
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">
-            {presentEmailFinding(result.body).text}
+            {advisoryOutboundBody(result.body, ratios, liveHealth)}
           </p>
           <p className="mt-3 border-t border-slate-800 pt-2 text-[11px] text-slate-500">
             Grounded in {result.grounding.currentPeriod}

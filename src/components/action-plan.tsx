@@ -705,11 +705,23 @@ export default function ActionPlanPanel({
           findings: draftActivity.findings,
           findingsReady: !draftActivity.loading,
           market,
+          ratios: canonicalRatios,
+          liveHealth: healthSnapshot,
         }),
       );
     }
     return out;
-  }, [items, itemNotes, pickups, draftActivity.runs, draftActivity.findings, draftActivity.loading, market]);
+  }, [
+    items,
+    itemNotes,
+    pickups,
+    draftActivity.runs,
+    draftActivity.findings,
+    draftActivity.loading,
+    market,
+    canonicalRatios,
+    healthSnapshot,
+  ]);
   useEffect(() => {
     const id = focusDraftId?.trim();
     if (!id) return;
