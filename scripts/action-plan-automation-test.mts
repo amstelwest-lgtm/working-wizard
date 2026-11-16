@@ -5,6 +5,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ActionPlanAutomation } from "../src/components/action-plan-automation";
+import { interventionPlanSteps } from "../src/lib/intervention-grounding";
 import {
   addDays,
   duplicateActionIds,
@@ -163,5 +164,28 @@ const debtMarkup = renderToStaticMarkup(
 );
 const confirms = debtMarkup.match(/>Confirm</g) ?? [];
 assert(confirms.length === 1, `Suggested — confirm keeps one debt row, got ${confirms.length}`);
+const oneDebt = renderToStaticMarkup(
+  createElement(ActionPlanAutomation, {
+    rows: debt.rows.filter((row) => row.id === "row-2"),
+    duplicates: debt.duplicates,
+    contradictions: [],
+    canEdit: true,
+    onConfirm: () => {},
+    onDrop: () => {},
+  }),
+);
+assert(!oneDebt.includes("Same action more than once"), oneDebt);
+assert(!oneDebt.includes("Drop duplicate"), "one remaining D/E row hides the duplicate banner");
+assert(
+  interventionPlanSteps(
+    [
+      "Target a D/E below 1× for conservative businesses, below 2× for growth",
+      "Collect the deposit",
+      "Bring debt-to-equity under the target",
+    ],
+    false,
+  ).filter((step) => /debt-to-equity|\bd\/e\b/i.test(step)).length === 1,
+  "the intervention plan keeps one debt-to-equity step",
+);
 
 console.log("action-plan-automation ok");

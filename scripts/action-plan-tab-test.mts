@@ -97,8 +97,8 @@ assert(shared.open === 3 && shared.overdue === 3, `shared counts ${shared.open} 
 assert(home.heading === "3 open, 3 overdue", home.heading);
 assert(planLine.includes("3 open") && planLine.includes("3 overdue"), planLine);
 assert(
-  openPlanTitles(planRows).filter((title) => /debt-to-equity/i.test(title)).length === 1,
-  "the owner list keeps one debt-to-equity action",
+  openPlanTitles(planRows).filter((title) => /debt-to-equity|\bd\/e\b/i.test(title)).length === 1,
+  "the owner list keeps one debt-to-equity action, including the D/E synonym",
 );
 const today = "2026-10-19";
 assert(

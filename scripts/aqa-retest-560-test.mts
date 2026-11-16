@@ -74,7 +74,7 @@ const diagnosed = findingSentence({ title: "creditor days -248, inventory days -
 assert(!diagnosed.includes("-248") && !diagnosed.includes("-93"), diagnosed);
 assert(diagnosed.includes("not meaningful"), diagnosed);
 assert(
-  ratioSentence("Creditor Days", "Creditor Days -248 days") === "Creditor Days not meaningful",
+  ratioSentence("Creditor Days", "Creditor Days -248 days") === "Creditor Days is not meaningful.",
   ratioSentence("Creditor Days", "Creditor Days -248 days"),
 );
 assert(

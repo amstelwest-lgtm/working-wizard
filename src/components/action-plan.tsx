@@ -1594,7 +1594,7 @@ export default function ActionPlanPanel({
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     return planAutomation(
-      enriched.map((item) => ({
+      listed.map((item) => ({
         id: item.id,
         title: stripMilonProjection(item.title),
         ownerId: item.owner_id,
@@ -1607,11 +1607,11 @@ export default function ActionPlanPanel({
       employees.map((employee) => ({ id: employee.id, name: employee.name })),
       today,
     );
-  }, [enriched, employees, lastNudgeEmails]);
+  }, [listed, employees, lastNudgeEmails]);
   useEffect(() => {
     if (loading) return;
-    onAnswer?.(items.map((item) => ({ title: stripMilonProjection(item.title), status: item.status })));
-  }, [items, onAnswer, loading]);
+    onAnswer?.(listed.map((item) => ({ title: stripMilonProjection(item.title), status: item.status })));
+  }, [listed, onAnswer, loading]);
   const filtered = useMemo(() => {
     let list = listed;
     if (filter === "overdue") list = list.filter((i) => i.health === "overdue");
@@ -1742,7 +1742,7 @@ export default function ActionPlanPanel({
 
   const drawerItem = drawerId ? (enriched.find((i) => i.id === drawerId) ?? null) : null;
   const interventionSteps = interventionPlanSteps(
-    enriched
+    listed
       .filter((item) => item.status !== "done")
       .map((item) => actionDisplayTitle(stripMilonProjection(item.title))),
     cashBelowFloor,

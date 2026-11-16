@@ -779,7 +779,9 @@ export function findingSentence(input: {
 }
 
 export function ratioSentence(name: string, detail?: string): string {
-  const source = quoteUnusableDayCounts((detail ?? "").trim());
+  const raw = (detail ?? "").trim();
+  const source = quoteUnusableDayCounts(raw);
+  if (source !== raw && /not meaningful/i.test(source)) return `${name} is not meaningful.`;
   const pct = source.match(/(-?\d+(?:\.\d+)?)%\s*$/);
   if (pct) return `${name} is ${Number(pct[1]).toFixed(1)}%.`;
   const days = source.match(/(-?\d+(?:\.\d+)?)\s+days\s*$/i);
@@ -791,7 +793,11 @@ export function ratioSentence(name: string, detail?: string): string {
     return `${name} is ${Math.round(count)} days.`;
   }
   const num = source.match(/(-?\d+(?:\.\d+)?)\s*$/);
-  if (!num) return source || quoteUnusableDayCounts(name);
+  if (!num) {
+    const named = quoteUnusableDayCounts(name);
+    if (named !== name && /not meaningful/i.test(named)) return `${name} is not meaningful.`;
+    return source || named;
+  }
   const value = Number(num[1]);
   if (!Number.isFinite(value)) return source || name;
   return `${name} is ${formatSnapshotRatio(name, value)}.`;

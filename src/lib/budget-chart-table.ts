@@ -9,6 +9,7 @@ import type { FiscalStatementSlice } from "@/lib/budget-period-types";
 import { computeBudgetMonths } from "@/lib/budget.compute";
 import { statementMonthActuals } from "@/lib/budget.bridges";
 import { fyMonths } from "@/lib/budget.months";
+import { MONTHS } from "@/lib/market/date-presets";
 import {
   normalizeTaxonomyTotals,
   varianceLine,
@@ -268,6 +269,26 @@ export const CHART_ACTUALS_EVEN_SPLIT =
 
 export const CHART_ACTUALS_NONE = "No monthly actuals on file.";
 
+/** Shown when uploaded months are scaled so they add up to the year. */
+export const CHART_ACTUALS_SCALED = "Actual bars are scaled to the period revenue.";
+
+/** "This year = YTD Mar–Oct". The months are the ones on the chart. */
+export function budgetChartPeriodCaption(months: readonly string[]): string | null {
+  const keys = months.filter((month) => /^\d{4}-\d{2}$/.test(month)).slice().sort();
+  if (!keys.length) return null;
+  const first = keys[0]!;
+  const last = keys[keys.length - 1]!;
+  const sameYear = first.slice(0, 4) === last.slice(0, 4);
+  const label = (ym: string) => {
+    const name = MONTHS[Number(ym.slice(5, 7)) - 1] ?? ym;
+    return sameYear ? name : `${name} ${ym.slice(0, 4)}`;
+  };
+  const start = label(first);
+  const end = label(last);
+  const range = start === end ? start : `${start}\u2013${end}`;
+  return `This year = YTD ${range}`;
+}
+
 /**
  * Actual bars for the revenue chart. They use the same year revenue as the
  * header. Uploaded months that already sum to that year stay as stored.
@@ -297,7 +318,7 @@ export function chartRevenueActuals(input: {
   if (!input.storedMonths || present.length === 0 || Math.abs(sum) < 1) {
     return { actuals: splitMoney(input.views.length, year), caption: CHART_ACTUALS_EVEN_SPLIT };
   }
-  return { actuals: scaleMoney(raw, year, sum), caption: null };
+  return { actuals: scaleMoney(raw, year, sum), caption: CHART_ACTUALS_SCALED };
 }
 
 function splitMoney(count: number, year: number): number[] {

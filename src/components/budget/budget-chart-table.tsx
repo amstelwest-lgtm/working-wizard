@@ -11,6 +11,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -30,6 +31,7 @@ import type { BudgetTemplateId } from "@/lib/budget.types";
 import { ownerMinus } from "@/lib/owner-money";
 import {
   budgetChartAmount,
+  budgetChartPeriodCaption,
   budgetChartSeries,
   chartRevenueActuals,
   budgetMonthViews,
@@ -434,6 +436,7 @@ function BudgetMonthChart({
   };
   const series = budgetChartSeries(views);
   const aligned = chartRevenueActuals({ views, yearRevenue, storedMonths });
+  const periodCaption = budgetChartPeriodCaption(views.map((row) => row.month));
   const data = views.map((row, index) => {
     const amount = budgetChartAmount(row, series);
     const budget = series === "expenses" ? amount : row.budget.revenue;
@@ -445,6 +448,7 @@ function BudgetMonthChart({
       amountLabel: money(amount),
       budget,
       actual,
+      actualLabel: actual == null ? null : money(actual),
       hasActual: series === "expenses" ? amount !== 0 : actual != null,
       signal: delta == null ? null : delta >= 0 ? "favourable" : "adverse",
       delta,
@@ -454,6 +458,11 @@ function BudgetMonthChart({
 
   return (
     <div className={fill ? "flex h-full min-h-[320px] flex-col" : "mt-4 min-w-0"}>
+      {periodCaption ? (
+        <p className="mb-2 text-[13px] text-[#3D5270] dark:text-slate-400" data-budget-year-caption="">
+          {periodCaption}
+        </p>
+      ) : null}
       <div
         className={
           fill
@@ -523,6 +532,29 @@ function BudgetMonthChart({
               ))}
             </Bar>
             <Bar dataKey="actual" name="actual" radius={[3, 3, 0, 0]} maxBarSize={fill ? 28 : 18}>
+              <LabelList
+                dataKey="actualLabel"
+                position="top"
+                content={(props) => {
+                  const text = typeof props.value === "string" ? props.value : "";
+                  const x = Number(props.x);
+                  const y = Number(props.y);
+                  const width = Number(props.width ?? 0);
+                  if (!text || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+                  return (
+                    <text
+                      x={x + (Number.isFinite(width) ? width / 2 : 0)}
+                      y={y - 4}
+                      textAnchor="middle"
+                      fill="currentColor"
+                      fontSize={10}
+                      data-budget-bar-actual=""
+                    >
+                      {text}
+                    </text>
+                  );
+                }}
+              />
               {data.map((row) => (
                 <Cell key={`${row.month}-a`} fill={row.hasActual ? ACTUAL_BAR : "transparent"} />
               ))}
@@ -556,6 +588,11 @@ function BudgetMonthChart({
             <div className="truncate text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200" data-budget-month-value="">
               {row.amountLabel}
             </div>
+            {row.actualLabel ? (
+              <div className="truncate text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200" data-budget-month-actual="">
+                {row.actualLabel}
+              </div>
+            ) : null}
             {row.delta != null && Math.abs(row.delta) >= 1 ? (
               <div className={`truncate text-sm font-semibold tabular-nums ${tone(row.signal)}`}>
                 {row.delta > 0 ? `+${tick(row.delta)}` : tick(row.delta)}
