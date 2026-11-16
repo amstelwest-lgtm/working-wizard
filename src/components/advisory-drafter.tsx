@@ -34,6 +34,7 @@ import {
   drafterAnswerSentence,
   plainSentDate,
 } from "@/lib/reports-drafter-copy";
+import { presentEmailFinding } from "@/lib/cached-finding-gate";
 import { rewriteDraftMonthStamp } from "@/lib/statement-period";
 
 type Kind = "client_email" | "meeting_agenda" | "exec_summary";
@@ -168,8 +169,8 @@ export function AdvisoryDrafter({
     try {
       const logged = await logShare("copy", result);
       const text = result.subject
-        ? `Subject: ${rewriteDraftMonthStamp(result.subject)}\n\n${rewriteDraftMonthStamp(logged.body)}`
-        : rewriteDraftMonthStamp(logged.body);
+        ? `Subject: ${rewriteDraftMonthStamp(result.subject)}\n\n${presentEmailFinding(logged.body).text}`
+        : presentEmailFinding(logged.body).text;
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
@@ -185,7 +186,7 @@ export function AdvisoryDrafter({
     const subject = encodeURIComponent(
       rewriteDraftMonthStamp(result.subject ?? `${clientName ?? "Client"} — advisory`),
     );
-    const body = encodeURIComponent(rewriteDraftMonthStamp(logged.body));
+    const body = encodeURIComponent(presentEmailFinding(logged.body).text);
     window.open(`mailto:?subject=${subject}&body=${body}`);
   };
 
@@ -193,8 +194,8 @@ export function AdvisoryDrafter({
     if (!result) return;
     const logged = await logShare("whatsapp", result);
     const text = result.subject
-      ? `*${rewriteDraftMonthStamp(result.subject)}*\n\n${rewriteDraftMonthStamp(logged.body)}`
-      : rewriteDraftMonthStamp(logged.body);
+      ? `*${rewriteDraftMonthStamp(result.subject)}*\n\n${presentEmailFinding(logged.body).text}`
+      : presentEmailFinding(logged.body).text;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
@@ -341,7 +342,7 @@ export function AdvisoryDrafter({
             </p>
           )}
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">
-            {rewriteDraftMonthStamp(result.body)}
+            {presentEmailFinding(result.body).text}
           </p>
           <p className="mt-3 border-t border-slate-800 pt-2 text-[11px] text-slate-500">
             Grounded in {result.grounding.currentPeriod}

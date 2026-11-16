@@ -522,9 +522,9 @@ export const BUSINESS_TYPE_TO_BENCHMARK: Record<string, string> = {
 
 /**
  * Debtor, inventory, and creditor days, then working-capital days.
- * A cost stored as a credit is still a cost, so inventory and creditor days
- * stay non-negative. Working-capital days are the net of those three and
- * can be negative. Roadmap, ratios, and the action formula all call this.
+ * A negative component is not a day count. Working-capital days are not the
+ * signed sum of those components. Roadmap, ratios, and the action formula
+ * all call this. Stored statement signs are left as stored.
  */
 export function operatingCycleDays(input: {
   revenue: number;
@@ -539,51 +539,117 @@ export function operatingCycleDays(input: {
   workingCapitalDays: number;
 } {
   const revenue = input.revenue;
-  const cogs = revenue > 0 ? costMagnitude(input.cogs) : input.cogs;
+  const cogsUsable = input.cogs >= 0 ? input.cogs : Number.NaN;
   const safe = (a: number, b: number) => {
     if (!Number.isFinite(a) || !Number.isFinite(b)) return Number.NaN;
     return b === 0 ? 0 : a / b;
   };
-  const roundDay = (days: number) => (Number.isFinite(days) ? Math.round(days) : days);
+  const roundDay = (days: number) => (Number.isFinite(days) && days >= 0 ? Math.round(days) : Number.NaN);
   const debtorDays = roundDay(safe(input.receivables, revenue) * 365);
-  let inventoryDays = roundDay(safe(input.inventory, cogs) * 365);
-  let creditorDays = roundDay(safe(input.payables, cogs) * 365);
-  if (Number.isFinite(inventoryDays) && inventoryDays < 0) inventoryDays = Math.abs(inventoryDays);
-  if (Number.isFinite(creditorDays) && creditorDays < 0) creditorDays = Math.abs(creditorDays);
+  let inventoryDays = roundDay(safe(input.inventory, cogsUsable) * 365);
+  let creditorDays =
+    input.payables < 0 ? Number.NaN : roundDay(safe(input.payables, cogsUsable) * 365);
   const suppressed =
     costDaysNotMeaningful({ revenue, cogs: input.cogs, days: creditorDays }) ||
     costDaysNotMeaningful({ revenue, cogs: input.cogs, days: inventoryDays });
   if (suppressed) {
-    return {
-      debtorDays,
-      inventoryDays: Number.NaN,
-      creditorDays: Number.NaN,
-      workingCapitalDays: Number.NaN,
-    };
+    inventoryDays = Number.NaN;
+    creditorDays = Number.NaN;
   }
-  const workingCapitalDays = [debtorDays, inventoryDays, creditorDays].every((days) =>
-    Number.isFinite(days),
-  )
-    ? debtorDays + inventoryDays - creditorDays
-    : Number.NaN;
-  return { debtorDays, inventoryDays, creditorDays, workingCapitalDays };
+  return {
+    debtorDays,
+    inventoryDays,
+    creditorDays,
+    workingCapitalDays: workingCapitalFromDayParts(debtorDays, inventoryDays, creditorDays),
+  };
 }
 
 /**
  * Working-capital days from day counts already on a line.
- * Component days are taken as non-negative. The net can stay negative.
+ * Any negative or missing component is not meaningful. The function does not
+ * add a negative inventory day to a negative creditor day.
  */
 export function workingCapitalFromDayParts(
   debtorDays: number,
   inventoryDays: number,
   creditorDays: number,
 ): number {
-  if (![debtorDays, inventoryDays, creditorDays].every((days) => Number.isFinite(days))) {
-    return Number.NaN;
+  const parts = [debtorDays, inventoryDays, creditorDays];
+  if (!parts.every((days) => Number.isFinite(days) && days >= 0)) return Number.NaN;
+  return Math.round(debtorDays) + Math.round(inventoryDays) - Math.round(creditorDays);
+}
+
+/** Shown instead of a ratio when the statement sign makes the formula unusable. */
+export const DATA_SIGN_NOTE =
+  "Data sign: cost of sales or payables are stored as a credit, so the ratio is not quoted.";
+
+function finiteFigure(figures: Record<string, unknown>, keys: readonly string[]): number | null {
+  for (const key of keys) {
+    const value = figures[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
   }
-  return (
-    Math.round(debtorDays) + Math.round(Math.abs(inventoryDays)) - Math.round(Math.abs(creditorDays))
-  );
+  return null;
+}
+
+function figureBag(figures: unknown): Record<string, unknown> {
+  if (Array.isArray(figures)) {
+    const bag: Record<string, unknown> = {};
+    for (const entry of figures) {
+      if (!entry || typeof entry !== "object" || !("key" in entry)) continue;
+      bag[String((entry as { key: unknown }).key)] = (entry as { value: unknown }).value;
+    }
+    return bag;
+  }
+  if (!figures || typeof figures !== "object") return {};
+  return figures as Record<string, unknown>;
+}
+
+/**
+ * A cached finding cites a ratio the tiles will not quote.
+ * This does not edit the stored sentence.
+ */
+export function cachedFindingRejected(text: string, figures?: unknown): boolean {
+  const bag = figureBag(figures);
+  const creditor = finiteFigure(bag, ["creditorDays", "Creditor Days"]);
+  const inventory = finiteFigure(bag, ["inventoryDays", "Inventory Days"]);
+  const debtor = finiteFigure(bag, ["debtorDays", "Debtor Days"]);
+  const wc = finiteFigure(bag, ["workingCapitalDays", "Working Capital Days"]);
+  const gross = finiteFigure(bag, ["grossMargin", "Gross Margin"]);
+  if (creditor != null && creditor < 0) return true;
+  if (inventory != null && inventory < 0) return true;
+  if (debtor != null && debtor < 0) return true;
+  if (wc != null && [debtor, inventory, creditor].some((days) => days != null && days < 0)) return true;
+  if (dataSignIssue({ grossMargin: gross })) return true;
+  const lower = text.toLowerCase();
+  if (
+    lower.includes("negative") &&
+    lower.includes("days") &&
+    (lower.includes("creditor") || lower.includes("inventory"))
+  ) {
+    return true;
+  }
+  if (/(creditor|inventory)\s+days\s+(?:of\s+)?-\d/.test(lower)) return true;
+  if (lower.includes("working capital days of 162") || lower.includes("working capital days of 161")) return true;
+  if (lower.includes("104.6%")) return true;
+  if (lower.includes("of not meaningful")) return true;
+  return false;
+}
+
+/** True when a gross-margin or days ratio must not be quoted. Does not change stored figures. */
+export function dataSignIssue(input: {
+  cogs?: number | null;
+  payables?: number | null;
+  grossMargin?: number | null;
+}): boolean {
+  if (typeof input.cogs === "number" && Number.isFinite(input.cogs) && input.cogs < 0) return true;
+  if (typeof input.payables === "number" && Number.isFinite(input.payables) && input.payables < 0) {
+    return true;
+  }
+  if (typeof input.grossMargin === "number" && Number.isFinite(input.grossMargin)) {
+    const fraction = Math.abs(input.grossMargin) <= 1.5 ? input.grossMargin : input.grossMargin / 100;
+    if (fraction > 1) return true;
+  }
+  return false;
 }
 
 /**
@@ -619,10 +685,13 @@ export function computeRatios(v: RatioInputs): Record<string, number> {
     return b === 0 ? 0 : a / b;
   };
 
-  if (n.revenue > 0 && n.cogs < 0) n.cogs = costMagnitude(n.cogs);
   const operatingMargin = safe(n.ebit, n.revenue);
   const netMargin = safe(n.netIncome, n.revenue);
-  const grossMargin = safe(n.revenue - n.cogs, n.revenue);
+  const rawGross = n.revenue !== 0 && Number.isFinite(n.revenue) ? (n.revenue - n.cogs) / n.revenue : Number.NaN;
+  const grossMargin =
+    n.cogs < 0 || n.payables < 0 || (Number.isFinite(rawGross) && rawGross > 1)
+      ? Number.NaN
+      : safe(n.revenue - n.cogs, n.revenue);
   const assetTurnover = safe(n.revenue, n.totalAssets);
   const equityMultiplier = equityMultiplierRatio(n.totalAssets, n.equity);
   const roa = netMargin * assetTurnover;

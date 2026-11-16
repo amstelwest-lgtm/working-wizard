@@ -104,6 +104,7 @@ const stale = findingSentence({
   liveHealth: live,
   canonicalRatios: { "Gross Margin": 95.4 },
 });
-assert(stale.includes(FIGURES_CHANGED_REGENERATE), stale);
+assert(stale.includes("Refreshed from current figures"), stale);
+assert(!stale.includes("104.6%"), stale);
 
 console.log("j4-za-gate-blocker: ok");

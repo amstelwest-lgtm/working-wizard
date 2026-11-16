@@ -48,15 +48,10 @@ Gross margin of 104.6% is revenue minus a negative cost: `(1 215 000 − (−56 
 
 #963 changed `ratioSentence` to “Creditor Days is not meaningful.” The Diagnose paragraph is `formatFindingProse`. It never calls `ratioSentence`.
 
-## One proposed fix
+## Fix that landed
 
-One display pass, shared by every surface above, using the same `overviewRatios` / `computeRatios` values the tiles already show. Do not wait for a new Analyst run, and do not update `agent_findings` in place.
+Not a rewrite of the cached sentence.
 
-- When live creditor or inventory days are not finite, replace the whole citation (“of -248”, “of not meaningful”, “negative creditor and inventory days”) with “Creditor days are not meaningful.” and “Inventory days are not meaningful.”
-- When live working-capital days are NaN, drop “Working Capital Days of 162”.
-- When the corrected gross margin is the tile value, replace “stored as 104.6%” with that percent.
-- Agree “Full year on file show” the same way “look” is already agreed.
+`computeRatios` / `operatingCycleDays` (`src/lib/ratios.ts`) are the inputs Overview, the tiles, and the Analyst prompt share (`overviewRatios`, `ask-ai/derive-ratios.ts`). A negative or missing day component makes working-capital days NaN. Negative cost of sales, negative payables, or a gross margin above 100% is a data-sign flag. Those ratios are not quoted. Stored financials are not rewritten.
 
-Call that pass from `formatFindingProse` (Home, Analyst, owner desk, FM hand-off text that already goes through `findingSentence`) and from the two cached paths that currently only run `rewriteDraftMonthStamp`: advisory draft email bodies, and pack section bodies. A new `record_finding` should use the same pass inside `shapeRecordedCopy`, so the next stored row matches the tiles. Old rows stay wrong in the table and read right on screen.
-
-Test: feed the two Chill Pepper sentences plus figures `{ creditorDays: -248, inventoryDays: -93, workingCapitalDays: 161.6, grossMargin: 1.046 }` and canonical ratios with NaN days and gross margin `1_159_000 / 1_215_000`. The result has no negative day count, no “of not meaningful”, no 162, and no 104.6%. Run it on `formatFindingProse` and on a string that has only been through `rewriteDraftMonthStamp`, the email and pack path.
+`presentCachedFinding` (`src/lib/cached-finding-gate.ts`) is a gate. If the cached text or its evidence figures fail that same check, Home (`findingSentence`), Analyst (the same sentence), the Financial Manager hand-off (`handoffResultText`), and the advisory email body do not show the stored paragraph. They show `renderHealthNarrative` plus “Refreshed from current figures.” The `agent_findings` title and detail stay as stored. The desk uses the existing source-check chip with `forceStale`. No new column. The next `record_finding` does not dedupe onto that row; it inserts a new one and sets the existing `superseded_by` on the old row (`agent-analyst/execute.ts`).

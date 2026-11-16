@@ -8,6 +8,7 @@ import { formatDate, formatMoney, type DateMarket, type MoneyMarket } from "./ma
 import { ZA_MARKET } from "./market/resolve";
 import { formatAsOf, formatLastRun, type AgentHeaderStatus } from "./milon-team";
 import type { AgentKey, TeamActivityEvent, TeamBriefingItem } from "./milon-team-feed";
+import { presentCachedFinding } from "./cached-finding-gate";
 import { correctedGrossMarginFraction, metricDirection, quoteUnusableDayCounts, workingCapitalFromDayParts } from "./ratios";
 import { canonicalScoreProse, type LiveHealthQuote } from "./score-prose";
 import {
@@ -758,6 +759,14 @@ export function findingSentence(input: {
   let text = title;
   if (detail && detail !== title && !title.includes(detail)) {
     text = `${title.replace(/[.!?]$/, "")}. ${detail}`;
+  }
+  const gated = presentCachedFinding({
+    text,
+    figures: input.figures,
+    live: narrativeSnapshot(input.liveHealth),
+  });
+  if (gated.stale) {
+    return /[.!?]$/.test(gated.text) ? gated.text : `${gated.text}.`;
   }
   const formatted = formatFindingProse(text, input.figures ?? {}, market, input.canonicalRatios);
   const scored = quoteLiveScoreOnly(formatted, input.liveHealth?.overall);
