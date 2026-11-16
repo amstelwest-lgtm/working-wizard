@@ -101,14 +101,14 @@ assert.deepEqual(planConfidenceDisplay(undefined), {
 assert.deepEqual(planConfidenceDisplay(72), { value: "72%", hint: null });
 assert.equal(
   planAnswerSentence([{ title: "Call the two largest overdue accounts" }]),
-  "1 action in the plan. Start with: call the two largest overdue accounts.",
+  "1 action in the plan. Start with: Call the two largest overdue accounts.",
 );
 assert.equal(
   planAnswerSentence([
     { title: "Raise prices on your best-selling products" },
     { title: "Chase the oldest invoice" },
   ]),
-  "2 actions in the plan. Start with: raise prices on your best-selling products.",
+  "2 actions in the plan. Start with: Raise prices on your best-selling products.",
 );
 assert.equal(
   planAnswerSentence([{ title: "AI review of pricing" }, { title: "File the return" }]),
@@ -119,11 +119,17 @@ assert.equal(
     { title: "File the return", status: "done" },
     { title: "Call the oldest account", status: "open" },
   ]),
-  "2 actions in the plan. Start with: call the oldest account.",
+  "2 actions in the plan. Start with: Call the oldest account.",
 );
 assert.equal(
   planAnswerSentence([{ title: "File the return", status: "done" }]),
   "Nothing left open.",
+);
+assert.equal(
+  planAnswerSentence([{ title: "Bring debt-to-equity under the target" }]).includes(
+    "Start with: Bring debt-to-equity under the target.",
+  ),
+  true,
 );
 assert.equal(
   planAnswerSentence([

@@ -269,24 +269,29 @@ export const CHART_ACTUALS_EVEN_SPLIT =
 
 export const CHART_ACTUALS_NONE = "No monthly actuals on file.";
 
-/** Shown when uploaded months are scaled so they add up to the year. */
-export const CHART_ACTUALS_SCALED = "Actual bars are scaled to the period revenue.";
+/** Shown only when stored months were scaled so the bars add up to the period. */
+export const CHART_ACTUALS_SCALED = "Monthly actuals shown add up to the period revenue.";
 
-/** "This year = YTD Mar–Oct". The months are the ones on the chart. */
-export function budgetChartPeriodCaption(months: readonly string[]): string | null {
-  const keys = months.filter((month) => /^\d{4}-\d{2}$/.test(month)).slice().sort();
+type CaptionMonth = string | { month: string; actual?: unknown };
+
+/** "YTD Mar–Oct 2026". Only months that have an actual. A string is already one of those. */
+export function budgetChartPeriodCaption(months: readonly CaptionMonth[]): string | null {
+  const keys = [
+    ...new Set(
+      months.flatMap((row) => {
+        const month = typeof row === "string" ? row : row.actual ? row.month : "";
+        return /^\d{4}-\d{2}$/.test(month) ? [month] : [];
+      }),
+    ),
+  ].sort();
   if (!keys.length) return null;
+  const name = (ym: string) => MONTHS[Number(ym.slice(5, 7)) - 1] ?? ym;
+  const year = (ym: string) => ym.slice(0, 4);
   const first = keys[0]!;
   const last = keys[keys.length - 1]!;
-  const sameYear = first.slice(0, 4) === last.slice(0, 4);
-  const label = (ym: string) => {
-    const name = MONTHS[Number(ym.slice(5, 7)) - 1] ?? ym;
-    return sameYear ? name : `${name} ${ym.slice(0, 4)}`;
-  };
-  const start = label(first);
-  const end = label(last);
-  const range = start === end ? start : `${start}\u2013${end}`;
-  return `This year = YTD ${range}`;
+  if (first === last) return `YTD ${name(first)} ${year(first)}`;
+  if (year(first) === year(last)) return `YTD ${name(first)}\u2013${name(last)} ${year(first)}`;
+  return `YTD ${name(first)} ${year(first)}\u2013${name(last)} ${year(last)}`;
 }
 
 /**

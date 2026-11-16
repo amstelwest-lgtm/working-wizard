@@ -436,7 +436,7 @@ function BudgetMonthChart({
   };
   const series = budgetChartSeries(views);
   const aligned = chartRevenueActuals({ views, yearRevenue, storedMonths });
-  const periodCaption = budgetChartPeriodCaption(views.map((row) => row.month));
+  const periodCaption = budgetChartPeriodCaption(views);
   const data = views.map((row, index) => {
     const amount = budgetChartAmount(row, series);
     const budget = series === "expenses" ? amount : row.budget.revenue;

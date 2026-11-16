@@ -124,8 +124,5 @@ export function planAnswerSentence(
   const title = open[0]?.title ?? "";
   const lead = kept.length === 1 ? "1 action in the plan" : `${kept.length} actions in the plan`;
   if (!title) return `${lead}.`;
-  const shown = /^[A-Z][a-z]/.test(title)
-    ? `${title.charAt(0).toLowerCase()}${title.slice(1)}`
-    : title;
-  return `${lead}. Start with: ${shown.endsWith(".") ? shown : `${shown}.`}`;
+  return `${lead}. Start with: ${title.endsWith(".") ? title : `${title}.`}`;
 }
