@@ -5,12 +5,17 @@
  * A suggested due (created + 14 days) is that item's own due date.
  */
 
+import { actionRowDisplayState } from "./action-handoff.ts";
 import { duplicateActionIds, effectiveActionDue } from "./action-plan-automation.ts";
 
 export type ActionCountInput = {
   status?: string | null;
   dueDate?: string | null;
   planTarget?: string | null;
+  /** Display only. A finished bot run is not counted overdue. */
+  pickupLabel?: string | null;
+  draftId?: string | null;
+  title?: string | null;
 };
 
 export type ActionPlanCounts = {
@@ -50,6 +55,9 @@ export function actionOverdueInput(
     dueDate?: string | null;
     createdAt?: string | null;
     planTarget?: string | null;
+    pickupLabel?: string | null;
+    draftId?: string | null;
+    title?: string | null;
   },
   today: string | Date = new Date(),
 ): ActionCountInput {
@@ -62,6 +70,9 @@ export function actionOverdueInput(
     status: item.status,
     dueDate: due,
     planTarget: due ? null : (item.planTarget ?? null),
+    pickupLabel: item.pickupLabel,
+    draftId: item.draftId,
+    title: item.title,
   };
 }
 
@@ -93,7 +104,17 @@ export function countActionPlan(
       continue;
     }
     open += 1;
-    if (actionIsOverdue(item, today)) overdue += 1;
+    if (actionIsOverdue(item, today)) {
+      const shown = actionRowDisplayState({
+        health: "overdue",
+        progressPct: 0,
+        status: item.status ?? "not_started",
+        pickupLabel: item.pickupLabel,
+        draftId: item.draftId,
+        title: item.title,
+      });
+      if (shown.overdue) overdue += 1;
+    }
   }
   return { total: items.length, open, done, overdue };
 }

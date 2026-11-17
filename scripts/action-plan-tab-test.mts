@@ -290,7 +290,7 @@ assert(planSrc.includes("buildStrategicMoveImportRows"), "import uses unique-seq
 assert(!/for \(const k of keys\)[\s\S]{0,200}await addItem/.test(planSrc), "import does not loop addItem with a stale seq");
 assert(planSrc.includes("Team members"), "Action Plan has a team members control");
 assert(planSrc.includes("function TeamPanel"), "team list panel exists");
-assert(/All owners[\s\S]{0,800}Team members/.test(planSrc), "team list sits next to the owner filter");
+assert(/ownerSelectOptions\(employees, ownerFilter\)[\s\S]{0,800}Team members/.test(planSrc), "team list sits next to the owner filter");
 assert(planSrc.includes("onManageTeam"), "owner picker can open the team list");
 assert(
   /onClick=\{\(e\) => \{\s*e\.stopPropagation\(\);\s*setAdding\(true\);/.test(planSrc),

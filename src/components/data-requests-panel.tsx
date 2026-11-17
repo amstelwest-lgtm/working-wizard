@@ -31,6 +31,7 @@ import {
 } from "@/lib/data-requests.functions";
 import { revealDataRequestsElement, subscribeDataRequestsReveal } from "@/lib/reveal-data-requests";
 import { trackedAskClass } from "@/lib/client-chrome";
+import { guardQuotedRatios } from "@/lib/ratios";
 import { useMarketFormat } from "@/contexts/market";
 
 type Props = {
@@ -377,7 +378,7 @@ export function DataRequestsPanel({
                       ) : null}
                     </div>
                     <p className="mt-1 text-[14px] font-semibold leading-snug text-slate-900 dark:text-[#F4F7FB]">
-                      {r.title}
+                      {guardQuotedRatios(r.title)}
                     </p>
                     {r.reason ? (
                       <p className="mt-0.5 text-[12px] leading-relaxed text-slate-700 dark:text-slate-200/85">

@@ -1,3 +1,4 @@
+import { actionRowDisplayState } from "@/lib/action-handoff";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 
 /**
@@ -18,6 +19,9 @@ export type AutomationItem = {
   status: AutomationStatus;
   createdAt: string;
   lastNudgeAt?: string | null;
+  /** Display only. A finished bot run is not overdue. Not written back. */
+  pickupLabel?: string | null;
+  draftId?: string | null;
 };
 
 export type TeamOption = { id: string; name: string };
@@ -154,6 +158,15 @@ export function planAutomation(
     else if (item.dueDate && item.dueDate < today) followUp = "overdue";
     else if (item.lastNudgeAt) followUp = "nudged";
     else if (hasOwner) followUp = "waiting";
+    const display = actionRowDisplayState({
+      health: followUp === "overdue" ? "overdue" : "on_track",
+      progressPct: 0,
+      status: item.status,
+      pickupLabel: item.pickupLabel,
+      draftId: item.draftId,
+      title: item.title,
+    });
+    if (followUp === "overdue" && !display.overdue) followUp = hasOwner ? "waiting" : "none";
     return {
       id: item.id,
       title: item.title,

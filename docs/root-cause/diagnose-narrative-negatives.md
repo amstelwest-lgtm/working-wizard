@@ -111,3 +111,85 @@ The number on an action row is the stored `action_items.seq` (`src/components/ac
 “Done by Financial Manager · 27 Oct” is `handoffProgressCaption` (`src/lib/action-handoff.ts`): a succeeded run that saved a finding. `deriveActionHealth` (`src/lib/action-item-health.ts`) does not read that caption. An open row whose due date is past is Overdue, and `progress_pct` stays 0 until someone moves it. The bot finishing a draft does not mark the action done and does not fill the bar.
 
 Owner load groups open rows by `owner_id` (`OwnerLoad` in `action-plan.tsx`). A bot assignment stores the agent name on `owner_name` and sets `owner_id` to null (`latestStoredAssignment` of kind `bot`, and the assign click). Null `owner_id` is the Unassigned bucket. Three actions handed to agents with no employee id count as Unassigned 3.
+
+## Gate d121bab4: the stored ask still shows the signed days
+
+AQA on prod `d121bab4` (Chill Pepper `79c4c485`, Practice·Theo, hard reload). The data-request card still reads, with an ASCII hyphen:
+
+> gross margin is 95.4%, creditor days are -248 days and inventory days are -93 days
+
+No “Not enough data” wording is on the page. The gross-margin tile is “—”. 95.4% appears only in that sentence. No code in this note.
+
+### What writes the sentence
+
+There is no template with this wording. The Analyst model writes it. `record_finding` in `supabase/functions/agent-analyst/execute.ts` stores it through `shapeRecordedCopy` (`src/lib/agent-bus.ts`) on `agent_findings.title` / `detail`. Approving the draft copies those strings onto `data_requests` with no guard: `liveRecordForDraft` (`src/lib/agent-draft-decision.ts`) sets `title: input.title` and `reason: input.detail`.
+
+The repo has no “agent-analyst v50” marker. The sentence is the model’s wording from a row saved before `guardQuotedRatios` ran on that write. The write-path call only affects a later `record_finding`, and only after that function is deployed. It does not rewrite a row already in `data_requests`.
+
+### Why the guard misses this card
+
+On `d121bab4`, `guardQuotedRatios` does match this literal sentence. With no live ratios, and with Creditor Days and Inventory Days set to NaN, it becomes “gross margin is 95.4%, creditor days are not enough data and inventory days are not enough data”. `findingCardCopy` does the same. The matcher allows “are” between the label and the number. The hyphen here is ASCII `-`, which the guard already accepts.
+
+The card that still shows the original sentence does not call that function.
+
+- `DataRequestsPanel` (`src/components/data-requests-panel.tsx`) prints `{r.title}` as stored.
+- The reason goes through `displayedDataRequestReason` (`src/lib/data-requests.ts`), which only rewrites “45-day benchmark”. It does not call `guardQuotedRatios`.
+- `OwnerDraftCard` does call the guard, via `findingCardCopy`. A still-open draft would not keep “-248”. The visible ask is the saved `data_requests` row.
+
+The gross-margin tile is the live ratio. Negative cost of sales makes `validateRatioInputs` refuse it, so the tile is “—”. 95.4% is the header margin the model copied into the stored sentence. The guard, when it runs, leaves that percent and replaces the day counts.
+
+### Why test:diagnose-days-guard passed
+
+The test builds a finding and calls `findingCardCopy`, `findingMetricContext`, `formatFindingProse`, `presentLiveDraft`, and `polishAgentCopy`. Those paths do call the guard, so a Chill Pepper-shaped title is cleaned. It never builds a `data_requests` row, never calls `displayedDataRequestReason`, and never renders `DataRequestsPanel`. The prod string is that stored title/reason. The fixture never went through the component that prints it.
+
+### Proposed fix, and the test
+
+One display-time call to `guardQuotedRatios` on the data-request title and reason, in `displayedDataRequestReason` and the title in `DataRequestsPanel`. Same function. No new column. Existing rows are re-read when the card renders. No SQL.
+
+The test passes the literal prod string `gross margin is 95.4%, creditor days are -248 days and inventory days are -93 days` through that display helper and asserts the result has no `-248` and no `-93`.
+
+### D. Suggested — confirm still says Overdue
+
+`actionRowDisplayState` (`src/lib/action-handoff.ts`) clears Overdue and fills the progress bar on the action row only, and only on screen. `planAutomation` (`src/lib/action-plan-automation.ts`) still sets `overdue` from the stored status and due date. `ActionPlanAutomation` (`src/components/action-plan-automation.tsx`) prints “· Overdue” from that flag, including on rows the plan row shows as done because the bot finished. `countActionPlan` / `formatActionPlanCounts` (`src/lib/action-plan-counts.ts`) count the same stored due dates, so the summary can say “3 open, including 3 overdue” when only one row is still overdue after the display rule.
+
+Proposed fix: pass the same display rule into `planAutomation` and `countActionPlan`. A finished bot run is not overdue and is not an open overdue in the summary. Do not write the plan. Test with two bot-finished rows and one still-overdue row, and assert the Suggested block and the summary name only the one.
+
+### E. All owners stays on All owners
+
+The owner dropdown (`action-plan.tsx`) is `value={ownerFilter ?? ""}` and its options are `employees[].id` plus “All owners”. A bucket click sets `ownerFilter` to the row key. An agent key (`agent:Financial Manager`) is not one of those options, so the control stays on “All owners” while the list is already filtered. A person id that is not in `employees` does the same.
+
+Proposed fix: the select value must be one of its options. Add the active bucket (the agent name, or the employee whose id was picked) as an option when it is selected. Test: pick an agent bucket and assert the select value is that agent, not `""`.
+
+## B. Past interviews still does not render (second fail)
+
+AQA on prod `d2c5a7d5`, firm Theo (`fca0f102-a597-4ec6-8f45-825c57f78797`), page `/practice/setup`. The action JSON fix and J4 pass. Past interviews still does not render.
+
+### The real interview row
+
+One active firm-wide row, `milon_brain_rules.id` `e168adc5-556f-4fd0-b390-2a2266d453c7`, `status` `active`, `task_type` `practice_setup_interview`, `source_event` `setup_partner_interview`, `client_id` null. Created 2026-11-13. The transcript is `rule_text`, 259 characters, JSON with three keys: `messages`, `question`, `modelTurns`.
+
+`modelTurns` is 1. `messages` has one element. Its role is `assistant`. There are zero `user` messages. `question` is 91 characters and is equal to that only message. There is no answered turn.
+
+`fetchFirmInterviewDraft` (`src/lib/setup-partner-client.ts`) reads that `rule_text` and `interviewDraftFromRuleText` (`src/lib/firm-interview-draft.ts`) parses it. The confirmed plan is the other active rows (`source_event` `setup_partner_confirm`), so the page is in phase `done` with this draft still open.
+
+### Why “transcript has answers” is false
+
+`PastInterviews` (`src/components/interview-exchange.tsx`) returns null when `interviewPairs` is empty. `interviewPairs` drops the live question when it is the last message and the model is not thinking. On this row that drop removes the only message. Nothing with a `user` role remains, so the log is not mounted. #968 did not change that filter. It only kept an archive across a redo and stopped labeling this draft as a redo. The condition is false because the stored transcript has no answer, not because the component failed to read a longer history.
+
+### Why test:practice-setup-route passed
+
+The route test’s saved-interview fixture (`scripts/practice-setup-route-test.mts`) is built with `interviewDraftWithQuestion` from an assistant question plus a user answer, then a second question. That row has a `user` message, so `interviewPairs` keeps a pair and `[data-past-interviews]` renders. The prod row is `{ messages: [{ role: "assistant", content: <question> }], question: <same>, modelTurns: 1 }`. The fixture never used that shape, so it could not fail.
+
+### Accepted behaviour
+
+Past responses sit below, hidden, if any. With zero answers the page renders no Past interviews section and does not repeat the live question. `PastInterviews` already returns null when `interviewPairs` is empty, so this row needs no render change. The test loads `PracticeSetupInterview` with a saved plan and this draft shape, and asserts `[data-past-interviews]` is absent and the question text appears once. A second fixture with an answered pair asserts the section is collapsed and shows a count. Redo stays on the Saved / idle screen only.
+
+### Redo, on this same screen
+
+AQA sees no Redo button. The controls are Next, “That’s enough, map it”, Review proposals, and Back to practice.
+
+Redo is this condition in `PracticeSetupInterview` (`src/components/practice-setup-panel.tsx`): `phase === "done" && !showInterview`. Back to practice is `phase === "done"`, so it shows while a plan is saved. Next and “That’s enough, map it” render only while `showInterview` is true. Review proposals sits on the next-steps card, which also shows because the phase is `done`.
+
+On this firm `showInterview` is true: the draft question is already in `messages` and no user message follows it, so `draftContinuesInterview` is true. Redo is therefore omitted on purpose. It is not missing from an idle page.
+
+Recommend keeping Redo only in the Saved / idle state, when no question is on screen. An interview that is already open does not need a second control to start one. AQA cannot click Redo from the current screen. To reach it, answer the open question, choose “That’s enough, map it”, and confirm the map so the interview panel closes. Status becomes Saved, and Redo interview sits with Back to practice. A fixture with a saved plan and a draft whose question already has a user reply (so `draftContinuesInterview` is false and `redoOpen` is false) lands on that idle screen directly.
