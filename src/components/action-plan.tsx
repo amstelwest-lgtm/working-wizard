@@ -28,7 +28,7 @@ import type { HealthScoreSnapshot } from "@/lib/health-snapshot";
 import { settleWithin } from "@/lib/bounded-load";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { handoffAssigneeName, handoffCommitError } from "@/lib/owner-handoff";
-import { assignedToast, describeActionHandoff, handoffDrawerFace, handoffRowChip, handoffRowShowsNotSent } from "@/lib/action-handoff";
+import { actionRowDisplayState, assignedToast, describeActionHandoff, handoffDrawerFace, handoffRowChip, handoffRowShowsNotSent } from "@/lib/action-handoff";
 import { handoffStillAwaitingRun } from "@/lib/agent-activity-poll";
 import { AssignmentNotes, type AssignmentNoteRow } from "@/components/assignment-notes";
 import { HandoffRunStatus } from "@/components/handoff-run-status";
@@ -398,6 +398,38 @@ export function toActionItemWrite(patch: Partial<Item>): Record<string, unknown>
     ...row
   } = patch;
   return row;
+}
+
+/** Numbers on screen follow the rows still shown. Stored seq is not rewritten. */
+export function visibleActionNumbers(count: number): number[] {
+  if (count <= 0) return [];
+  return Array.from({ length: count }, (_, index) => index + 1);
+}
+
+/**
+ * Open actions grouped for Owner load. A bot assignee has a name and no
+ * employee id, so it is its own bucket rather than Unassigned.
+ */
+export function ownerLoadRows(
+  items: readonly { id: string; status: string; owner_id: string | null; owner_name: string | null }[],
+  employees: readonly { id: string; name: string }[],
+): { key: string; name: string; count: number }[] {
+  const buckets = new Map<string, { name: string; count: number }>();
+  for (const item of items) {
+    if (item.status === "done") continue;
+    const agentName = !item.owner_id && item.owner_name?.trim() ? item.owner_name.trim() : null;
+    const key = item.owner_id ?? (agentName ? `agent:${agentName}` : "unassigned");
+    const name = item.owner_id
+      ? (employees.find((employee) => employee.id === item.owner_id)?.name ?? item.owner_name?.trim() ?? "—")
+      : (agentName ?? "Unassigned");
+    const bucket = buckets.get(key) ?? { name, count: 0 };
+    bucket.count += 1;
+    buckets.set(key, bucket);
+  }
+  return [...buckets.entries()]
+    .sort((a, b) => b[1].count - a[1].count || a[1].name.localeCompare(b[1].name))
+    .slice(0, 6)
+    .map(([key, bucket]) => ({ key, name: bucket.name, count: bucket.count }));
 }
 
 /**
@@ -2024,9 +2056,10 @@ export default function ActionPlanPanel({
             </div>
           )}
           <div>
-            {filtered.map((it) => (
+            {filtered.map((it, index) => (
               <ItemRow
                 key={it.id}
+                displayNumber={visibleActionNumbers(filtered.length)[index] ?? index + 1}
                 duplicateTitle={duplicateActionIds(filtered).includes(it.id)}
                 item={it}
                 focused={it.id === focusedItemId}
@@ -2611,6 +2644,7 @@ function DriversStrip({
 
 // ═══ Table row ═══════════════════════════════════════════════════════════════
 function ItemRow({
+  displayNumber,
   item,
   employees,
   milestones,
@@ -2644,6 +2678,7 @@ function ItemRow({
   focused,
   suggestion,
 }: {
+  displayNumber: number;
   item: Item & { health?: Health };
   focused?: boolean;
   /** Display-only. Confirming still writes through the existing owner and date controls. */
@@ -2687,8 +2722,17 @@ function ItemRow({
   onOpenDraft?: (draftId: string) => void;
 }) {
   const { market } = useMarketFormat();
-  const h = healthMeta(item.health);
-  const overdue = item.health === "overdue";
+  const shown = actionRowDisplayState({
+    health: item.health ?? "on_track",
+    progressPct: item.progress_pct,
+    status: item.status,
+    pickupLabel,
+    draftId,
+    title: item.title,
+  });
+  const h = healthMeta(shown.health as Health);
+  const overdue = shown.overdue;
+  const progressPct = shown.progressPct;
   const [editTitle, setEditTitle] = useState(false);
   const [title, setTitle] = useState(() => stripMilonProjection(item.title));
   const [pickOwner, setPickOwner] = useState(false);
@@ -2726,7 +2770,7 @@ function ItemRow({
         />
       )}
       <span className="w-5 shrink-0 text-right text-[11px] font-bold tabular-nums text-slate-400 dark:text-slate-500">
-        {item.seq}
+        {displayNumber}
       </span>
 
       {/* Title + why (inline edit — owners only) */}
@@ -2897,7 +2941,7 @@ function ItemRow({
         <div className="relative h-1.5 rounded-full bg-amber-900/10 dark:bg-slate-800">
           <div
             className="h-1.5 rounded-full"
-            style={{ width: `${item.progress_pct}%`, background: h.color }}
+            style={{ width: `${progressPct}%`, background: h.color }}
           />
           {exp != null && item.status !== "done" && (
             <div
@@ -2907,7 +2951,7 @@ function ItemRow({
           )}
         </div>
         <div className="mt-0.5 flex justify-between text-[10px] tabular-nums text-slate-400 dark:text-slate-500">
-          <span>{item.progress_pct}%</span>
+          <span>{progressPct}%</span>
           {milestones.length > 0 && (
             <span>
               {msDone}/{milestones.length} wk
@@ -4294,28 +4338,25 @@ function OwnerLoad({
   employees: Employee[];
   onPick: (id: string | null) => void;
 }) {
-  const open = items.filter((i) => i.status !== "done");
-  const byOwner = new Map<string, (Item & { health?: Health })[]>();
-  open.forEach((i) => {
-    const k = i.owner_id ?? "unassigned";
-    byOwner.set(k, [...(byOwner.get(k) ?? []), i]);
-  });
-  const max = Math.max(1, ...[...byOwner.values()].map((v) => v.length));
-  const rows = [...byOwner.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 6);
+  const rows = ownerLoadRows(items, employees);
+  const max = Math.max(1, ...rows.map((row) => row.count));
   return (
     <VizCard title="Owner load · open actions">
       <div className="space-y-2">
         {rows.length === 0 && <p className="text-xs text-slate-400">All actions complete.</p>}
-        {rows.map(([ownerId, list]) => {
-          const name =
-            ownerId === "unassigned"
-              ? "Unassigned"
-              : (employees.find((e) => e.id === ownerId)?.name ?? "—");
+        {rows.map((row) => {
+          const name = row.name;
+          const list = items.filter((item) => {
+            if (item.status === "done") return false;
+            const agentName = !item.owner_id && item.owner_name?.trim() ? item.owner_name.trim() : null;
+            const key = item.owner_id ?? (agentName ? `agent:${agentName}` : "unassigned");
+            return key === row.key;
+          });
           return (
             <button
-              key={ownerId}
+              key={row.key}
               className="block w-full text-left"
-              onClick={() => onPick(ownerId === "unassigned" ? null : ownerId)}
+              onClick={() => onPick(row.key.startsWith("agent:") || row.key === "unassigned" ? null : row.key)}
             >
               <div className="mb-0.5 flex justify-between text-[11px]">
                 <span className="font-semibold text-slate-700 dark:text-slate-300">{name}</span>

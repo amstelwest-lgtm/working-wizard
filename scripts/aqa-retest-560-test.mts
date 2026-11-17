@@ -67,14 +67,15 @@ assert(flags!.includes("95.4%"), flags!);
 assert(!flags!.includes("104.6"), flags!);
 assert(!flags!.includes("-248"), flags!);
 assert(!flags!.includes("-93"), flags!);
-assert(flags!.includes("248"), flags!);
-assert(flags!.includes("93"), flags!);
+assert(!flags!.includes("248"), flags!);
+assert(!flags!.includes("93"), flags!);
+assert(flags!.includes("not enough data"), flags!);
 assert(!flags!.includes("161.6"), flags!);
 const diagnosed = findingSentence({ title: "creditor days -248, inventory days -93" });
 assert(!diagnosed.includes("-248") && !diagnosed.includes("-93"), diagnosed);
 assert(diagnosed.includes("Refreshed from current figures"), diagnosed);
 assert(
-  ratioSentence("Creditor Days", "Creditor Days -248 days") === "Creditor Days is not meaningful.",
+  ratioSentence("Creditor Days", "Creditor Days -248 days") === "Creditor Days is not enough data.",
   ratioSentence("Creditor Days", "Creditor Days -248 days"),
 );
 assert(

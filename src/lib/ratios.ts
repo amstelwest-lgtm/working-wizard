@@ -444,22 +444,11 @@ export const FLOW_FIELD_KEYS = [
 ] as const satisfies readonly (keyof RatioInputs)[];
 
 /**
- * Day counts quoted on Roadmap and in chat.
- * Component days are never printed negative. A negative working-capital cycle
- * is flagged — creditors fund it — instead of a bare minus.
- */
-const NEGATIVE_DAY_QUOTE =
-  /\b(creditor days|inventory days|days payable outstanding|days ap|dpo|stock days|dio)\b([^.\n]{0,40}?)(?<![\d.\u2013\u2014])(-\d+(?:\.\d+)?)(\s*days?)?/gi;
-
-/**
  * Diagnose must not quote creditor or inventory days below zero.
  * A negative or missing input is not a day count.
  */
 export function quoteUnusableDayCounts(text: string): string {
-  return text.replace(NEGATIVE_DAY_QUOTE, (_full, label: string, mid: string) => {
-    const glue = mid.replace(/\s+/g, " ");
-    return `${label}${glue}${DAYS_NOT_MEANINGFUL}`;
-  });
+  return guardQuotedRatios(text);
 }
 
 export function formatQuotedDays(name: string, days: number): string {
@@ -671,6 +660,64 @@ export function validateRatioInputs(input: RatioInputValues): RatioValidation {
 /** True when a gross-margin or days ratio must not be quoted. Does not change stored figures. */
 export function dataSignIssue(input: RatioInputValues): boolean {
   return validateRatioInputs(input).dataSign;
+}
+
+/** Shown when a day count must not be quoted. Never the absolute value. */
+export const NOT_ENOUGH_RATIO_DATA = "not enough data";
+
+const QUOTED_DAY_LABELS: { pattern: string; name: string; key: RatioQuoteKey }[] = [
+  { pattern: "creditor days|days payable outstanding|days ap|dpo", name: "Creditor Days", key: "creditorDays" },
+  { pattern: "inventory days|stock days|dio", name: "Inventory Days", key: "inventoryDays" },
+  { pattern: "debtor days|days sales outstanding|days ar|dso", name: "Debtor Days", key: "debtorDays" },
+  { pattern: "working capital days|wc days", name: "Working Capital Days", key: "workingCapitalDays" },
+];
+
+function parseQuotedNumber(raw: string): number {
+  return Number(raw.replace(/\u2212/g, "-"));
+}
+
+function dropQuotedDay(
+  key: RatioQuoteKey,
+  name: string,
+  cited: number,
+  ratios?: Record<string, number | null> | null,
+): boolean {
+  const component = key === "creditorDays" || key === "inventoryDays" || key === "debtorDays";
+  if (component && cited < 0) return true;
+  if (!ratios || !(name in ratios)) return false;
+  const live = ratios[name];
+  if (typeof live !== "number" || !Number.isFinite(live)) return true;
+  return !validateRatioInputs({ [key]: live }).quotable[key];
+}
+
+/**
+ * One guard for every narrative that cites days.
+ * A negative component day, or a live ratio that is NaN or otherwise unquotable,
+ * becomes "not enough data". The count is not kept and is not flipped positive.
+ * An impact delta ("−12 debtor days") is not this shape and stays.
+ * Matches ASCII "-" and unicode "−".
+ */
+export function guardQuotedRatios(
+  text: string,
+  ratios?: Record<string, number | null> | null,
+): string {
+  if (!text) return text;
+  let out = text;
+  for (const spec of QUOTED_DAY_LABELS) {
+    const pattern = new RegExp(
+      `(?<![\\w/])(${spec.pattern})\\b((?:\\s+(?:ratio|figure|reading|are|is|of|and|at|currently|about|around|now))*\\s*[:=]?\\s*)([-\\u2212]?\\d+(?:\\.\\d+)?)(\\s*days?)?`,
+      "gi",
+    );
+    out = out.replace(pattern, (full, label: string, mid: string, raw: string, _suffix: string | undefined, offset: number) => {
+      const cited = parseQuotedNumber(raw);
+      if (!Number.isFinite(cited)) return full;
+      const after = out.slice(offset + full.length);
+      if (/^[\u2013\u2014-]\d/.test(after)) return full;
+      if (!dropQuotedDay(spec.key, spec.name, cited, ratios)) return full;
+      return `${label}${mid}${NOT_ENOUGH_RATIO_DATA}`;
+    });
+  }
+  return out;
 }
 
 const QUOTE_NAME: Record<RatioQuoteKey, string> = {

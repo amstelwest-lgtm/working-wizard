@@ -42,9 +42,8 @@ import {
 } from "../../../src/lib/health-snapshot.ts";
 import { earlierStatementNote } from "../../../src/lib/statement-import-plan.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
-import { cachedFindingRejected } from "../../../src/lib/ratios.ts";
+import { cachedFindingRejected, guardQuotedRatios, periodMonthsOf } from "../../../src/lib/ratios.ts";
 import { overviewRatios } from "../../../src/lib/health-score.ts";
-import { periodMonthsOf } from "../../../src/lib/ratios.ts";
 import { supersedeOlderFindings } from "../_shared/agent-findings-supersede.ts";
 
 export type AnalystExecCtx = {
@@ -328,6 +327,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
   });
   if (!grounded.ok) return { error: grounded.error, tool_blocked: true };
   const market = moneyMarketFromClient(ctx.market);
+  const quoteRatios = canonicalQuoteRatios(ctx.pool);
   const shaped = shapeRecordedCopy({
     title,
     detail,
@@ -336,13 +336,15 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     figures: grounded.evidence.figures,
     periodLabel: grounded.evidence.period_label, // date-ok: evidence period key, formatted when printed
     market,
-    canonicalRatios: canonicalQuoteRatios(ctx.pool),
+    canonicalRatios: quoteRatios,
     storedNumbers: storedFigureValues(ctx.pool),
   });
   if (!shaped.ok) return { error: shaped.error };
+  const guardedTitle = guardQuotedRatios(shaped.title, quoteRatios);
+  const guardedDetail = guardQuotedRatios(shaped.detail, quoteRatios);
   const cited = attachCitedEvidence({
-    title: shaped.title,
-    detail: shaped.detail,
+    title: guardedTitle,
+    detail: guardedDetail,
     pool: ctx.pool,
     evidence: grounded.evidence,
   });
@@ -357,14 +359,14 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     ...(liveSnapshot ? snapshotEvidenceFields(liveSnapshot) : {}),
   };
   const reconciledCopy = persistReconciledFindingCopy({
-    title: shaped.title,
-    detail: shaped.detail,
+    title: guardedTitle,
+    detail: guardedDetail,
     evidence,
     live: liveSnapshot,
-    canonicalRatios: canonicalQuoteRatios(ctx.pool),
+    canonicalRatios: quoteRatios,
   });
-  const recordTitle = reconciledCopy.title;
-  const recordDetail = reconciledCopy.detail ?? "";
+  const recordTitle = guardQuotedRatios(reconciledCopy.title, quoteRatios);
+  const recordDetail = guardQuotedRatios(reconciledCopy.detail ?? "", quoteRatios);
   const warning = cited.warning;
   const recordKeys = [
     findingRecordKey({

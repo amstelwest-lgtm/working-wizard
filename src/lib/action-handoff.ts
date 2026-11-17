@@ -185,6 +185,40 @@ export function formatAssignmentNote(
  * A succeeded run with no id says the bot couldn't draft this, with the reason.
  * Pass `findingsReady: false` while that list is still loading so the row stays on Working.
  */
+/**
+ * Display only. A finished bot run is not Overdue at 0%.
+ * An action that still needs a person to approve or sign off is not shown as done.
+ * Nothing here is written back to the plan.
+ */
+export function actionNeedsHumanClose(input: { draftId?: string | null; title?: string | null }): boolean {
+  if ((input.draftId ?? "").trim()) return true;
+  return /\b(sign[\s-]?off|approval|approve)\b/i.test(input.title ?? "");
+}
+
+export function actionRowDisplayState(input: {
+  health: string;
+  progressPct: number;
+  status: string;
+  pickupLabel?: string | null;
+  draftId?: string | null;
+  title?: string | null;
+}): { health: string; progressPct: number; overdue: boolean } {
+  const botFinished = /^Done by\b/i.test(input.pickupLabel ?? "");
+  if (!botFinished || input.status === "done") {
+    return {
+      health: input.health,
+      progressPct: input.progressPct,
+      overdue: input.health === "overdue",
+    };
+  }
+  const needsHuman = actionNeedsHumanClose(input);
+  return {
+    health: needsHuman ? (input.health === "overdue" || input.health === "complete" ? "on_track" : input.health) : "complete",
+    progressPct: Math.max(input.progressPct, 100),
+    overdue: false,
+  };
+}
+
 export function handoffProgressCaption(
   agent: AgentKey,
   status: string | null | undefined,

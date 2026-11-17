@@ -4,6 +4,7 @@
  * says when those inputs have moved. The stored row is not rewritten.
  */
 import { groundAdvisoryNarrative } from "./advisory-narrative.ts";
+import { guardQuotedRatios } from "./ratios.ts";
 import {
   readStoredHealthSnapshot,
   reconcileStoredHealthNarrative,
@@ -243,7 +244,7 @@ export function presentLiveDraft(base: string, live?: DraftLiveFigures | null): 
   if (!hasRatios && !hasOverall && !live?.health && UNGROUNDED_FIGURE.test(trimmed)) {
     return { text: DRAFT_OUT_OF_DATE, stale: true, refresh: true };
   }
-  const grounded = quoteLiveDraftProse(trimmed, { ratios, overall });
+  const grounded = guardQuotedRatios(quoteLiveDraftProse(trimmed, { ratios, overall }), ratios);
   const health = reconcileStoredHealthNarrative({
     text: grounded,
     live: live?.health ?? null,
