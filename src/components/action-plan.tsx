@@ -126,7 +126,14 @@ const LABEL_CLS = "text-[10px] uppercase tracking-wider text-slate-500 dark:text
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type Status = "not_started" | "in_progress" | "done" | "blocked";
-type Health = "on_track" | "at_risk" | "off_track" | "overdue" | "complete" | "not_started";
+type Health =
+  | "on_track"
+  | "at_risk"
+  | "off_track"
+  | "overdue"
+  | "complete"
+  | "not_started"
+  | "awaiting_sign_off";
 
 type Plan = {
   id: string;
@@ -368,6 +375,7 @@ const HEALTH_META: Record<Health, { label: string; color: string; bg: string }> 
   overdue: { label: "Overdue", color: "#ef4444", bg: "rgba(239,68,68,0.16)" },
   not_started: { label: "Not started", color: "#64748b", bg: "rgba(100,116,139,0.14)" },
   complete: { label: "Done", color: "#8a938c", bg: "rgba(138,147,140,0.15)" },
+  awaiting_sign_off: { label: "Awaiting sign-off", color: "#64748b", bg: "rgba(100,116,139,0.14)" },
 };
 export function healthMeta(h?: string | null) {
   return h && h in HEALTH_META ? HEALTH_META[h as Health] : HEALTH_META.on_track;
@@ -1652,9 +1660,15 @@ export default function ActionPlanPanel({
     () =>
       items.map((i) => ({
         ...i,
-        health: deriveActionHealth({ ...i, plan_target: plan?.target_date ?? null }),
+        health: deriveActionHealth({
+          ...i,
+          plan_target: plan?.target_date ?? null,
+          pickupLabel: handoffByItem.get(i.id)?.caption ?? null,
+          draftId: handoffByItem.get(i.id)?.draftId ?? null,
+          title: i.title,
+        }),
       })),
-    [items, plan?.target_date],
+    [items, plan?.target_date, handoffByItem],
   );
   const listed = useMemo(() => keptOpenPlanRows(enriched), [enriched]);
   const planCounts = useMemo(
@@ -1704,7 +1718,7 @@ export default function ActionPlanPanel({
     else if (filter === "at_risk")
       list = list.filter((i) => i.health === "at_risk" || i.health === "off_track");
     else if (filter === "blocked") list = list.filter((i) => i.status === "blocked");
-    else if (filter === "done") list = list.filter((i) => i.status === "done");
+    else if (filter === "done") list = list.filter((i) => i.status === "done" || i.health === "complete");
     if (ownerFilter) list = list.filter((i) => actionMatchesOwnerFilter(i, ownerFilter));
     const by = [...list];
     if (sortBy === "due")
@@ -1731,6 +1745,7 @@ export default function ActionPlanPanel({
       overdue: 0,
       not_started: 0,
       complete: 0,
+      awaiting_sign_off: 0,
     };
     listed.forEach((i) => {
       const key = i.health && i.health in c ? i.health : "on_track";
@@ -4196,11 +4211,13 @@ export function formatActionHealthSummary(counts: Record<Health, number>): strin
   const open =
     counts.on_track + counts.at_risk + counts.off_track + counts.overdue + (counts.not_started ?? 0);
   const done = counts.complete ?? 0;
+  const awaiting = counts.awaiting_sign_off ?? 0;
   return formatActionPlanCounts({
-    total: open + done,
+    total: open + done + awaiting,
     open,
     done,
     overdue: counts.overdue ?? 0,
+    awaitingSignOff: awaiting,
   });
 }
 

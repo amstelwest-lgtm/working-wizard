@@ -33,7 +33,7 @@ import {
   isMilonItMember,
 } from "@/lib/user-roles";
 import { scoreTier, type OverallHealth } from "@/lib/health-score";
-import { actionIsOverdue, actionOverdueInput } from "@/lib/action-plan-counts";
+import { actionCounts, actionDisplayClass, actionOverdueInput } from "@/lib/action-plan-counts";
 import {
   buildAttentionItems,
   buildFollowUpQueue,
@@ -1569,27 +1569,30 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           if (!targetByClient.has(plan.client_id)) targetByClient.set(plan.client_id, plan.target_date);
         }
         if (!actErr && actions) {
+          const grouped = new Map<string, { status: string; dueDate: string | null; createdAt: string | null; planTarget: string | null; title: string }[]>();
           for (const a of actions) {
-            openActionsMap[a.client_id] = (openActionsMap[a.client_id] ?? 0) + 1;
-            const overdue = actionIsOverdue(
-              actionOverdueInput(
-                {
-                  status: a.status,
-                  dueDate: a.due_date,
-                  createdAt: a.created_at,
-                  planTarget: targetByClient.get(a.client_id) ?? null,
-                },
-                today,
-              ),
-              today,
-            );
-            if (overdue) {
-              overdueActionsMap[a.client_id] = (overdueActionsMap[a.client_id] ?? 0) + 1;
-            }
             const title = typeof a.title === "string" ? a.title.trim() : "";
-            if (title) {
-              chaseActionsMap[a.client_id] = chaseActionsMap[a.client_id] ?? [];
-              chaseActionsMap[a.client_id].push({ title, overdue });
+            const list = grouped.get(a.client_id) ?? [];
+            list.push({
+              status: a.status,
+              dueDate: a.due_date,
+              createdAt: a.created_at,
+              planTarget: targetByClient.get(a.client_id) ?? null,
+              title,
+            });
+            grouped.set(a.client_id, list);
+          }
+          for (const [clientId, rows] of grouped) {
+            const judged = rows.map((row) => actionOverdueInput(row, today));
+            const counts = actionCounts(judged, today);
+            if (counts.open) openActionsMap[clientId] = counts.open;
+            if (counts.overdue) overdueActionsMap[clientId] = counts.overdue;
+            for (const row of judged) {
+              if (!row.title) continue;
+              const klass = actionDisplayClass(row, today);
+              if (klass !== "open" && klass !== "overdue") continue;
+              chaseActionsMap[clientId] = chaseActionsMap[clientId] ?? [];
+              chaseActionsMap[clientId].push({ title: row.title, overdue: klass === "overdue" });
             }
           }
         }

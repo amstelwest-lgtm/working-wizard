@@ -362,7 +362,7 @@ import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { DRAFT_NEEDS_ACCOUNTANT, draftFindingKindLabel, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { isVisibleAgentFinding } from "@/lib/milon-team-activity";
-import { findingForAction } from "@/lib/action-handoff";
+import { describeActionHandoff, findingForAction } from "@/lib/action-handoff";
 import { handoffRowStillWorking } from "@/lib/agent-activity-poll";
 import { ownerPresence, steerOpenHandoffs, withCardHandoffRuns } from "@/lib/owner-presence";
 import {
@@ -390,7 +390,7 @@ import {
   type RowAssignment,
 } from "@/lib/open-plan-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, spokenCashStrain, type OwnerBooks } from "@/lib/owner-answers";
-import { actionOverdueInput, countActionPlan, keptOpenPlanRows } from "@/lib/action-plan-counts";
+import { actionCounts, actionDisplayClass, actionOverdueInput, keptOpenPlanRows } from "@/lib/action-plan-counts";
 import { homeActionNeeds, openActionSentence, presentHomeDraftBody, presentHomeDraftTitle } from "@/lib/owner-needs";
 import { healthSnapshotFromBooks, readStoredScoreSnapshotHash, renderHealthNarrative } from "@/lib/health-snapshot";
 import { draftStoredFiguresHash, draftStoredHealth, latestFiguresStamp } from "@/lib/draft-figures";
@@ -2145,13 +2145,87 @@ function ClientView() {
           return [{ ...row, id, title }];
         }),
       );
-      const titles = visible.map((row) => row.title);
       setOpenPlanUnavailable(false);
-      setOpenPlanTitles(titles);
       const ids = visible.map((row) => row.id);
       const [noteLog, runs] = ids.length
         ? await Promise.all([loadActionNotes(ids), loadActionHandoffRuns(ids)])
         : [new Map(), new Map()];
+      const runIds = [...runs.values()].map((run) => run.id).filter((id): id is string => Boolean(id));
+      const findingRes = runIds.length
+        ? await (
+            supabase as unknown as {
+              from(table: string): {
+                select(columns: string): {
+                  in(
+                    column: string,
+                    values: string[],
+                  ): Promise<{
+                    data:
+                      | {
+                          id?: string;
+                          run_id?: string | null;
+                          status?: string | null;
+                          superseded_by?: unknown;
+                          dismissed_reason?: string | null;
+                        }[]
+                      | null;
+                    error: { message?: string } | null;
+                  }>;
+                };
+              };
+            }
+          )
+            .from("agent_findings")
+            .select("id, run_id, status, superseded_by, dismissed_reason")
+            .in("run_id", runIds)
+        : { data: [], error: null };
+      const findings = (findingRes.data ?? []).flatMap((row) => {
+        const id = typeof row.id === "string" ? row.id : "";
+        if (!id) return [];
+        return [
+          {
+            id,
+            run_id: typeof row.run_id === "string" ? row.run_id : null,
+            status: typeof row.status === "string" ? row.status : null,
+            superseded_by: row.superseded_by,
+            dismissed_reason: typeof row.dismissed_reason === "string" ? row.dismissed_reason : null,
+          },
+        ];
+      });
+      const runList = [...runs.entries()].map(([actionId, run]) => ({
+        id: run.id,
+        agent: run.agent,
+        status: run.status,
+        at: run.at,
+        queued_at: run.at,
+        action_item_id: actionId,
+      }));
+      const counted = visible.map((row) => {
+        const handoff = describeActionHandoff({
+          actionItemId: row.id,
+          assignee: row.owner_name,
+          notes: noteLog.get(row.id) ?? [],
+          storedRun: runs.get(row.id) ?? null,
+          runs: runList,
+          findings,
+          findingsReady: !findingRes.error,
+        });
+        return {
+          status: row.status,
+          dueDate: row.due_date,
+          createdAt: row.created_at ?? null,
+          planTarget,
+          title: row.title,
+          pickupLabel: handoff.caption,
+          draftId: handoff.draftId,
+        };
+      });
+      const judged = counted.map((row) => actionOverdueInput(row, today));
+      const counts = actionCounts(judged, today);
+      const titles = visible.flatMap((row, index) => {
+        const klass = actionDisplayClass(judged[index]!, today);
+        return klass === "open" || klass === "overdue" ? [row.title] : [];
+      });
       const assignments = assignmentsFromNotes(noteLog);
       if (cancelled) return;
       const pendings = [...pendingHandoffs.current.values()].filter(
@@ -2240,22 +2314,7 @@ function ClientView() {
         }
       }
       setOpenPlanTitles(titles);
-      setOpenPlanOverdue(
-        countActionPlan(
-          visible.map((row) =>
-            actionOverdueInput(
-              {
-                status: row.status,
-                dueDate: row.due_date,
-                createdAt: row.created_at ?? null,
-                planTarget,
-              },
-              today,
-            ),
-          ),
-          today,
-        ).overdue,
-      );
+      setOpenPlanOverdue(counts.overdue);
       paintAssignments(labelled, merged, paintedNotes, paintedRuns);
     })();
     return () => {

@@ -20,13 +20,16 @@ const PROD =
   "gross margin is 95.4%, creditor days are -248 days and inventory days are -93 days";
 
 const title = guardQuotedRatios(PROD);
-const reason = displayedDataRequestReason(PROD);
-for (const shown of [title, reason]) {
-  assert(!shown.includes("-248"), `display keeps -248: ${shown}`);
-  assert(!shown.includes("-93"), `display keeps -93: ${shown}`);
-  assert(shown.includes("95.4%"), `display keeps the margin: ${shown}`);
-  assert(shown.includes("not enough data"), `display replaces the days: ${shown}`);
-}
+const reason = displayedDataRequestReason(
+  `The stored ratios contradict each other. ${PROD}`,
+);
+assert(!title.includes("-248") && !title.includes("-93"), `guard keeps the days: ${title}`);
+assert(title.includes("not enough data"), `guard replaces the days: ${title}`);
+assert(!reason.includes("-248") && !reason.includes("-93"), `display keeps the days: ${reason}`);
+assert(reason.includes("Not enough data for creditor days"), `creditor sentence: ${reason}`);
+assert(reason.includes("Not enough data for inventory days"), `inventory sentence: ${reason}`);
+assert(!/stored ratios contradict/i.test(reason), `contradiction opener stayed: ${reason}`);
+assert(reason.includes("95.4%"), `display keeps the margin: ${reason}`);
 assert(displayedDataRequestReason("above the 45-day benchmark").includes("40-day benchmark"), "the benchmark rewrite stays");
 
 const written = liveRecordForDraft({
@@ -45,7 +48,8 @@ if (written.ok) {
   const row = written.record.row;
   for (const field of [String(row.title), String(row.reason)]) {
     assert(!field.includes("-248") && !field.includes("-93"), `write path stays dirty: ${field}`);
-    assert(field.includes("not enough data"), `write path replaces the days: ${field}`);
+    assert(field.includes("Not enough data for creditor days"), `write path sentence: ${field}`);
+    assert(!/stored ratios contradict/i.test(field), `write path keeps the opener: ${field}`);
   }
 }
 
@@ -60,7 +64,7 @@ const planned = planAutomation(items, [], today);
 const overdueRows = planned.rows.filter((row) => row.overdue);
 assert(overdueRows.map((row) => row.title).join("|") === "Call the supplier", `suggested overdue rows: ${overdueRows.map((row) => row.title).join("|")}`);
 const summary = formatActionPlanCounts(countActionPlan(items, today));
-assert(summary === "3 actions · 3 open, including 1 overdue", `summary names every overdue row: ${summary}`);
+assert(summary === "3 actions · 1 open, including 1 overdue · 2 done", `summary names every overdue row: ${summary}`);
 
 const window = new Window({
   url: "http://127.0.0.1:5000/practice/setup",

@@ -19,7 +19,7 @@ import { coerceMarketSelection, parseMarketSelection } from "@/lib/market/parse"
 import { resolveMarket } from "@/lib/market/resolve";
 import { onlyActiveClients } from "@/lib/archive-client";
 import { collapseDuplicateClientShells, loadClientDisplayNames } from "@/lib/client-display-name";
-import { actionIsOverdue, actionOverdueInput } from "@/lib/action-plan-counts";
+import { actionCounts, actionOverdueInput } from "@/lib/action-plan-counts";
 import { countUnreviewedSends } from "@/lib/client-agent-done";
 import {
   rankPortfolio,
@@ -190,7 +190,7 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
       groupCount(sb, "data_requests", ids, "client_id, severity, status", (q) =>
         (q as { in: (c: string, v: string[]) => unknown }).in("status", ["open", "sent"]),
       ),
-      groupCount(sb, "action_items", ids, "client_id, status, due_date, created_at", (q) =>
+      groupCount(sb, "action_items", ids, "client_id, status, due_date, created_at, title", (q) =>
         (q as { neq: (c: string, v: string) => unknown }).neq("status", "done"),
       ),
       groupCount(sb, "proposed_next_steps", ids, "client_id, status", (q) =>
@@ -237,21 +237,39 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
     }
     const openReq = tally(requests);
     const blockingReq = tally(requests, (r) => r.severity === "critical");
-    const openAct = tally(actions);
-    const overdueAct = tally(actions, (r) =>
-      actionIsOverdue(
-        actionOverdueInput(
-          {
-            status: typeof r.status === "string" ? r.status : "",
-            dueDate: typeof r.due_date === "string" ? r.due_date : null,
-            createdAt: typeof r.created_at === "string" ? r.created_at : null,
-            planTarget: planTarget.get(String(r.client_id ?? "")) ?? null,
-          },
-          today,
-        ),
+    const rowsByClient = new Map<
+      string,
+      {
+        status: string;
+        dueDate: string | null;
+        createdAt: string | null;
+        planTarget: string | null;
+        title: string | null;
+      }[]
+    >();
+    for (const row of actions) {
+      const id = String(row.client_id ?? "");
+      if (!id) continue;
+      const list = rowsByClient.get(id) ?? [];
+      list.push({
+        status: typeof row.status === "string" ? row.status : "",
+        dueDate: typeof row.due_date === "string" ? row.due_date : null,
+        createdAt: typeof row.created_at === "string" ? row.created_at : null,
+        planTarget: planTarget.get(id) ?? null,
+        title: typeof row.title === "string" ? row.title : null,
+      });
+      rowsByClient.set(id, list);
+    }
+    const openAct: CountMap = new Map();
+    const overdueAct: CountMap = new Map();
+    for (const [id, rows] of rowsByClient) {
+      const counts = actionCounts(
+        rows.map((row) => actionOverdueInput(row, today)),
         today,
-      ),
-    );
+      );
+      if (counts.open) openAct.set(id, counts.open);
+      if (counts.overdue) overdueAct.set(id, counts.overdue);
+    }
     const blockedAct = tally(actions, (r) => r.status === "blocked");
     const proposed = tally(recs);
 

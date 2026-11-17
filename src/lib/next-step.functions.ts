@@ -28,6 +28,7 @@ import {
 } from "@/lib/next-step";
 import { isMissingRecommendationRelation } from "@/lib/recommendations";
 import { isBusinessOwnerSeat } from "@/lib/owner-workspaces";
+import { actionCounts, type ActionCountInput } from "@/lib/action-plan-counts";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type LooseQuery = any;
@@ -49,6 +50,24 @@ function isMissingRelation(err: unknown): boolean {
         : "",
     )
   );
+}
+
+async function loadOpenActionRows(sb: LooseSb, clientId: string): Promise<ActionCountInput[]> {
+  const { data, error } = await sb
+    .from("action_items")
+    .select("status, due_date, created_at, title")
+    .eq("client_id", clientId)
+    .neq("status", "done");
+  if (error) {
+    if (isMissingRelation(error)) return [];
+    throw new Error(error.message);
+  }
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    status: typeof row.status === "string" ? row.status : "",
+    dueDate: typeof row.due_date === "string" ? row.due_date : null,
+    createdAt: typeof row.created_at === "string" ? row.created_at : null,
+    title: typeof row.title === "string" ? row.title : null,
+  }));
 }
 
 async function count(
@@ -255,8 +274,7 @@ export const getNextStep = createServerFn({ method: "GET" })
       hasSnapshot,
       openQuestions,
       proposedRecommendations,
-      openActions,
-      overdueActions,
+      actionRows,
       blockedActions,
       gaps,
       openDataRequests,
@@ -267,10 +285,7 @@ export const getNextStep = createServerFn({ method: "GET" })
         q.eq("status", "unanswered").in("audience", questionAudiences),
       ),
       count(sb, "proposed_next_steps", data.clientId, (q) => q.eq("status", "proposed")),
-      count(sb, "action_items", data.clientId, (q) => q.neq("status", "done")),
-      count(sb, "action_items", data.clientId, (q) =>
-        q.neq("status", "done").lt("due_date", today),
-      ),
+      loadOpenActionRows(sb, data.clientId),
       count(sb, "action_items", data.clientId, (q) => q.eq("status", "blocked")),
       recommendationGaps(sb, data.clientId),
       // P0.6: open or sent asks, with kinds. Empty on a pre-P0.6 database.
@@ -278,6 +293,7 @@ export const getNextStep = createServerFn({ method: "GET" })
       latestPack(sb, data.clientId),
     ]);
 
+    const actionTotals = actionCounts(actionRows, today);
     const facts: NextStepFacts = {
       clientId: data.clientId,
       state: snapshot.state,
@@ -290,8 +306,8 @@ export const getNextStep = createServerFn({ method: "GET" })
       openQuestions,
       proposedRecommendations,
       approvedWithoutAction: gaps.approvedWithoutAction,
-      openActions,
-      overdueActions,
+      openActions: actionTotals.open,
+      overdueActions: actionTotals.overdue,
       blockedActions,
       actionedUnmeasured: gaps.actionedUnmeasured,
       openDataRequests: openDataRequests.count,
