@@ -3,6 +3,7 @@
  * Nothing here talks to the database or to a model.
  */
 import { groundAdvisoryNarrative } from "./advisory-narrative.ts";
+import { guardQuotedRatios } from "./ratios.ts";
 import { liveOverallFromRecord, quoteLiveScoreOnly } from "./draft-figures.ts";
 import { cashComfortThreshold } from "./cash-runway.ts";
 import { formatMoney, type MoneyMarket } from "./market/format.ts";
@@ -1589,13 +1590,16 @@ export function polishAgentCopy(input: {
   const stored = input.storedNumbers ?? figureLeaves(input.figures).map((leaf) => leaf.value);
   const stripped = stripUnstoredHealthyBand(stripRatioDumpLines(input.text).replace(/\s+/g, " ").trim(), stored);
   const ratios = quoteRatiosFromFigures(input.figures, input.canonicalRatios);
-  const formatted = quoteLiveScoreOnly(
-    repairDraftMetricUnits(
-      ratios
-        ? groundAdvisoryNarrative(formatCopyAmounts(stripped, input.figures, market), ratios)
-        : formatCopyAmounts(stripped, input.figures, market),
+  const formatted = guardQuotedRatios(
+    quoteLiveScoreOnly(
+      repairDraftMetricUnits(
+        ratios
+          ? groundAdvisoryNarrative(formatCopyAmounts(stripped, input.figures, market), ratios)
+          : formatCopyAmounts(stripped, input.figures, market),
+      ),
+      liveOverallFromRecord(input.figures as Record<string, unknown> | undefined),
     ),
-    liveOverallFromRecord(input.figures as Record<string, unknown> | undefined),
+    ratios,
   );
   if (!formatted) return { ok: false, error: `A ${input.role} needs a complete sentence.` };
   const parts = splitCopySentences(formatted);

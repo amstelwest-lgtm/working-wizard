@@ -5,7 +5,7 @@
  * Qualitative claims follow the same score bands as the Scorecard.
  */
 import { numberRatioRecord, overviewRatios, scoreRatio } from "./health-score.ts";
-import { formatQuotedDays, healthBandLabel, periodMonthsOf, scoreTier } from "./ratios.ts";
+import { formatQuotedDays, guardQuotedRatios, healthBandLabel, periodMonthsOf, scoreTier } from "./ratios.ts";
 
 const DAYS_RATIOS = new Set([
   "Debtor Days",
@@ -42,6 +42,7 @@ const LABEL_SPECS: ReadonlyArray<{ labels: string; name: string; kind: QuoteKind
     name: "Creditor Days",
     kind: "days",
   },
+  { labels: "inventory days|stock days|DIO", name: "Inventory Days", kind: "days" },
   { labels: "operating margin|OM", name: "Operating Margin", kind: "margin" },
   { labels: "gross margin|GM", name: "Gross Margin", kind: "margin" },
   { labels: "net margin|NM", name: "Net Margin", kind: "margin" },
@@ -212,8 +213,11 @@ export function groundAdvisoryNarrative(
   text: string,
   ratios: Record<string, number> | null | undefined,
 ): string {
-  if (!text || !ratios) return text;
-  return alignPayablesJudgment(groundLabeled(groundDayPair(text, ratios), ratios), ratios);
+  if (!text) return text;
+  const grounded = ratios
+    ? alignPayablesJudgment(groundLabeled(groundDayPair(text, ratios), ratios), ratios)
+    : text;
+  return guardQuotedRatios(grounded, ratios);
 }
 
 /**

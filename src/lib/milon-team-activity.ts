@@ -9,7 +9,7 @@ import { ZA_MARKET } from "./market/resolve";
 import { formatAsOf, formatLastRun, type AgentHeaderStatus } from "./milon-team";
 import type { AgentKey, TeamActivityEvent, TeamBriefingItem } from "./milon-team-feed";
 import { presentCachedFinding } from "./cached-finding-gate";
-import { correctedGrossMarginFraction, metricDirection, quoteUnusableDayCounts, workingCapitalFromDayParts } from "./ratios";
+import { correctedGrossMarginFraction, guardQuotedRatios, metricDirection, quoteUnusableDayCounts, workingCapitalFromDayParts } from "./ratios";
 import { canonicalScoreProse, type LiveHealthQuote } from "./score-prose";
 import {
   badgeMonthFromPeriod,
@@ -357,7 +357,7 @@ function correctQuotedFigure(key: string, value: number): number {
     return Math.abs(value) <= 1.5 ? fraction : fraction * 100;
   }
   if ((kind === "inventory" || kind === "creditor" || kind === "debtor") && value < 0) {
-    return Math.abs(value);
+    return value;
   }
   return value;
 }
@@ -371,11 +371,16 @@ function correctQuotedFigures(entries: { key: string; value: number }[]): { key:
   const debtor = pick("debtor");
   const inventory = pick("inventory");
   const creditor = pick("creditor");
-  const wc = workingCapitalFromDayParts(
-    debtor?.value ?? Number.NaN,
-    inventory?.value ?? Number.NaN,
-    creditor?.value ?? Number.NaN,
-  );
+  const partsReady =
+    debtor != null &&
+    inventory != null &&
+    creditor != null &&
+    debtor.value >= 0 &&
+    inventory.value >= 0 &&
+    creditor.value >= 0;
+  const wc = partsReady
+    ? workingCapitalFromDayParts(debtor.value, inventory.value, creditor.value)
+    : Number.NaN;
   if (!Number.isFinite(wc)) return corrected;
   return corrected.map((entry) => (figureKind(entry.key) === "wc" ? { ...entry, value: wc } : entry));
 }
@@ -572,7 +577,10 @@ export function formatFindingProse(
     : repaired;
   const bag: Record<string, number> = {};
   for (const entry of figureEntries(figures)) bag[entry.key] = entry.value;
-  return quoteUnusableDayCounts(repairDraftMetricUnits(quoteLiveScoreOnly(grounded, liveOverallFromRecord(bag))));
+  return guardQuotedRatios(
+    repairDraftMetricUnits(quoteLiveScoreOnly(grounded, liveOverallFromRecord(bag))),
+    canonicalRatios,
+  );
 }
 
 const METRIC_WORD =
@@ -688,7 +696,7 @@ export function findingMetricContext(
     return `${clause.label} ${clause.amount}`;
   });
   const line = parts.join(", ");
-  return line.charAt(0).toUpperCase() + line.slice(1);
+  return guardQuotedRatios(line.charAt(0).toUpperCase() + line.slice(1), canonicalRatios);
 }
 
 function requestAsk(evidence: unknown): string | null {
@@ -735,7 +743,10 @@ export function findingCardCopy(
   else if (detail && !isMetricDump(row.detail ?? "")) lead = detail;
   else lead = title || detail;
   const context = findingMetricContext(row.evidence, market, canonicalRatios);
-  return { lead, context: context && !isMetricDump(lead) ? context : null };
+  return {
+    lead: guardQuotedRatios(lead, canonicalRatios),
+    context: context && !isMetricDump(lead) ? guardQuotedRatios(context, canonicalRatios) : null,
+  };
 }
 
 /** One sentence. Percentages and currency are formatted; 0.7795 never survives. */
@@ -792,7 +803,7 @@ export function findingSentence(input: {
 export function ratioSentence(name: string, detail?: string): string {
   const raw = (detail ?? "").trim();
   const source = quoteUnusableDayCounts(raw);
-  if (source !== raw && /not meaningful/i.test(source)) return `${name} is not meaningful.`;
+  if (source !== raw && /not meaningful|not enough data/i.test(source)) return `${name} is not enough data.`;
   const pct = source.match(/(-?\d+(?:\.\d+)?)%\s*$/);
   if (pct) return `${name} is ${Number(pct[1]).toFixed(1)}%.`;
   const days = source.match(/(-?\d+(?:\.\d+)?)\s+days\s*$/i);
