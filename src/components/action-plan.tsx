@@ -401,6 +401,24 @@ export function toActionItemWrite(patch: Partial<Item>): Record<string, unknown>
   return row;
 }
 
+/** Options for the owner dropdown. The active bucket is included even when it is not an employee id. */
+export function ownerSelectOptions(
+  employees: readonly { id: string; name: string }[],
+  active: string | null,
+): { value: string; label: string }[] {
+  const options = [
+    { value: "", label: "All owners" },
+    ...employees.map((employee) => ({ value: employee.id, label: employee.name })),
+  ];
+  if (active && !options.some((option) => option.value === active)) {
+    options.push({
+      value: active,
+      label: active.startsWith("agent:") ? active.slice("agent:".length) : active,
+    });
+  }
+  return options;
+}
+
 /** What an Owner-load click filters to. Unassigned clears the filter. An agent key keeps that agent. */
 export function ownerLoadPick(key: string): string | null {
   if (key === "unassigned") return null;
@@ -1641,17 +1659,20 @@ export default function ActionPlanPanel({
   const listed = useMemo(() => keptOpenPlanRows(enriched), [enriched]);
   const planCounts = useMemo(
     () =>
-      countActionPlan(
+        countActionPlan(
         listed.map((item) =>
           actionOverdueInput({
             status: item.status,
             dueDate: item.due_date,
             createdAt: item.created_at,
             planTarget: plan?.target_date ?? null,
+            pickupLabel: handoffByItem.get(item.id)?.caption ?? null,
+            draftId: handoffByItem.get(item.id)?.draftId ?? null,
+            title: item.title,
           }),
         ),
       ),
-    [listed, plan?.target_date],
+    [listed, plan?.target_date, handoffByItem],
   );
   const automation = useMemo(() => {
     const now = new Date();
@@ -1666,11 +1687,13 @@ export default function ActionPlanPanel({
         status: item.status,
         createdAt: item.created_at,
         lastNudgeAt: lastNudgeEmails[item.id]?.sent_at ?? null,
+        pickupLabel: handoffByItem.get(item.id)?.caption ?? null,
+        draftId: handoffByItem.get(item.id)?.draftId ?? null,
       })),
       employees.map((employee) => ({ id: employee.id, name: employee.name })),
       today,
     );
-  }, [listed, employees, lastNudgeEmails]);
+  }, [listed, employees, lastNudgeEmails, handoffByItem]);
   useEffect(() => {
     if (loading) return;
     onAnswer?.(listed.map((item) => ({ title: stripMilonProjection(item.title), status: item.status })));
@@ -1975,10 +1998,9 @@ export default function ActionPlanPanel({
               onChange={(e) => setOwnerFilter(e.target.value || null)}
               className={`rounded-md border px-2 py-1 text-[11px] ${INPUT_CLS}`}
             >
-              <option value="">All owners</option>
-              {employees.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name}
+              {ownerSelectOptions(employees, ownerFilter).map((option) => (
+                <option key={option.value || "all-owners"} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>

@@ -160,9 +160,9 @@ The owner dropdown (`action-plan.tsx`) is `value={ownerFilter ?? ""}` and its op
 
 Proposed fix: the select value must be one of its options. Add the active bucket (the agent name, or the employee whose id was picked) as an option when it is selected. Test: pick an agent bucket and assert the select value is that agent, not `""`.
 
-## B. Past interviews still does not render (second fail, no code)
+## B. Past interviews still does not render (second fail)
 
-AQA on prod `d2c5a7d5`, firm Theo (`fca0f102-a597-4ec6-8f45-825c57f78797`), page `/practice/setup`. The action JSON fix and J4 pass. Past interviews still does not render. No code in this note.
+AQA on prod `d2c5a7d5`, firm Theo (`fca0f102-a597-4ec6-8f45-825c57f78797`), page `/practice/setup`. The action JSON fix and J4 pass. Past interviews still does not render.
 
 ### The real interview row
 
@@ -180,11 +180,9 @@ One active firm-wide row, `milon_brain_rules.id` `e168adc5-556f-4fd0-b390-2a2266
 
 The route test’s saved-interview fixture (`scripts/practice-setup-route-test.mts`) is built with `interviewDraftWithQuestion` from an assistant question plus a user answer, then a second question. That row has a `user` message, so `interviewPairs` keeps a pair and `[data-past-interviews]` renders. The prod row is `{ messages: [{ role: "assistant", content: <question> }], question: <same>, modelTurns: 1 }`. The fixture never used that shape, so it could not fail.
 
-### Proposed fix, and the test
+### Accepted behaviour
 
-Render the log when `messages.length > 0`, including a transcript whose only turn is the unanswered opening question. Do not drop that sole message just because it is also the live question. `PastInterviews` should mount for this row.
-
-The test loads `PracticeSetupInterview` with a saved plan and this draft shape: one assistant message, `question` equal to that message, `modelTurns` 1, no user message. It asserts `[data-past-interviews]` is present and that its text includes the question.
+Past responses sit below, hidden, if any. With zero answers the page renders no Past interviews section and does not repeat the live question. `PastInterviews` already returns null when `interviewPairs` is empty, so this row needs no render change. The test loads `PracticeSetupInterview` with a saved plan and this draft shape, and asserts `[data-past-interviews]` is absent and the question text appears once. A second fixture with an answered pair asserts the section is collapsed and shows a count. Redo stays on the Saved / idle screen only.
 
 ### Redo, on this same screen
 
