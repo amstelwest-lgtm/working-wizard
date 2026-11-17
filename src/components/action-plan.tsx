@@ -401,6 +401,24 @@ export function toActionItemWrite(patch: Partial<Item>): Record<string, unknown>
   return row;
 }
 
+/** What an Owner-load click filters to. Unassigned clears the filter. An agent key keeps that agent. */
+export function ownerLoadPick(key: string): string | null {
+  if (key === "unassigned") return null;
+  return key;
+}
+
+/** True when a row belongs to the Owner-load filter, including an agent name with no employee id. */
+export function actionMatchesOwnerFilter(
+  item: { owner_id: string | null; owner_name: string | null },
+  filter: string | null,
+): boolean {
+  if (!filter) return true;
+  if (filter.startsWith("agent:")) {
+    return !item.owner_id && item.owner_name?.trim() === filter.slice("agent:".length);
+  }
+  return item.owner_id === filter;
+}
+
 /** Numbers on screen follow the rows still shown. Stored seq is not rewritten. */
 export function visibleActionNumbers(count: number): number[] {
   if (count <= 0) return [];
@@ -1664,7 +1682,7 @@ export default function ActionPlanPanel({
       list = list.filter((i) => i.health === "at_risk" || i.health === "off_track");
     else if (filter === "blocked") list = list.filter((i) => i.status === "blocked");
     else if (filter === "done") list = list.filter((i) => i.status === "done");
-    if (ownerFilter) list = list.filter((i) => i.owner_id === ownerFilter);
+    if (ownerFilter) list = list.filter((i) => actionMatchesOwnerFilter(i, ownerFilter));
     const by = [...list];
     if (sortBy === "due")
       by.sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"));
@@ -4368,7 +4386,7 @@ function OwnerLoad({
             <button
               key={row.key}
               className="block w-full text-left"
-              onClick={() => onPick(row.key.startsWith("agent:") || row.key === "unassigned" ? null : row.key)}
+              onClick={() => onPick(ownerLoadPick(row.key))}
             >
               <div className="mb-0.5 flex justify-between text-[11px]">
                 <span className="font-semibold text-slate-700 dark:text-slate-300">{name}</span>

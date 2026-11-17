@@ -811,24 +811,28 @@ export function presentActionWhy(
   return findingSentence({ title: raw, canonicalRatios, liveHealth });
 }
 
+function notEnoughDataFor(name: string): string {
+  return `Not enough data for ${name.trim().toLowerCase()}`;
+}
+
 export function ratioSentence(name: string, detail?: string): string {
   const raw = (detail ?? "").trim();
   const source = quoteUnusableDayCounts(raw);
-  if (source !== raw && /not meaningful|not enough data/i.test(source)) return `${name} is not enough data.`;
+  if (source !== raw && /not meaningful|not enough data/i.test(source)) return notEnoughDataFor(name);
   const pct = source.match(/(-?\d+(?:\.\d+)?)%\s*$/);
   if (pct) return `${name} is ${Number(pct[1]).toFixed(1)}%.`;
   const days = source.match(/(-?\d+(?:\.\d+)?)\s+days\s*$/i);
   if (days) {
     const count = Number(days[1]);
     if (count < 0 && /creditor|inventory|payable|stock|\bdpo\b|\bdio\b/i.test(`${name} ${source}`)) {
-      return `${name} is not meaningful.`;
+      return notEnoughDataFor(name);
     }
     return `${name} is ${Math.round(count)} days.`;
   }
   const num = source.match(/(-?\d+(?:\.\d+)?)\s*$/);
   if (!num) {
     const named = quoteUnusableDayCounts(name);
-    if (named !== name && /not meaningful/i.test(named)) return `${name} is not meaningful.`;
+    if (named !== name && /not meaningful|not enough data/i.test(named)) return notEnoughDataFor(name);
     return source || named;
   }
   const value = Number(num[1]);

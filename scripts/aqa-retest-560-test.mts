@@ -75,7 +75,7 @@ const diagnosed = findingSentence({ title: "creditor days -248, inventory days -
 assert(!diagnosed.includes("-248") && !diagnosed.includes("-93"), diagnosed);
 assert(diagnosed.includes("Refreshed from current figures"), diagnosed);
 assert(
-  ratioSentence("Creditor Days", "Creditor Days -248 days") === "Creditor Days is not enough data.",
+  ratioSentence("Creditor Days", "Creditor Days -248 days") === "Not enough data for creditor days",
   ratioSentence("Creditor Days", "Creditor Days -248 days"),
 );
 assert(
