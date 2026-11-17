@@ -1,5 +1,26 @@
 const MARKER = "@@milon-projection@@";
 const CLOSER = "@@/milon-projection@@";
+const PROJECTION_KEYS = ["\"pillar\"", "\"impactLabel\"", "\"frozenAt\"", "\"driver\""];
+
+/** Where a broken projection tail starts. The opener may already be gone. */
+function projectionTailStart(before: string): number {
+  let cut = before.length;
+  let found = false;
+  for (const key of PROJECTION_KEYS) {
+    const at = before.lastIndexOf(key);
+    if (at >= 0 && at < cut) {
+      cut = at;
+      found = true;
+    }
+  }
+  if (!found) {
+    const brace = before.lastIndexOf("{");
+    if (brace < 0) return before.length;
+    cut = brace;
+  }
+  while (cut > 0 && /[\s",:{]/.test(before[cut - 1] ?? "")) cut -= 1;
+  return cut;
+}
 
 /**
  * Action copy sometimes stores a machine token plus a JSON blob, closed by
@@ -14,8 +35,15 @@ export function stripMilonProjection(text: string | null | undefined): string {
   while (i < raw.length) {
     const at = raw.indexOf(MARKER, i);
     if (at < 0) {
-      out += raw.slice(i).split(CLOSER).join("");
-      break;
+      const close = raw.indexOf(CLOSER, i);
+      if (close < 0) {
+        out += raw.slice(i);
+        break;
+      }
+      const before = raw.slice(i, close);
+      out += before.slice(0, projectionTailStart(before));
+      i = close + CLOSER.length;
+      continue;
     }
     out += raw.slice(i, at);
     let j = at + MARKER.length;
