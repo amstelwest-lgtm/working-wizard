@@ -32,6 +32,7 @@ import {
 import {
   bespokeLogRow,
   buildPracticeImplementationPlan,
+  approvalDraftClientId,
   approvalDraftTitles,
   clientSetupBrainRows,
   mergeProductGap,
@@ -201,14 +202,20 @@ async function insertApprovalDrafts(
   firmId: string,
   userId: string,
   titles: readonly string[],
+  contextClientId: string | null,
 ) {
-  if (!titles.length) return;
-  const { data, error } = await admin.from("clients").select("id").eq("firm_id", firmId).limit(1);
-  if (error || !data?.[0]?.id) return;
-  const clientId = String(data[0].id);
   for (const title of titles) {
+    const clientId = approvalDraftClientId({ title, contextClientId });
+    if (!clientId) continue;
+    const { data, error } = await admin
+      .from("clients")
+      .select("id")
+      .eq("id", clientId)
+      .eq("firm_id", firmId)
+      .maybeSingle();
+    if (error || !data?.id) continue;
     const { error: insertError } = await admin.from("proposed_next_steps").insert({
-      client_id: clientId,
+      client_id: String(data.id),
       title,
       rationale: "Needs approval before Milōn runs it.",
       assumptions: [],
@@ -431,6 +438,7 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     screenshots?: unknown;
     messages?: unknown;
     sessionId?: unknown;
+    sessionKind?: unknown;
   };
   try {
     body = await req.json();
@@ -536,16 +544,20 @@ async function handleSetupPartner(req: Request): Promise<Response> {
       console.info("setup_partner_bespoke", firmId, step.dedupe_key);
       bespokeLogged += 1;
     }
-    if (!clientId) {
-      try {
-        await insertApprovalDrafts(adminClient, firmId, user.id, approvalDraftTitles(map));
-        await retireFirmInterviewDraft(adminClient, firmId);
-      } catch (err) {
-        console.error(
-          "setup_partner_interview_clear_failed",
-          err instanceof Error ? err.message : err,
-        );
-      }
+    try {
+      await insertApprovalDrafts(
+        adminClient,
+        firmId,
+        user.id,
+        approvalDraftTitles(map),
+        clientId,
+      );
+      if (!clientId) await retireFirmInterviewDraft(adminClient, firmId);
+    } catch (err) {
+      console.error(
+        "setup_partner_interview_clear_failed",
+        err instanceof Error ? err.message : err,
+      );
     }
     return respond({
       ok: true,
@@ -613,6 +625,18 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     }
   }
 
+  if (action === "discard_redo") {
+    if (clientId) return respond({ error: "discard_redo is the practice interview" }, 400);
+    if (!firmId) return respond({ error: "Firm not accessible" }, 403);
+    try {
+      await retireFirmInterviewDraft(adminClient, firmId);
+    } catch (err) {
+      console.error("setup_partner_discard_redo_failed", err instanceof Error ? err.message : err);
+      return respond({ error: "Could not discard the redo" }, 500);
+    }
+    return respond({ ok: true });
+  }
+
   if (action === "firm_turn") {
     if (clientId) return respond({ error: "firm_turn is the practice interview" }, 400);
     const modelTurns =
@@ -624,13 +648,14 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     const remembered = draftMessages(history);
     const sessionId =
       (typeof body.sessionId === "string" && body.sessionId.trim()) || crypto.randomUUID();
+    const sessionKind = body.sessionKind === "redo" ? "redo" : null;
     const savedAt = new Date().toISOString();
     const persistQuestion = async (question: string, turns: number, messages = remembered) => {
       try {
         await saveFirmInterviewDraft(adminClient, {
           firmId,
           approverId: user.id,
-          draft: interviewDraftWithQuestion(messages, question, turns, { sessionId, savedAt }),
+          draft: interviewDraftWithQuestion(messages, question, turns, { sessionId, savedAt, sessionKind }),
         });
       } catch (err) {
         console.error(

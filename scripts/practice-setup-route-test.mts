@@ -1326,12 +1326,12 @@ async function runPanel() {
     "the open question stays on the interview",
   );
   assert(
-    document.querySelector("[data-im-status]")?.textContent?.trim() === "Interviewing",
-    "a saved interview is not a redo",
+    document.querySelector("[data-im-status]")?.textContent?.trim() === "Redo in progress",
+    "an open draft beside a saved plan is a redo after reload",
   );
   assert(
-    !document.body.textContent?.includes("Redo in progress"),
-    "the hero does not say redo when none was started",
+    document.body.textContent?.includes("Discard redo, keep saved plan"),
+    "that redo can still be discarded",
   );
   assert(
     !document.body.textContent?.includes("Save takeover proposals") &&
