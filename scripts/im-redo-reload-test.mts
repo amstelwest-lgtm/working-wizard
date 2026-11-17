@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { Window } from "happy-dom";
 import { interviewDraftFromRuleText } from "../src/lib/firm-interview-draft.ts";
-import { classifyPracticeStep } from "../src/lib/setup-partner-plan.ts";
+import { approvalDraftClientId, classifyPracticeStep } from "../src/lib/setup-partner-plan.ts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { InterviewExchange } from "../src/components/interview-exchange.tsx";
@@ -182,10 +182,15 @@ await redo.unmount();
 
 const saved = await mount({ messages: [], question: "", modelTurns: 0, past: [retired] });
 const log = document.querySelector("[data-past-interviews]");
-assert(log?.tagName === "DETAILS", "a retired transcript is listed on the saved plan");
+assert(log?.tagName === "DETAILS", "a retired transcript is listed on the saved plan before Redo");
 assert(log?.textContent?.includes(savedAnswer), "the saved answer is in the log");
 assert((log as { open?: boolean }).open === false, "the log starts collapsed");
 assert(document.querySelector("[data-im-status]")?.textContent?.trim() === "Saved", "the saved plan is not an interview");
+assert(
+  document.querySelector('[data-step="current"]')?.textContent?.includes("Live"),
+  "the saved plan is the Live step",
+);
+assert(button("Redo interview")?.tagName === "BUTTON", "Redo is still there on the saved plan");
 await saved.unmount();
 
 const empty = await mount({
@@ -209,5 +214,29 @@ const discardAt = edge.indexOf('action === "discard_redo"');
 const discardBody = edge.slice(discardAt, discardAt + 500);
 assert(discardBody.includes("retireFirmInterviewDraft"), "discard retires the draft");
 assert(!discardBody.includes("retirePriorOnboarding"), "discard does not touch the saved rules");
+
+const pageClient = "79c4c485-9fa7-4499-9139-e1bb7cb40649";
+const namedClient = "353f1dbf-a7ba-4092-878d-792223ba3536";
+assert(
+  approvalDraftClientId({ title: "Partner reviews the pack" }) === null,
+  "a firm draft is not pinned to a client",
+);
+assert(
+  approvalDraftClientId({ title: "Partner reviews the pack", contextClientId: pageClient }) === pageClient,
+  "the client on the page receives the draft",
+);
+assert(
+  approvalDraftClientId({ title: `Send the pack for ${namedClient}` }) === namedClient,
+  "a draft about a client uses that client",
+);
+assert(
+  approvalDraftClientId({ title: `Send the pack for ${namedClient}`, contextClientId: pageClient }) === namedClient,
+  "the client the draft is about wins over the page",
+);
+const draftsAt = edge.indexOf("async function insertApprovalDrafts");
+const draftsBody = edge.slice(draftsAt, edge.indexOf("async function retirePriorOnboarding"));
+assert(draftsBody.includes("approvalDraftClientId"), "confirm asks which client the draft is for");
+assert(draftsBody.includes("if (!clientId) continue"), "a draft with no client is skipped");
+assert(!draftsBody.includes(".limit(1)"), "confirm does not take the firm's first client");
 
 console.log("im-redo-reload ok");

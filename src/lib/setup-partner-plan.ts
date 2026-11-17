@@ -699,6 +699,33 @@ export function approvalDraftTitles(map: Pick<SetupPartnerWorkflowMap, "checklis
   return titles;
 }
 
+const CLIENT_ID_IN_TEXT =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+function clientUuid(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const text = value.trim().toLowerCase();
+  return CLIENT_ID_IN_TEXT.test(text) && text.length === 36 ? text : null;
+}
+
+/** A draft line that names a client is about that client. */
+export function clientNamedByDraft(title: string): string | null {
+  const match = title.match(CLIENT_ID_IN_TEXT);
+  return match ? match[0].toLowerCase() : null;
+}
+
+/**
+ * The client an approval draft belongs to. A line that names a client wins.
+ * Otherwise the client on the page. No client means the draft stays with the
+ * firm and is not written onto a client row.
+ */
+export function approvalDraftClientId(input: {
+  title: string;
+  contextClientId?: string | null;
+}): string | null {
+  return clientNamedByDraft(input.title) ?? clientUuid(input.contextClientId);
+}
+
 /**
  * Read-only. First-seen rows use created_at. A merge keeps created_at and writes seen=<iso> on rule_text.
  * productGapsSinceYesterday applies the same 24h window to both.

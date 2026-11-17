@@ -32,6 +32,7 @@ import {
 import {
   bespokeLogRow,
   buildPracticeImplementationPlan,
+  approvalDraftClientId,
   approvalDraftTitles,
   clientSetupBrainRows,
   mergeProductGap,
@@ -201,14 +202,20 @@ async function insertApprovalDrafts(
   firmId: string,
   userId: string,
   titles: readonly string[],
+  contextClientId: string | null,
 ) {
-  if (!titles.length) return;
-  const { data, error } = await admin.from("clients").select("id").eq("firm_id", firmId).limit(1);
-  if (error || !data?.[0]?.id) return;
-  const clientId = String(data[0].id);
   for (const title of titles) {
+    const clientId = approvalDraftClientId({ title, contextClientId });
+    if (!clientId) continue;
+    const { data, error } = await admin
+      .from("clients")
+      .select("id")
+      .eq("id", clientId)
+      .eq("firm_id", firmId)
+      .maybeSingle();
+    if (error || !data?.id) continue;
     const { error: insertError } = await admin.from("proposed_next_steps").insert({
-      client_id: clientId,
+      client_id: String(data.id),
       title,
       rationale: "Needs approval before Milōn runs it.",
       assumptions: [],
@@ -537,16 +544,20 @@ async function handleSetupPartner(req: Request): Promise<Response> {
       console.info("setup_partner_bespoke", firmId, step.dedupe_key);
       bespokeLogged += 1;
     }
-    if (!clientId) {
-      try {
-        await insertApprovalDrafts(adminClient, firmId, user.id, approvalDraftTitles(map));
-        await retireFirmInterviewDraft(adminClient, firmId);
-      } catch (err) {
-        console.error(
-          "setup_partner_interview_clear_failed",
-          err instanceof Error ? err.message : err,
-        );
-      }
+    try {
+      await insertApprovalDrafts(
+        adminClient,
+        firmId,
+        user.id,
+        approvalDraftTitles(map),
+        clientId,
+      );
+      if (!clientId) await retireFirmInterviewDraft(adminClient, firmId);
+    } catch (err) {
+      console.error(
+        "setup_partner_interview_clear_failed",
+        err instanceof Error ? err.message : err,
+      );
     }
     return respond({
       ok: true,
