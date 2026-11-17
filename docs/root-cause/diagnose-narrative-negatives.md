@@ -57,3 +57,57 @@ Not a rewrite of the cached sentence.
 `validateRatioInputs` is that check. `computeRatios`, `dataSignIssue`, and the cached-finding gate all call it. The gate does not look for particular sentences. It reads each ratio name the text cites, takes the number beside that name, and asks the validator. A live tile ratio that is already NaN fails the same way.
 
 `presentCachedFinding` swaps only the sentence that fails. The rest of an email, meeting agenda, exec summary, or hand-off note stays, including after `rewriteDraftMonthStamp`. The replacement is `renderHealthNarrative` plus “Refreshed from current figures.” Home and Analyst pass the same figures and live snapshot into `findingSentence`. The action plan passes them into the Financial Manager hand-off. The client page passes them into the advisory drafter. The `agent_findings` title and detail stay as stored. The desk uses the existing source-check chip with `forceStale`. No new column. The next `record_finding` does not dedupe onto that row; it inserts a new one and sets the existing `superseded_by` on the old row (`agent-analyst/execute.ts`).
+
+## Gate 17 Nov: data-request still quotes negative days beside 95.4%
+
+AQA gate FAIL on prod `0c37f532` (#964 and #966 live), Chill Pepper Boutique Hotel `79c4c485` (Practice·Theo). Health/Diagnose still shows a data-request narrative with `creditor days −248` and `inventory days −93` beside `gross margin is 95.4%`. The ratio tiles do not. This is the second fail on negative days in Diagnose, so no narrative code is changed here.
+
+95.4% is the header margin: revenue R1 215 000 minus the cost treated as a cost (R56 000), not the signed-cost reading of 104.6%. Creditor days −248 and inventory days −93 are the signed day counts. Live `operatingCycleDays` returns NaN for both. The sentence keeps the signed days and the corrected margin in one line.
+
+### Every surface that renders the data-request copy
+
+The card label “Data request” is `agent_findings.kind = data_request_draft`. There is still no template that contains these numbers. The Analyst writes them, and `shapeRecordedCopy` stores them.
+
+| Surface | Render path | Gate |
+| --- | --- | --- |
+| Accountant Health/Diagnose desk | `MilonTeamPane` (`src/components/milon-team/milon-team-pane.tsx`) mounts `MilonTeamDesk`. A draft row is `OwnerDraftCard` (`src/components/owner-draft-card.tsx`). The client file mounts that pane (`src/routes/_authenticated/clients.$clientId.tsx`). | The card does not call `findingSentence`. |
+| Owner Health/Diagnose desk | The same `MilonTeamDesk` and `OwnerDraftCard`, with `decisionSeat="owner"`. | Same skip. |
+| Accountant home draft line | `presentHomeDraftTitle` / `presentHomeDraftBody` in `clients.$clientId.tsx`, from `src/lib/owner-needs.ts`. | `presentLiveDraft` only. |
+| Owner home draft line | `ownerDraftPresentations` in `src/components/owner-door/owner-door.tsx`, drawn by `owner-home.tsx`. | Same `presentLiveDraft`. |
+| Drafts list | `AgentDraftShelf` (`src/components/agent-draft-shelf.tsx`) is another `OwnerDraftCard`. | Same skip. |
+| Write | `supabase/functions/agent-analyst/execute.ts` calls `shapeRecordedCopy` (`src/lib/agent-bus.ts`). The Financial Manager prompt can ask for `data_request_draft`; the row is still stored by that Analyst execute path. | `polishAgentCopy` only. |
+
+`OwnerDraftCard` builds the lead with `findingCardCopy` (`src/lib/milon-team-activity.ts`) and the second line with `findingMetricContext`. For `data_request_draft` it sets `fromSnapshot` to empty, so `findingSentence` — and therefore `presentCachedFinding` — never runs. `HealthNarrativeLine` prints that lead as given.
+
+The desk hero is different. `MilonTeamPane` does call `findingSentence` on the newest finding for the selected agent. That one path is covered. The card under it, and the home draft line, are not.
+
+### Why the #964 gate does not cover it
+
+`validateRatioInputs`, `cachedFindingRejected`, and `presentCachedFinding` only run inside `findingSentence`. The data-request card and the home draft line do not call it.
+
+What they call instead leaves the signed days in place:
+
+- `groundAdvisoryNarrative` (`src/lib/advisory-narrative.ts`) rewrites a day or margin quote only when the live ratio is finite. Chill Pepper’s creditor and inventory days are NaN, so those citations are skipped. Gross margin, when the live value is the finite corrected 0.954, is rewritten to `95.4%`. Inventory days is not in `LABEL_SPECS` at all, so that label is never rewritten even when the live number is finite.
+- `presentLiveDraft` (`src/lib/draft-figures.ts`) is that grounder plus the health-score reconcile. It does not call `quoteUnusableDayCounts` or `presentCachedFinding`.
+- `formatFindingProse`, used for the card lead, does call `quoteUnusableDayCounts`. That regex only matches an ASCII hyphen before the digits (`creditor days -248`). A unicode minus (`creditor days −248`, U+2212) does not match. `citedNumber` in the gate has the same ASCII-only minus, so a unicode minus is read as a positive 248. A positive 248 is not unquotable on its own. `numberRatioRecord` keeps NaN, and `ratioValue` then treats NaN as “no live figure”, which is the skip above. An absent figure is not unquotable.
+- `findingMetricContext` does not quote the minus. `correctQuotedFigure` turns a negative component day into `Math.abs`. The second line can still read `creditor days are 248, inventory days 93, gross margin 95.4%`. That is the magnitude of an unusable day count sitting beside the corrected margin. The gate never sees this line.
+
+So #964 can refresh a finding sentence and still leave the data-request lead, the home draft line, and the metric context quoting days the tiles refuse.
+
+### Proposed single fix
+
+One shared guard on every narrative or data-request surface that cites days or a margin: `findingCardCopy`, `findingMetricContext`, `formatFindingProse`, `presentLiveDraft`, and `polishAgentCopy` / `shapeRecordedCopy`. When `validateRatioInputs` says that ratio is unquotable, drop the citation or say the data is insufficient. Do not turn a negative day count into its absolute value. Do not leave a corrected margin in the same sentence as an unsuppressed day count.
+
+No stored financials change. No new column. The `agent_findings` row stays as written.
+
+### Verification
+
+A test that builds Chill Pepper-shaped inputs — revenue 1 215 000, cost of sales −56 000, and the receivables, inventory, and payables that produce creditor days −248 and inventory days −93 — and walks them through `findingCardCopy`, `findingMetricContext`, `formatFindingProse`, `presentLiveDraft`, and `polishAgentCopy`. Each result must not contain `−248`, `-248`, `−93`, or `-93`.
+
+### Action plan, same pass, no code
+
+The number on an action row is the stored `action_items.seq` (`src/components/action-plan.tsx`), not a recount of the rows on screen. `keptOpenPlanRows` drops a repeated title before paint, and a deleted row is not renumbered until someone drags the list. Either one leaves a hole, so the visible numbers can run 1, 2, 3, 5.
+
+“Done by Financial Manager · 27 Oct” is `handoffProgressCaption` (`src/lib/action-handoff.ts`): a succeeded run that saved a finding. `deriveActionHealth` (`src/lib/action-item-health.ts`) does not read that caption. An open row whose due date is past is Overdue, and `progress_pct` stays 0 until someone moves it. The bot finishing a draft does not mark the action done and does not fill the bar.
+
+Owner load groups open rows by `owner_id` (`OwnerLoad` in `action-plan.tsx`). A bot assignment stores the agent name on `owner_name` and sets `owner_id` to null (`latestStoredAssignment` of kind `bot`, and the assign click). Null `owner_id` is the Unassigned bucket. Three actions handed to agents with no employee id count as Unassigned 3.
