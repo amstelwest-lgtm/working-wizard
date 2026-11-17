@@ -1,4 +1,5 @@
 import { useMarketFormat } from "@/contexts/market";
+import { groupInterviewSessions, type FirmInterviewDraft } from "@/lib/firm-interview-draft";
 import type { FirmInterviewMessage } from "@/lib/setup-partner";
 
 export const IMPLEMENTATION_MANAGER_THINKING = "Implementation Manager is thinking…";
@@ -72,46 +73,73 @@ export function InterviewExchange({
   );
 }
 
-/** Collapsed Q/A log. Render only when a prior answer exists. */
+/** Collapsed Q/A log. One interview per session. Render only when an answer exists. */
 export function PastInterviews({
-  messages,
+  messages = [],
   question,
   thinking,
   recordedAt,
+  sessionId,
+  sessions,
 }: {
-  messages: readonly FirmInterviewMessage[];
+  messages?: readonly FirmInterviewMessage[];
   question: string;
   thinking: boolean;
   recordedAt?: string | null;
+  sessionId?: string | null;
+  sessions?: readonly FirmInterviewDraft[];
 }) {
   const { date: formatWhen } = useMarketFormat();
-  const pairs = interviewPairs(messages, question, thinking);
-  if (pairs.length === 0) return null;
-  const when = recordedAt ? new Date(recordedAt) : null;
-  const date = when && !Number.isNaN(when.getTime()) ? formatWhen(when) : null;
+  const grouped = groupInterviewSessions(
+    sessions && sessions.length > 0
+      ? sessions
+      : [
+          {
+            messages: [...messages],
+            question,
+            modelTurns: 0,
+            sessionId: sessionId ?? null,
+            savedAt: recordedAt ?? null,
+          },
+        ],
+  );
+  if (grouped.length === 0) return null;
+  const label = grouped.length === 1 ? "1 interview" : `${grouped.length} interviews`;
   return (
     <details className="setup-partner__log im-card" data-past-interviews="">
-      <summary>Past interviews ({pairs.length})</summary>
+      <summary>{label}</summary>
       <div className="im-log-groups">
-        <section>
-          {date ? (
-            <h3 className="setup-partner__log-date">
-              <time dateTime={recordedAt ?? undefined}>{date}</time>
-            </h3>
-          ) : null}
-          <ol className="setup-partner__transcript">
-            {pairs.map((pair, index) => (
-              <li key={`${index}-${pair.question}`} className="im-thread">
-                {pair.question ? (
-                  <p className="setup-partner__log-q im-bubble im-bubble--ask">
-                    <strong>{pair.question}</strong>
-                  </p>
-                ) : null}
-                {pair.answer ? <p className="setup-partner__log-a im-bubble">{pair.answer}</p> : null}
-              </li>
-            ))}
-          </ol>
-        </section>
+        {grouped.map((session) => {
+          const pairs = interviewPairs(
+            session.messages,
+            session.sessionId && session.sessionId === sessionId ? question : "",
+            session.sessionId && session.sessionId === sessionId ? thinking : false,
+          ).filter((pair) => pair.answer);
+          if (pairs.length === 0) return null;
+          const when = session.savedAt ? new Date(session.savedAt) : null;
+          const date = when && !Number.isNaN(when.getTime()) ? formatWhen(when) : null;
+          return (
+            <section key={session.sessionId || session.savedAt || pairs[0]?.question}>
+              {date ? (
+                <h3 className="setup-partner__log-date">
+                  <time dateTime={session.savedAt ?? undefined}>{date}</time>
+                </h3>
+              ) : null}
+              <ol className="setup-partner__transcript">
+                {pairs.map((pair, index) => (
+                  <li key={`${session.sessionId}-${index}-${pair.question}`} className="im-thread">
+                    {pair.question ? (
+                      <p className="setup-partner__log-q im-bubble im-bubble--ask">
+                        <strong>{pair.question}</strong>
+                      </p>
+                    ) : null}
+                    {pair.answer ? <p className="setup-partner__log-a im-bubble">{pair.answer}</p> : null}
+                  </li>
+                ))}
+              </ol>
+            </section>
+          );
+        })}
       </div>
     </details>
   );

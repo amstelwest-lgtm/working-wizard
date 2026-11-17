@@ -234,6 +234,7 @@
     "test:setup-partner": "vite-node --config scripts/vite-test.config.ts scripts/setup-partner-test.mts",
     "test:setup-partner-gap": "vite-node --config scripts/vite-test.config.ts scripts/setup-partner-gap-test.mts",
     "test:practice-setup-route": "vite-node --config scripts/vite-test.config.ts scripts/practice-setup-route-test.mts",
+    "test:im-interview-session": "vite-node --config scripts/vite-test.config.ts scripts/im-interview-session-test.mts",
     "test:interview-exchange": "vite-node --config scripts/vite-test.config.ts scripts/interview-exchange-test.mts",
     "test:im-page-client-view": "vite-node --config scripts/vite-test.config.ts scripts/im-page-client-view-test.mts",
     "test:aqa-d2c5a7d5": "vite-node --config scripts/vite-test.config.ts scripts/aqa-d2c5a7d5-test.mts",

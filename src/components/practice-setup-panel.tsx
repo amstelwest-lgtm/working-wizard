@@ -25,13 +25,15 @@ import {
   firmInterviewTranscript,
   firmSetupPartnerSummary,
   firmInterviewUserError,
+  interviewAnswerCount,
   questionAsWritten,
+  shouldBuildInterviewMap,
   withMarketCoverage,
   type FirmInterviewMessage,
   type SetupPartnerCountry,
   type SetupPartnerWorkflowMap,
 } from "@/lib/setup-partner";
-import type { FirmInterviewDraft } from "@/lib/firm-interview-draft";
+import { groupInterviewSessions, type FirmInterviewDraft } from "@/lib/firm-interview-draft";
 import {
   buildSetupPartnerFirmMap,
   confirmSetupPartnerFirmMap,
@@ -42,6 +44,7 @@ import {
 import { InterviewExchange, PastInterviews } from "@/components/interview-exchange";
 import { discardPracticeRedo } from "@/lib/discard-practice-redo.functions";
 import {
+  approvalDraftTitles,
   buildPracticeImplementationPlan,
   cleanFlowLine,
   dedupePracticeSteps,
@@ -110,15 +113,15 @@ export function implementationManagerStep(input: {
   interviewing: boolean;
 }): ImplementationManagerStep {
   if (input.interviewing || input.phase === "interview") return "interview";
-  if (input.phase === "map") return "map";
+  if (input.phase === "map") return "proposals";
   return "live";
 }
 
 /** This route's Toaster. App chrome also mounts one; this id keeps a single toast. */
 export const PRACTICE_SETUP_TOASTER_ID = "practice-setup";
 
-/** The interview call gives up after this and shows Retry. */
-export const PRACTICE_SETUP_INTERVIEW_MS = 10_000;
+/** The interview call gives up after this and shows Retry. Above the 25s edge timeout. */
+export const PRACTICE_SETUP_INTERVIEW_MS = 35_000;
 
 /** Shown when the signed-in account has no firm. Never the loading sentence. */
 export const PRACTICE_SETUP_NO_FIRM =
@@ -150,7 +153,8 @@ type AskTurn = (input: {
   firmId: string;
   messages: FirmInterviewMessage[];
   modelTurns: number;
-}) => Promise<{ question: string; done: boolean; modelTurns: number }>;
+  sessionId?: string | null;
+}) => Promise<{ question: string; done: boolean; modelTurns: number; sessionId?: string }>;
 type DiscardRedo = (firmId: string) => Promise<void>;
 
 export function PracticeSetupPanel() {
@@ -207,6 +211,8 @@ export function PracticeSetupInterview({
   const [discarding, setDiscarding] = useState(false);
   const [noFirmWaited, setNoFirmWaited] = useState(false);
   const [recordedAt, setRecordedAt] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [pastDrafts, setPastDrafts] = useState<FirmInterviewDraft[]>([]);
   const [reviewOpen, setReviewOpen] = useState(false);
   const discardSavedRedo = useServerFn(discardPracticeRedo);
   const country = parseMarketSelection(firmMarket)?.country ?? null;
@@ -221,12 +227,15 @@ export function PracticeSetupInterview({
     setError(null);
     setTurnError(null);
     try {
-      const built = await buildMap({
-        firmId,
-        answers: { transcript: firmInterviewTranscript(history) },
-        summary: firmSetupPartnerSummary(),
-        modelTurns: turns,
-      });
+      const built = await withDeadline(
+        buildMap({
+          firmId,
+          answers: { transcript: firmInterviewTranscript(history) },
+          summary: firmSetupPartnerSummary(),
+          modelTurns: turns,
+        }),
+        PRACTICE_SETUP_INTERVIEW_MS,
+      );
       setModelTurns(built.modelTurns);
       const nextMap = built.map;
       setMap({
@@ -252,11 +261,18 @@ export function PracticeSetupInterview({
     setTurnError(null);
     try {
       const next = await withDeadline(
-        askTurn({ firmId, messages: history, modelTurns: turns }),
+        askTurn({ firmId, messages: history, modelTurns: turns, sessionId }),
         PRACTICE_SETUP_INTERVIEW_MS,
       );
       setModelTurns(next.modelTurns);
-      if (next.done) {
+      if (next.sessionId) setSessionId(next.sessionId);
+      if (
+        shouldBuildInterviewMap({
+          answers: interviewAnswerCount(history),
+          modelDone: next.done,
+          forced: false,
+        })
+      ) {
         await mapFrom(history, next.modelTurns);
         return;
       }
@@ -316,8 +332,10 @@ export function PracticeSetupInterview({
         if (draft && draft.messages.length > 0) {
           setMessages(draft.messages);
           setArchive(draft.messages);
+          if (draft.sessionId) setSessionId(draft.sessionId);
           const stamped = draft as FirmInterviewDraft & { recordedAt?: string | null };
-          if (stamped.recordedAt) setRecordedAt(stamped.recordedAt);
+          if (draft.savedAt || stamped.recordedAt) setRecordedAt(draft.savedAt ?? stamped.recordedAt ?? null);
+          setPastDrafts(draft.past ?? []);
         }
         if (draft?.question) {
           setQuestion(draft.question);
@@ -446,8 +464,9 @@ export function PracticeSetupInterview({
   };
 
   const continuing = draftContinuesInterview(question, messages);
+  const thinkingNow = booting || loading;
   const showInterview =
-    (!booting || loading) && !visibleMap && (phase === "interview" || redoOpen || continuing);
+    !visibleMap && (thinkingNow || phase === "interview" || redoOpen || continuing);
   const flowLines = visibleMap ? visibleMap.todaysFlow.map(cleanFlowLine).filter(Boolean) : [];
   const checklist = visibleMap ? visibleMap.checklist.map(cleanFlowLine).filter(Boolean) : [];
   const stepLines = [...(preview?.steps ?? []), ...(plan?.steps ?? [])]
@@ -546,9 +565,7 @@ export function PracticeSetupInterview({
         title="Implementation Manager"
         subtitle="Maps how your practice runs so Milōn can take on the work"
       />
-      <PracticeSetupHero status={status} step={step} working={showInterview || loading} />
-
-      {booting && !showInterview ? <p className="im-card setup-partner__lede">Loading your practice.</p> : null}
+      <PracticeSetupHero status={status} step={step} working={thinkingNow} />
 
       {showInterview ? (
         <div className="im-card" data-im-interview="">
@@ -558,16 +575,18 @@ export function PracticeSetupInterview({
           </h2>
           <InterviewExchange
             question={question}
-            thinking={loading}
+            thinking={thinkingNow}
             questionIndex={modelTurns > 0 ? modelTurns : undefined}
           />
-          <textarea
-            className="setup-partner__answer"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Walk through it"
-            style={{ fontFamily: "var(--font-sans), sans-serif" }}
-          />
+          {question ? (
+            <textarea
+              className="setup-partner__answer"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder="Walk through it"
+              style={{ fontFamily: "var(--font-sans), sans-serif" }}
+            />
+          ) : null}
           {turnError ? (
             <p className="setup-partner__error" role="alert">
               {turnError}
@@ -599,14 +618,27 @@ export function PracticeSetupInterview({
           )}
           {visibleMap && visibleMap.milonCoverage.length > 0 ? (
             <div data-im-coverage="">
-              <h3>Milōn coverage</h3>
+              <h3>Integration plan</h3>
               <ul className="im-checks">
                 {visibleMap.milonCoverage.map((row) => (
                   <li key={`${row.agent}-${row.owns}`}>
                     <Check size={16} aria-hidden />
                     <span>
-                      {row.agent}: {row.owns}
+                      {row.agent} takes {row.owns}
                     </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {visibleMap && approvalDraftTitles(visibleMap).length > 0 ? (
+            <div data-im-approval-drafts="">
+              <h3>Drafts that need approval</h3>
+              <ul className="im-checks">
+                {approvalDraftTitles(visibleMap).map((title) => (
+                  <li key={title}>
+                    <Check size={16} aria-hidden />
+                    <span>{title}</span>
                   </li>
                 ))}
               </ul>
@@ -628,9 +660,19 @@ export function PracticeSetupInterview({
 
       {!booting ? (
         <PastInterviews
-          messages={redoOpen && archive.length > 0 ? archive : messages}
+          sessions={groupInterviewSessions([
+            ...pastDrafts,
+            {
+              messages: redoOpen && archive.length > 0 ? archive : messages,
+              question,
+              modelTurns,
+              sessionId,
+              savedAt: recordedAt,
+            },
+          ])}
           question={redoOpen ? "" : question}
-          thinking={redoOpen ? false : loading}
+          thinking={redoOpen ? false : thinkingNow}
+          sessionId={sessionId}
           recordedAt={recordedAt}
         />
       ) : null}

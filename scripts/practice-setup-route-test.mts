@@ -85,7 +85,7 @@ assert(route.includes("<PracticeSetupPanel"), "route renders the firm panel");
 const panel = read("src/components/practice-setup-panel.tsx");
 assert(panel.includes("Implementation Manager"), "firm header label");
 assert(panel.includes("data-practice-setup-panel"), "panel marker");
-assert(panel.includes("PRACTICE_SETUP_INTERVIEW_MS = 10_000"), "the interview call has a 10s deadline");
+assert(panel.includes("PRACTICE_SETUP_INTERVIEW_MS = 35_000"), "the interview call outlasts the 25s edge timeout");
 assert(panel.includes("data-practice-setup-retry"), "a timed-out interview can be retried");
 assert(panel.includes("data-practice-setup-phase=\"no-firm\""), "no firm is its own state");
 assert(panel.includes("PRACTICE_SETUP_NO_FIRM"), "no firm says to open setup");
@@ -108,7 +108,8 @@ assert(tree.includes("'/practice/setup'"), "route tree publishes /practice/setup
 
 const edge = read("supabase/functions/setup-partner/index.ts");
 assert(edge.includes("saveFirmInterviewDraft"), "each turn is saved on the existing brain row");
-assert(edge.includes("clearFirmInterviewDraft"), "confirm clears the in-progress interview");
+assert(edge.includes("retireFirmInterviewDraft"), "confirm retires the interview and keeps the transcript");
+assert(edge.includes('status: "retired"'), "a retired interview is not deleted");
 assert(
   SETUP_PARTNER_INTERVIEW_EVENT !== SETUP_PARTNER_SOURCE_EVENT &&
     SETUP_PARTNER_INTERVIEW_TASK !== SETUP_PARTNER_TASK_WORKFLOW,

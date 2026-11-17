@@ -21,6 +21,11 @@ export type FirmInterviewDraft = {
   messages: FirmInterviewDraftMessage[];
   question: string;
   modelTurns: number;
+  /** One interview. Absent on rows saved before sessions existed. */
+  sessionId?: string | null;
+  savedAt?: string | null;
+  /** Retired interviews loaded with the active draft. Not written back. */
+  past?: FirmInterviewDraft[];
 };
 
 function clipContent(value: string): string {
@@ -33,6 +38,7 @@ export function interviewDraftWithQuestion(
   messages: readonly FirmInterviewDraftMessage[],
   question: string,
   modelTurns: number,
+  session?: { sessionId?: string | null; savedAt?: string | null },
 ): FirmInterviewDraft {
   const questionText = clipContent(question);
   const kept: FirmInterviewDraftMessage[] = [];
@@ -51,16 +57,20 @@ export function interviewDraftWithQuestion(
     messages: withQuestion.slice(-MESSAGE_CAP),
     question: questionText,
     modelTurns: Number.isFinite(modelTurns) && modelTurns > 0 ? Math.floor(modelTurns) : 0,
+    sessionId: session?.sessionId?.trim() || null,
+    savedAt: session?.savedAt ?? null,
   };
 }
 
 export function interviewDraftRuleText(draft: FirmInterviewDraft): string {
   const messages = draft.messages.slice(-MESSAGE_CAP);
   let turns = draft.modelTurns;
-  let text = JSON.stringify({ messages, question: draft.question, modelTurns: turns });
+  const sessionId = draft.sessionId?.trim() || null;
+  const savedAt = draft.savedAt ?? new Date().toISOString();
+  let text = JSON.stringify({ messages, question: draft.question, modelTurns: turns, sessionId, savedAt });
   while (text.length > RULE_CHARS && messages.length > 1) {
     messages.shift();
-    text = JSON.stringify({ messages, question: draft.question, modelTurns: turns });
+    text = JSON.stringify({ messages, question: draft.question, modelTurns: turns, sessionId, savedAt });
   }
   return text;
 }
@@ -74,7 +84,13 @@ export function interviewDraftFromRuleText(raw: string | null | undefined): Firm
     return null;
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-  const row = parsed as { messages?: unknown; question?: unknown; modelTurns?: unknown };
+  const row = parsed as {
+    messages?: unknown;
+    question?: unknown;
+    modelTurns?: unknown;
+    sessionId?: unknown;
+    savedAt?: unknown;
+  };
   const question = typeof row.question === "string" ? row.question.trim() : "";
   if (!question) return null;
   const messages: FirmInterviewDraftMessage[] = [];
@@ -89,7 +105,32 @@ export function interviewDraftFromRuleText(raw: string | null | undefined): Firm
   }
   const modelTurns =
     typeof row.modelTurns === "number" && row.modelTurns > 0 ? Math.floor(row.modelTurns) : 0;
-  return interviewDraftWithQuestion(messages, question, modelTurns);
+  const sessionId = typeof row.sessionId === "string" ? row.sessionId : null;
+  const savedAt = typeof row.savedAt === "string" ? row.savedAt : null;
+  return interviewDraftWithQuestion(messages, question, modelTurns, { sessionId, savedAt });
+}
+
+/** Same session_id is one interview. A row with no session_id is its own interview. */
+export function groupInterviewSessions(drafts: readonly FirmInterviewDraft[]): FirmInterviewDraft[] {
+  const out: FirmInterviewDraft[] = [];
+  const byId = new Map<string, FirmInterviewDraft>();
+  for (const draft of drafts) {
+    const id = draft.sessionId?.trim() ?? "";
+    if (!id) {
+      out.push(draft);
+      continue;
+    }
+    const prev = byId.get(id);
+    if (!prev) {
+      const next = { ...draft, messages: [...draft.messages] };
+      byId.set(id, next);
+      out.push(next);
+      continue;
+    }
+    prev.messages = [...prev.messages, ...draft.messages];
+    if (draft.savedAt && (!prev.savedAt || draft.savedAt > prev.savedAt)) prev.savedAt = draft.savedAt;
+  }
+  return out.filter((draft) => draft.messages.some((message) => message.role === "user"));
 }
 
 export type InterviewDraftInsert = {
