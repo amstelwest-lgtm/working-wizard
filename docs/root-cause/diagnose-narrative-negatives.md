@@ -111,3 +111,51 @@ The number on an action row is the stored `action_items.seq` (`src/components/ac
 “Done by Financial Manager · 27 Oct” is `handoffProgressCaption` (`src/lib/action-handoff.ts`): a succeeded run that saved a finding. `deriveActionHealth` (`src/lib/action-item-health.ts`) does not read that caption. An open row whose due date is past is Overdue, and `progress_pct` stays 0 until someone moves it. The bot finishing a draft does not mark the action done and does not fill the bar.
 
 Owner load groups open rows by `owner_id` (`OwnerLoad` in `action-plan.tsx`). A bot assignment stores the agent name on `owner_name` and sets `owner_id` to null (`latestStoredAssignment` of kind `bot`, and the assign click). Null `owner_id` is the Unassigned bucket. Three actions handed to agents with no employee id count as Unassigned 3.
+
+## Gate d121bab4: the stored ask still shows the signed days
+
+AQA on prod `d121bab4` (Chill Pepper `79c4c485`, Practice·Theo, hard reload). The data-request card still reads, with an ASCII hyphen:
+
+> gross margin is 95.4%, creditor days are -248 days and inventory days are -93 days
+
+No “Not enough data” wording is on the page. The gross-margin tile is “—”. 95.4% appears only in that sentence. No code in this note.
+
+### What writes the sentence
+
+There is no template with this wording. The Analyst model writes it. `record_finding` in `supabase/functions/agent-analyst/execute.ts` stores it through `shapeRecordedCopy` (`src/lib/agent-bus.ts`) on `agent_findings.title` / `detail`. Approving the draft copies those strings onto `data_requests` with no guard: `liveRecordForDraft` (`src/lib/agent-draft-decision.ts`) sets `title: input.title` and `reason: input.detail`.
+
+The repo has no “agent-analyst v50” marker. The sentence is the model’s wording from a row saved before `guardQuotedRatios` ran on that write. The write-path call only affects a later `record_finding`, and only after that function is deployed. It does not rewrite a row already in `data_requests`.
+
+### Why the guard misses this card
+
+On `d121bab4`, `guardQuotedRatios` does match this literal sentence. With no live ratios, and with Creditor Days and Inventory Days set to NaN, it becomes “gross margin is 95.4%, creditor days are not enough data and inventory days are not enough data”. `findingCardCopy` does the same. The matcher allows “are” between the label and the number. The hyphen here is ASCII `-`, which the guard already accepts.
+
+The card that still shows the original sentence does not call that function.
+
+- `DataRequestsPanel` (`src/components/data-requests-panel.tsx`) prints `{r.title}` as stored.
+- The reason goes through `displayedDataRequestReason` (`src/lib/data-requests.ts`), which only rewrites “45-day benchmark”. It does not call `guardQuotedRatios`.
+- `OwnerDraftCard` does call the guard, via `findingCardCopy`. A still-open draft would not keep “-248”. The visible ask is the saved `data_requests` row.
+
+The gross-margin tile is the live ratio. Negative cost of sales makes `validateRatioInputs` refuse it, so the tile is “—”. 95.4% is the header margin the model copied into the stored sentence. The guard, when it runs, leaves that percent and replaces the day counts.
+
+### Why test:diagnose-days-guard passed
+
+The test builds a finding and calls `findingCardCopy`, `findingMetricContext`, `formatFindingProse`, `presentLiveDraft`, and `polishAgentCopy`. Those paths do call the guard, so a Chill Pepper-shaped title is cleaned. It never builds a `data_requests` row, never calls `displayedDataRequestReason`, and never renders `DataRequestsPanel`. The prod string is that stored title/reason. The fixture never went through the component that prints it.
+
+### Proposed fix, and the test
+
+One display-time call to `guardQuotedRatios` on the data-request title and reason, in `displayedDataRequestReason` and the title in `DataRequestsPanel`. Same function. No new column. Existing rows are re-read when the card renders. No SQL.
+
+The test passes the literal prod string `gross margin is 95.4%, creditor days are -248 days and inventory days are -93 days` through that display helper and asserts the result has no `-248` and no `-93`.
+
+### D. Suggested — confirm still says Overdue
+
+`actionRowDisplayState` (`src/lib/action-handoff.ts`) clears Overdue and fills the progress bar on the action row only, and only on screen. `planAutomation` (`src/lib/action-plan-automation.ts`) still sets `overdue` from the stored status and due date. `ActionPlanAutomation` (`src/components/action-plan-automation.tsx`) prints “· Overdue” from that flag, including on rows the plan row shows as done because the bot finished. `countActionPlan` / `formatActionPlanCounts` (`src/lib/action-plan-counts.ts`) count the same stored due dates, so the summary can say “3 open, including 3 overdue” when only one row is still overdue after the display rule.
+
+Proposed fix: pass the same display rule into `planAutomation` and `countActionPlan`. A finished bot run is not overdue and is not an open overdue in the summary. Do not write the plan. Test with two bot-finished rows and one still-overdue row, and assert the Suggested block and the summary name only the one.
+
+### E. All owners stays on All owners
+
+The owner dropdown (`action-plan.tsx`) is `value={ownerFilter ?? ""}` and its options are `employees[].id` plus “All owners”. A bucket click sets `ownerFilter` to the row key. An agent key (`agent:Financial Manager`) is not one of those options, so the control stays on “All owners” while the list is already filtered. A person id that is not in `employees` does the same.
+
+Proposed fix: the select value must be one of its options. Add the active bucket (the agent name, or the employee whose id was picked) as an option when it is selected. Test: pick an agent bucket and assert the select value is that agent, not `""`.
