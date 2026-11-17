@@ -389,6 +389,22 @@ export function firmInterviewShouldStop(modelTurns: number, done: boolean): bool
   return done || modelTurns >= FIRM_INTERVIEW_TURN_CAP;
 }
 
+/** Map after enough answers and a model that says it can map, or as soon as the person stops. */
+export const INTERVIEW_MAP_MIN_ANSWERS = 4;
+
+export function interviewAnswerCount(messages: readonly { role: string }[]): number {
+  return messages.filter((message) => message.role === "user").length;
+}
+
+export function shouldBuildInterviewMap(input: {
+  answers: number;
+  modelDone: boolean;
+  forced: boolean;
+}): boolean {
+  if (input.forced) return true;
+  return input.modelDone && input.answers >= INTERVIEW_MAP_MIN_ANSWERS;
+}
+
 export function firmInterviewTranscript(messages: readonly FirmInterviewMessage[]): string {
   return messages
     .map((row) => `${row.role === "assistant" ? "Q" : "A"}: ${row.content.trim()}`)

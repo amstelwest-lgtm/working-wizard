@@ -238,7 +238,7 @@ const answered = await mountInterview({
 const log = answered.host.querySelector("[data-past-interviews]");
 assert(log?.tagName === "DETAILS", "answered pairs render past interviews");
 assert((log as { open?: boolean } | null)?.open === false, "past interviews start collapsed");
-assert(log?.querySelector("summary")?.textContent?.includes("Past interviews (1)"), "the count is the answered pairs");
+assert(log?.querySelector("summary")?.textContent?.includes("1 interview"), "the count is one interview");
 assert((answered.host.textContent ?? "").includes("Redo interview"), "redo is on the saved idle screen");
 await answered.unmount();
 

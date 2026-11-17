@@ -681,6 +681,24 @@ export function isPracticeGapQueued(row: {
   return false;
 }
 
+const DRAFT_HIDDEN = /\b(json|tool|supabase|rpc|function)\b/i;
+
+/** Checklist lines a person still has to approve. No JSON and no tool names. */
+export function approvalDraftTitles(map: Pick<SetupPartnerWorkflowMap, "checklist" | "todaysFlow">): string[] {
+  const seen = new Set<string>();
+  const titles: string[] = [];
+  for (const line of [...(map.checklist ?? []), ...(map.todaysFlow ?? [])]) {
+    const text = line.replace(/\s+/g, " ").trim();
+    if (!text || text.includes("{") || text.includes("`") || DRAFT_HIDDEN.test(text)) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    titles.push(text);
+    if (titles.length >= 8) break;
+  }
+  return titles;
+}
+
 /**
  * Read-only. First-seen rows use created_at. A merge keeps created_at and writes seen=<iso> on rule_text.
  * productGapsSinceYesterday applies the same 24h window to both.

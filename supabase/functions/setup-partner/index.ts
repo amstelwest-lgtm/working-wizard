@@ -32,6 +32,7 @@ import {
 import {
   bespokeLogRow,
   buildPracticeImplementationPlan,
+  approvalDraftTitles,
   clientSetupBrainRows,
   mergeProductGap,
   productGapInsertRow,
@@ -183,15 +184,43 @@ async function saveFirmInterviewDraft(
   if (insertError) throw new Error(insertError.message);
 }
 
-async function clearFirmInterviewDraft(admin: AdminClient, firmId: string) {
+async function retireFirmInterviewDraft(admin: AdminClient, firmId: string) {
   const { error } = await admin
     .from("milon_brain_rules")
-    .delete()
+    .update({ status: "retired" })
     .eq("firm_id", firmId)
     .is("client_id", null)
     .eq("source_event", SETUP_PARTNER_INTERVIEW_EVENT)
-    .eq("task_type", SETUP_PARTNER_INTERVIEW_TASK);
+    .eq("task_type", SETUP_PARTNER_INTERVIEW_TASK)
+    .eq("status", "active");
   if (error) throw new Error(error.message);
+}
+
+async function insertApprovalDrafts(
+  admin: AdminClient,
+  firmId: string,
+  userId: string,
+  titles: readonly string[],
+) {
+  if (!titles.length) return;
+  const { data, error } = await admin.from("clients").select("id").eq("firm_id", firmId).limit(1);
+  if (error || !data?.[0]?.id) return;
+  const clientId = String(data[0].id);
+  for (const title of titles) {
+    const { error: insertError } = await admin.from("proposed_next_steps").insert({
+      client_id: clientId,
+      title,
+      rationale: "Needs approval before Milōn runs it.",
+      assumptions: [],
+      status: "proposed",
+      source: "ai",
+      data_depth: "statement",
+      evidence: [],
+      created_by: userId,
+      priority: "medium",
+    });
+    if (insertError) console.error("setup_partner_approval_draft_failed", insertError.message);
+  }
 }
 
 async function retirePriorOnboarding(admin: AdminClient, firmId: string, clientId: string | null) {
@@ -401,6 +430,7 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     modelTurns?: unknown;
     screenshots?: unknown;
     messages?: unknown;
+    sessionId?: unknown;
   };
   try {
     body = await req.json();
@@ -508,7 +538,8 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     }
     if (!clientId) {
       try {
-        await clearFirmInterviewDraft(adminClient, firmId);
+        await insertApprovalDrafts(adminClient, firmId, user.id, approvalDraftTitles(map));
+        await retireFirmInterviewDraft(adminClient, firmId);
       } catch (err) {
         console.error(
           "setup_partner_interview_clear_failed",
@@ -591,12 +622,15 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     }
     const history = Array.isArray(body.messages) ? body.messages : [];
     const remembered = draftMessages(history);
-    const persistQuestion = async (question: string, turns: number) => {
+    const sessionId =
+      (typeof body.sessionId === "string" && body.sessionId.trim()) || crypto.randomUUID();
+    const savedAt = new Date().toISOString();
+    const persistQuestion = async (question: string, turns: number, messages = remembered) => {
       try {
         await saveFirmInterviewDraft(adminClient, {
           firmId,
           approverId: user.id,
-          draft: interviewDraftWithQuestion(remembered, question, turns),
+          draft: interviewDraftWithQuestion(messages, question, turns, { sessionId, savedAt }),
         });
       } catch (err) {
         console.error(
@@ -615,8 +649,13 @@ async function handleSetupPartner(req: Request): Promise<Response> {
         done,
         modelTurns: nextTurns,
         model: interviewModel,
+        sessionId,
       });
     };
+    const lastAnswered = [...remembered].reverse().find((message) => message.role === "assistant");
+    if (remembered.some((message) => message.role === "user") && lastAnswered?.content) {
+      await persistQuestion(lastAnswered.content, modelTurns);
+    }
     const lines = history
       .map((row) => {
         if (!row || typeof row !== "object") return "";

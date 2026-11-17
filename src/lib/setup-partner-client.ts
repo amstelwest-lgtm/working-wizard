@@ -98,23 +98,27 @@ export type FirmInterviewTurn = {
   question: string;
   done: boolean;
   modelTurns: number;
+  sessionId?: string;
 };
 
 export async function firmInterviewTurn(input: {
   firmId: string;
   messages: Array<{ role: "user" | "assistant"; content: string }>;
   modelTurns: number;
+  sessionId?: string | null;
 }): Promise<FirmInterviewTurn> {
   const body = await invokeSetupPartner<FirmInterviewTurn>({
     action: "firm_turn",
     firmId: input.firmId,
     messages: input.messages,
     modelTurns: input.modelTurns,
+    sessionId: input.sessionId ?? null,
   });
   return {
     question: body.question ?? "",
     done: Boolean(body.done),
     modelTurns: body.modelTurns,
+    sessionId: typeof body.sessionId === "string" ? body.sessionId : undefined,
   };
 }
 
@@ -202,7 +206,24 @@ export async function fetchFirmInterviewDraft(firmId: string): Promise<FirmInter
   const row = data?.[0];
   const draft = interviewDraftFromRuleText(row?.rule_text);
   if (!draft) return null;
-  return { ...draft, recordedAt: row?.created_at ?? null };
+  const pastBuilder = (
+    supabase as unknown as {
+      from: (table: string) => { select: (columns: string) => DraftQuery };
+    }
+  ).from("milon_brain_rules");
+  const pastRes = await pastBuilder
+    .select("rule_text, created_at")
+    .eq("firm_id", firmId)
+    .is("client_id", null)
+    .eq("source_event", SETUP_PARTNER_INTERVIEW_EVENT)
+    .eq("status", "retired")
+    .eq("task_type", SETUP_PARTNER_INTERVIEW_TASK)
+    .order("created_at", { ascending: true })
+    .limit(20);
+  const past = (pastRes.error ? [] : (pastRes.data ?? []))
+    .map((item) => interviewDraftFromRuleText(item.rule_text))
+    .filter((item): item is FirmInterviewDraft => item != null);
+  return { ...draft, savedAt: draft.savedAt ?? row?.created_at ?? null, past };
 }
 
 export async function confirmSetupPartnerFirmMap(
