@@ -8,6 +8,7 @@ import { formatDate, formatMoney, type DateMarket, type MoneyMarket } from "./ma
 import { ZA_MARKET } from "./market/resolve";
 import { formatAsOf, formatLastRun, type AgentHeaderStatus } from "./milon-team";
 import type { AgentKey, TeamActivityEvent, TeamBriefingItem } from "./milon-team-feed";
+import { stripMilonProjection } from "./milon-projection";
 import { presentCachedFinding } from "./cached-finding-gate";
 import { correctedGrossMarginFraction, guardQuotedRatios, metricDirection, quoteUnusableDayCounts, workingCapitalFromDayParts } from "./ratios";
 import { canonicalScoreProse, type LiveHealthQuote } from "./score-prose";
@@ -806,9 +807,9 @@ export function presentActionWhy(
   canonicalRatios?: Record<string, number> | null,
   liveHealth?: HealthScoreSnapshot | null,
 ): string {
-  const raw = (text ?? "").replace(/\s+/g, " ").trim();
+  const raw = stripMilonProjection(text).replace(/\s+/g, " ").trim();
   if (!raw) return "";
-  return findingSentence({ title: raw, canonicalRatios, liveHealth });
+  return stripMilonProjection(findingSentence({ title: raw, canonicalRatios, liveHealth }));
 }
 
 function notEnoughDataFor(name: string): string {

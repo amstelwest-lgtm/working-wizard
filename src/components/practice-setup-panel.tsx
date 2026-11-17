@@ -62,6 +62,35 @@ const SETUP_STEPS = [
 
 export type ImplementationManagerStep = (typeof SETUP_STEPS)[number]["id"];
 
+/**
+ * A saved plan plus the interview that produced it is not a redo.
+ * A redo is a draft question that is not already in that transcript.
+ */
+export function draftIsActiveRedo(
+  hasPlan: boolean,
+  question: string,
+  messages: readonly { role: string; content: string }[],
+): boolean {
+  const asked = question.trim();
+  if (!hasPlan || !asked) return false;
+  return !messages.some((message) => message.role === "assistant" && message.content === asked);
+}
+
+/** The saved transcript already asks this, and nobody has answered it yet. */
+export function draftContinuesInterview(
+  question: string,
+  messages: readonly { role: string; content: string }[],
+): boolean {
+  const asked = question.trim();
+  if (!asked) return false;
+  let at = -1;
+  messages.forEach((message, index) => {
+    if (message.role === "assistant" && message.content === asked) at = index;
+  });
+  if (at < 0) return false;
+  return !messages.slice(at + 1).some((message) => message.role === "user");
+}
+
 /** Status words follow the live state. Saved is only the idle saved plan. */
 export function implementationManagerStatus(input: {
   booting: boolean;
@@ -163,6 +192,7 @@ export function PracticeSetupInterview({
 }) {
   const [phase, setPhase] = useState<Phase>("interview");
   const [messages, setMessages] = useState<FirmInterviewMessage[]>([]);
+  const [archive, setArchive] = useState<FirmInterviewMessage[]>([]);
   const [question, setQuestion] = useState("");
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
@@ -258,12 +288,14 @@ export function PracticeSetupInterview({
   useEffect(() => {
     if (!firmId) {
       setMessages([]);
+      setArchive([]);
       setQuestion("");
       setDraft("");
       return;
     }
     let cancel = false;
     setMessages([]);
+    setArchive([]);
     setQuestion("");
     setDraft("");
     setBooting(true);
@@ -283,14 +315,15 @@ export function PracticeSetupInterview({
         }
         if (draft && draft.messages.length > 0) {
           setMessages(draft.messages);
+          setArchive(draft.messages);
           const stamped = draft as FirmInterviewDraft & { recordedAt?: string | null };
           if (stamped.recordedAt) setRecordedAt(stamped.recordedAt);
         }
         if (draft?.question) {
           setQuestion(draft.question);
           setModelTurns(draft.modelTurns);
-          if (hasPlan) setRedoOpen(true);
-          else setPhase("interview");
+          if (hasPlan && draftIsActiveRedo(true, draft.question, draft.messages)) setRedoOpen(true);
+          else if (!hasPlan) setPhase("interview");
           return;
         }
         if (hasPlan) return;
@@ -312,6 +345,7 @@ export function PracticeSetupInterview({
   }, [firmId, loadSaved, loadDraft]);
 
   const redo = () => {
+    setArchive((prev) => (prev.length > 0 ? prev : messages));
     setMessages([]);
     setQuestion("");
     setDraft("");
@@ -411,8 +445,9 @@ export function PracticeSetupInterview({
     }
   };
 
+  const continuing = draftContinuesInterview(question, messages);
   const showInterview =
-    (!booting || loading) && !visibleMap && (phase === "interview" || redoOpen);
+    (!booting || loading) && !visibleMap && (phase === "interview" || redoOpen || continuing);
   const flowLines = visibleMap ? visibleMap.todaysFlow.map(cleanFlowLine).filter(Boolean) : [];
   const checklist = visibleMap ? visibleMap.checklist.map(cleanFlowLine).filter(Boolean) : [];
   const stepLines = [...(preview?.steps ?? []), ...(plan?.steps ?? [])]
@@ -593,9 +628,9 @@ export function PracticeSetupInterview({
 
       {!booting ? (
         <PastInterviews
-          messages={messages}
-          question={question}
-          thinking={loading}
+          messages={redoOpen && archive.length > 0 ? archive : messages}
+          question={redoOpen ? "" : question}
+          thinking={redoOpen ? false : loading}
           recordedAt={recordedAt}
         />
       ) : null}

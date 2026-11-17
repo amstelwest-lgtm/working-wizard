@@ -1091,6 +1091,10 @@ async function runPanel() {
     "a saved redo draft is on screen",
   );
   assert(
+    document.querySelector("[data-past-interviews]")?.textContent?.includes("Redo draft answer"),
+    "an active redo still shows the earlier interview",
+  );
+  assert(
     document.body.textContent?.includes("Who signs the pack"),
     "the confirmed plan stays beside the redo draft",
   );
@@ -1313,16 +1317,20 @@ async function runPanel() {
   await waitForPhase("done");
   assert(savedPlanAsks === 0, "a draft over a saved plan does not ask again");
   assert(
+    document.querySelector("[data-past-interviews]")?.textContent?.includes(resumeAnswer),
+    "a saved interview is listed under past interviews",
+  );
+  assert(
     document.querySelector(".setup-partner__question")?.textContent === resumeQuestion,
-    "the redo draft keeps its question",
+    "the open question stays on the interview",
   );
   assert(
-    document.querySelector("[data-im-status]")?.textContent?.trim() === "Redo in progress",
-    "the redo draft is not marked Saved",
+    document.querySelector("[data-im-status]")?.textContent?.trim() === "Interviewing",
+    "a saved interview is not a redo",
   );
   assert(
-    document.body.textContent?.includes("Discard redo, keep saved plan"),
-    "the redo draft can be discarded",
+    !document.body.textContent?.includes("Redo in progress"),
+    "the hero does not say redo when none was started",
   );
   assert(
     !document.body.textContent?.includes("Save takeover proposals") &&
