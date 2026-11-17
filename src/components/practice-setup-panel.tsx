@@ -2,10 +2,23 @@ import { createElement, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  ClipboardList,
+  ListChecks,
+  Map as MapIcon,
+  MessageSquare,
+  RefreshCw,
+  RotateCcw,
+  Undo2,
+} from "lucide-react";
 import "./setup-partner-panel.css";
 import "@/components/owner-door/owner-door.css";
-import { ImRoutineProposals } from "@/components/im-routine-proposals";
-import { HomeBotCard } from "@/components/owner-door/home-bot-card";
+import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
+import { PageHeader } from "@/components/primitives/page-header";
+import { ImProposalDecisions } from "@/components/im-proposal-decisions";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { parseMarketSelection } from "@/lib/market/parse";
 import {
@@ -13,7 +26,6 @@ import {
   firmSetupPartnerSummary,
   firmInterviewUserError,
   questionAsWritten,
-  setupPartnerMapPromptBlock,
   withMarketCoverage,
   type FirmInterviewMessage,
   type SetupPartnerCountry,
@@ -27,21 +39,51 @@ import {
   fetchFirmSetupPlan,
   firmInterviewTurn,
 } from "@/lib/setup-partner-client";
-import { ImTakeoverProposals } from "@/components/im-takeover-proposals";
-import { ImplementationManagerChip } from "@/components/practice-setup-card";
-import { InterviewExchange } from "@/components/interview-exchange";
+import { InterviewExchange, PastInterviews } from "@/components/interview-exchange";
 import { discardPracticeRedo } from "@/lib/discard-practice-redo.functions";
 import {
   buildPracticeImplementationPlan,
   cleanFlowLine,
   dedupePracticeSteps,
-  practiceBucketLabel,
   type PracticeImplementationPlan,
 } from "@/lib/setup-partner-plan";
-import { ImProposalDecisions } from "@/components/im-proposal-decisions";
 
 /** User-facing name. Internal ids stay setup_partner. */
 export const IMPLEMENTATION_MANAGER_LABEL = "Implementation Manager";
+
+export type ImplementationManagerStatus = "Not started" | "Interviewing" | "Redo in progress" | "Saved" | "Map";
+
+const SETUP_STEPS = [
+  { id: "interview", label: "Interview" },
+  { id: "map", label: "Map" },
+  { id: "proposals", label: "Proposals" },
+  { id: "live", label: "Live" },
+] as const;
+
+export type ImplementationManagerStep = (typeof SETUP_STEPS)[number]["id"];
+
+/** Status words follow the live state. Saved is only the idle saved plan. */
+export function implementationManagerStatus(input: {
+  booting: boolean;
+  phase: "interview" | "map" | "done";
+  interviewing: boolean;
+  redo: boolean;
+}): ImplementationManagerStatus {
+  if (input.booting) return "Not started";
+  if (input.redo) return "Redo in progress";
+  if (input.interviewing || input.phase === "interview") return "Interviewing";
+  if (input.phase === "done") return "Saved";
+  return "Map";
+}
+
+export function implementationManagerStep(input: {
+  phase: "interview" | "map" | "done";
+  interviewing: boolean;
+}): ImplementationManagerStep {
+  if (input.interviewing || input.phase === "interview") return "interview";
+  if (input.phase === "map") return "map";
+  return "live";
+}
 
 /** This route's Toaster. App chrome also mounts one; this id keeps a single toast. */
 export const PRACTICE_SETUP_TOASTER_ID = "practice-setup";
@@ -134,25 +176,14 @@ export function PracticeSetupInterview({
   const [redoOpen, setRedoOpen] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [noFirmWaited, setNoFirmWaited] = useState(false);
+  const [recordedAt, setRecordedAt] = useState<string | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const discardSavedRedo = useServerFn(discardPracticeRedo);
   const country = parseMarketSelection(firmMarket)?.country ?? null;
   const marketCountry: SetupPartnerCountry | null =
     country === "US" || country === "ZA" ? country : null;
   const visibleMap = map ? withMarketCoverage(map, marketCountry) : null;
   const preview = visibleMap ? buildPracticeImplementationPlan(visibleMap) : null;
-  const filledMap = visibleMap
-    ? {
-        ...visibleMap,
-        checklist: visibleMap.checklist.length
-          ? visibleMap.checklist
-          : (preview?.steps.filter((step) => step.bucket === "client_setup").map((step) => step.step) ??
-            []),
-        gaps: visibleMap.gaps.length
-          ? visibleMap.gaps
-          : (preview?.steps.filter((step) => step.bucket === "product_gap").map((step) => step.step) ??
-            []),
-      }
-    : null;
 
   const mapFrom = async (history: FirmInterviewMessage[], turns: number) => {
     if (!firmId) return;
@@ -250,8 +281,12 @@ export function PracticeSetupInterview({
           setPlan({ steps: dedupePracticeSteps(saved.steps) });
           setPhase("done");
         }
-        if (draft?.question) {
+        if (draft && draft.messages.length > 0) {
           setMessages(draft.messages);
+          const stamped = draft as FirmInterviewDraft & { recordedAt?: string | null };
+          if (stamped.recordedAt) setRecordedAt(stamped.recordedAt);
+        }
+        if (draft?.question) {
           setQuestion(draft.question);
           setModelTurns(draft.modelTurns);
           if (hasPlan) setRedoOpen(true);
@@ -303,6 +338,7 @@ export function PracticeSetupInterview({
       setMap(null);
       setTurnError(null);
       setModelTurns(0);
+      setRecordedAt(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not discard the redo");
     } finally {
@@ -329,7 +365,7 @@ export function PracticeSetupInterview({
         data-practice-setup-panel="no-firm"
         aria-label={IMPLEMENTATION_MANAGER_LABEL}
       >
-        <PracticeSetupHero status="Not started" metric="Takes ~10 min" />
+        <PracticeSetupHero status="Not started" />
         <p className="setup-partner__lede" data-practice-setup-phase="no-firm">
           {PRACTICE_SETUP_NO_FIRM}
         </p>
@@ -375,160 +411,193 @@ export function PracticeSetupInterview({
     }
   };
 
+  const showInterview =
+    (!booting || loading) && !visibleMap && (phase === "interview" || redoOpen);
+  const flowLines = visibleMap ? visibleMap.todaysFlow.map(cleanFlowLine).filter(Boolean) : [];
+  const checklist = visibleMap ? visibleMap.checklist.map(cleanFlowLine).filter(Boolean) : [];
+  const stepLines = [...(preview?.steps ?? []), ...(plan?.steps ?? [])]
+    .filter((step) => step.bucket === "client_setup" || step.bucket === "covered")
+    .map((step) => step.step);
+  const nextLines = [...new Set([...flowLines, ...checklist, ...stepLines])];
+  const status = implementationManagerStatus({
+    booting: booting && !loading,
+    phase,
+    interviewing: showInterview,
+    redo: redoOpen,
+  });
+  const step = implementationManagerStep({ phase, interviewing: showInterview });
+  const actions = !booting ? (
+    <div className="setup-partner__actions" data-im-actions="">
+      {showInterview ? (
+        <>
+          <button
+            type="button"
+            className={
+              !loading && !draft.trim()
+                ? "setup-partner__primary is-needs-answer"
+                : "setup-partner__primary"
+            }
+            disabled={loading || !draft.trim() || !question}
+            onClick={() => void advance()}
+          >
+            <ArrowRight size={15} aria-hidden />
+            {loading ? "Working…" : "Next"}
+          </button>
+          {!loading && !draft.trim() ? <span className="im-next-hint">Type an answer</span> : null}
+          <button
+            type="button"
+            className="setup-partner__ghost"
+            disabled={loading}
+            onClick={() => void mapFrom(messages, modelTurns)}
+          >
+            <MapIcon size={15} aria-hidden />
+            {"That's enough, map it"}
+          </button>
+        </>
+      ) : null}
+      {turnError ? (
+        <button
+          type="button"
+          className="setup-partner__ghost"
+          data-practice-setup-retry=""
+          onClick={() => void requestTurn(messages, modelTurns)}
+        >
+          <RefreshCw size={15} aria-hidden />
+          {"Retry"}
+        </button>
+      ) : null}
+      {visibleMap && (phase === "map" || redoOpen) ? (
+        <button
+          type="button"
+          className="setup-partner__ghost"
+          disabled={saving}
+          onClick={() => void confirm()}
+        >
+          <Check size={15} aria-hidden />
+          {saving ? "Saving…" : "Confirm workflow map"}
+        </button>
+      ) : null}
+      {redoOpen ? (
+        <button type="button" className="setup-partner__ghost" disabled={discarding} onClick={() => void discardRedoDraft()}>
+          <Undo2 size={15} aria-hidden />
+          {discarding ? "Discarding…" : "Discard redo, keep saved plan"}
+        </button>
+      ) : null}
+      {phase === "done" && !showInterview ? (
+        <button type="button" className="setup-partner__ghost" onClick={redo}>
+          <RotateCcw size={15} aria-hidden />
+          {"Redo interview"}
+        </button>
+      ) : null}
+      {phase === "done" ? (
+        <Link to="/practice" className="setup-partner__ghost">
+          <ArrowLeft size={15} aria-hidden />
+          {"Back to practice"}
+        </Link>
+      ) : null}
+    </div>
+  ) : null;
+
   return (
     <section
-      className="setup-partner"
+      className="setup-partner im-flow im-page"
       data-practice-setup-panel=""
       data-practice-setup-phase={booting ? "loading" : phase}
-        aria-label={IMPLEMENTATION_MANAGER_LABEL}
-      >
-        <PracticeSetupHero
-          status={heroStatus(phase, booting)}
-          metric={heroMetric(phase, preview?.steps.length ?? plan?.steps.length ?? 0)}
-        />
+      data-im-page=""
+      aria-label={IMPLEMENTATION_MANAGER_LABEL}
+    >
+      <PageHeader
+        eyebrow="Practice"
+        title="Implementation Manager"
+        subtitle="Maps how your practice runs so Milōn can take on the work"
+      />
+      <PracticeSetupHero status={status} step={step} working={showInterview || loading} />
 
-      {booting ? <p className="setup-partner__lede">Loading your practice.</p> : null}
+      {booting && !showInterview ? <p className="im-card setup-partner__lede">Loading your practice.</p> : null}
 
-      {!booting && redoOpen ? (
-        <div data-practice-redo="open">
-          <h3>Redo in progress</h3>
-          <div className="setup-partner__actions">
-            <button type="button" disabled={discarding} onClick={() => void discardRedoDraft()}>
-              {discarding ? "Discarding…" : "Discard redo, keep saved plan"}
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {!booting && !visibleMap && (phase === "interview" || redoOpen) ? (
-        <div>
-          <InterviewExchange question={question} thinking={loading} messages={messages} />
+      {showInterview ? (
+        <div className="im-card" data-im-interview="">
+          <h2 className="im-card__title">
+            <MessageSquare size={18} aria-hidden />
+            Interview
+          </h2>
+          <InterviewExchange
+            question={question}
+            thinking={loading}
+            questionIndex={modelTurns > 0 ? modelTurns : undefined}
+          />
           <textarea
             className="setup-partner__answer"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             placeholder="Walk through it"
+            style={{ fontFamily: "var(--font-sans), sans-serif" }}
           />
           {turnError ? (
             <p className="setup-partner__error" role="alert">
               {turnError}
             </p>
           ) : null}
-          <div className="setup-partner__actions">
-            <button
-              type="button"
-              className="setup-partner__primary"
-              disabled={loading || !draft.trim() || !question}
-              onClick={() => void advance()}
-            >
-              {loading ? "Working…" : "Next"}
-            </button>
-            <button
-              type="button"
-              className="setup-partner__ghost"
-              disabled={loading}
-              onClick={() => void mapFrom(messages, modelTurns)}
-            >
-              That's enough, map it
-            </button>
-            {turnError ? (
-              <button
-                type="button"
-                className="setup-partner__ghost"
-                data-practice-setup-retry=""
-                onClick={() => void requestTurn(messages, modelTurns)}
-              >
-                Retry
-              </button>
-            ) : null}
-          </div>
+          {actions}
         </div>
+      ) : actions ? (
+        <div className="im-card">{actions}</div>
       ) : null}
 
-      {!booting && visibleMap && (phase === "map" || redoOpen) ? (
-        <div className="setup-partner__map">
-          <pre className="sr-only">{setupPartnerMapPromptBlock(filledMap ?? visibleMap)}</pre>
-          <h3>Today&apos;s flow</h3>
-          <ul>
-            {visibleMap.todaysFlow.map(cleanFlowLine).filter(Boolean).map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-          <h3>Milōn coverage</h3>
-          <ul>
-            {visibleMap.milonCoverage.map((row) => (
-              <li key={`${row.agent}-${row.owns}`}>
-                {row.agent}: {row.owns}
-              </li>
-            ))}
-          </ul>
-          {filledMap && filledMap.gaps.length > 0 ? (
-            <>
-              <h3>Gaps</h3>
-              <ul>
-                {filledMap.gaps.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-          {filledMap && filledMap.checklist.length > 0 ? (
-            <>
-              <h3>Setup checklist</h3>
-              <ul>
-                {filledMap.checklist.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-          {preview && preview.steps.length > 0 ? (
-            <>
-              <h3>Buckets</h3>
-              <ul>
-                {preview.steps.map((step) => (
-                  <li key={`${step.dedupe_key}-${step.step}`}>
-                    {step.step} — {practiceBucketLabel(step.bucket)}
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-          <div className="setup-partner__actions">
-            <button
-              type="button"
-              className="setup-partner__primary"
-              disabled={saving}
-              onClick={() => void confirm()}
-            >
-              {saving ? "Saving…" : "Confirm workflow map"}
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {!booting && phase === "done" ? (
-        <div>
-          <p className="setup-partner__done">Saved for the practice.</p>
-          {firmId ? <ImRoutineProposals firmId={firmId} plan={plan} /> : null}
-          {plan && plan.steps.length > 0 ? (
-            <ul>
-              {plan.steps.map((step) => (
-                <li key={`${step.dedupe_key}-${step.step}`}>
-                  {step.step} — {practiceBucketLabel(step.bucket)}
+      {!booting && (phase === "done" || nextLines.length > 0 || visibleMap) ? (
+        <div className="im-card setup-partner__next" data-im-next="">
+          <h2 className="im-card__title">
+            <ListChecks size={18} aria-hidden />
+            Recommended next steps
+          </h2>
+          {nextLines.length > 0 ? (
+            <ul className="im-checks">
+              {nextLines.map((line) => (
+                <li key={line}>
+                  <Check size={16} aria-hidden />
+                  <span>{line}</span>
                 </li>
               ))}
             </ul>
+          ) : (
+            <p className="im-muted">The next steps appear once the map is ready.</p>
+          )}
+          {visibleMap && visibleMap.milonCoverage.length > 0 ? (
+            <div data-im-coverage="">
+              <h3>Milōn coverage</h3>
+              <ul className="im-checks">
+                {visibleMap.milonCoverage.map((row) => (
+                  <li key={`${row.agent}-${row.owns}`}>
+                    <Check size={16} aria-hidden />
+                    <span>
+                      {row.agent}: {row.owns}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
-          {firmId ? <ImTakeoverProposals firmId={firmId} plan={plan} /> : null}
-          <div className="setup-partner__actions">
-            <button type="button" className="setup-partner__ghost" onClick={redo}>
-              Redo interview
-            </button>
-            <Link to="/practice">Back to practice</Link>
-          </div>
-          {firmId ? <ImProposalDecisions firmId={firmId} /> : null}
+          {firmId ? (
+            <div className="setup-partner__actions">
+              <button type="button" className="setup-partner__ghost" onClick={() => setReviewOpen(true)}>
+                <ClipboardList size={15} aria-hidden />
+                {"Review proposals"}
+              </button>
+            </div>
+          ) : null}
+          {reviewOpen && firmId ? (
+            <ImProposalDecisions firmId={firmId} quiet startOpen />
+          ) : null}
         </div>
+      ) : null}
+
+      {!booting ? (
+        <PastInterviews
+          messages={messages}
+          question={question}
+          thinking={loading}
+          recordedAt={recordedAt}
+        />
       ) : null}
 
       {error ? (
@@ -544,44 +613,44 @@ function setupToast(message: string, role: "status" | "alert") {
   return createElement("span", { role }, message);
 }
 
-function heroStatus(phase: Phase, booting: boolean): string {
-  if (phase === "done") return "Saved";
-  if (phase === "map") return "Map ready";
-  if (booting) return "Not started";
-  return "In progress";
-}
-
-function heroMetric(phase: Phase, steps: number): string {
-  if ((phase === "map" || phase === "done") && steps > 0) {
-    return `${steps} step${steps === 1 ? "" : "s"} mapped`;
-  }
-  return "Takes ~10 min";
-}
-
-function PracticeSetupHero({ status, metric }: { status: string; metric: string }) {
+function PracticeSetupHero({
+  status,
+  step,
+  working,
+}: {
+  status: ImplementationManagerStatus;
+  step: ImplementationManagerStep;
+  working: boolean;
+}) {
+  const current = SETUP_STEPS.findIndex((item) => item.id === step);
   return (
-    <div className="owner-door" data-im-card="solo">
-      <div className="owner-pane" data-owner-home="true">
-        <div className="owner-agents">
-          <HomeBotCard
-            agent="setup_partner"
-            name={IMPLEMENTATION_MANAGER_LABEL}
-            label={IMPLEMENTATION_MANAGER_LABEL}
-            chip={<ImplementationManagerChip />}
-            status={
-              <span className={status === "Saved" ? "owner-status" : "owner-status is-attention"}>{status}</span>
-            }
-            lines={
-              <span className="owner-lines" data-status-update="">
-                <span className="owner-voice">
-                  Map how the firm closes, reviews, signs off, and reports.{" "}
-                  <strong className="owner-money">{metric}</strong>
-                </span>
-              </span>
-            }
-          />
+    <article className="im-card im-hero" data-im-card="solo" data-im-hero="">
+      <div className="setup-partner__head im-hero__id">
+        <OwnerAvatar
+          agent="setup_partner"
+          variant="character"
+          motion={working ? "working" : "idle"}
+          size="md"
+          label={IMPLEMENTATION_MANAGER_LABEL}
+        />
+        <div className="setup-partner__head-text">
+          <div className="im-hero__name">
+            <h2 className="setup-partner__title">{IMPLEMENTATION_MANAGER_LABEL}</h2>
+            <span className="im-status" data-im-status="">{status}</span>
+          </div>
+          <p className="im-hero__role">Maps the close, the review, and the sign-off.</p>
         </div>
       </div>
-    </div>
+      <ol className="im-stepper" aria-label="Setup progress">
+        {SETUP_STEPS.map((item, index) => {
+          const state = index < current ? "done" : index === current ? "current" : "upcoming";
+          return (
+            <li key={item.id} data-step={state} aria-current={state === "current" ? "step" : undefined}>
+              <span>{item.label}</span>
+            </li>
+          );
+        })}
+      </ol>
+    </article>
   );
 }

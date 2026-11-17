@@ -4,7 +4,7 @@
  */
 import { readFileSync } from "node:fs";
 import { actionRowDisplayState } from "../src/lib/action-handoff.ts";
-import { ownerLoadRows, visibleActionNumbers } from "../src/components/action-plan.tsx";
+import { actionMatchesOwnerFilter, ownerLoadPick, ownerLoadRows, visibleActionNumbers } from "../src/components/action-plan.tsx";
 import { groundAdvisoryNarrative } from "../src/lib/advisory-narrative.ts";
 import { polishAgentCopy } from "../src/lib/agent-bus.ts";
 import { presentLiveDraft } from "../src/lib/draft-figures.ts";
@@ -126,6 +126,19 @@ if (load.find((row) => row.name === "Unassigned")?.count !== 1) {
 }
 if (JSON.stringify(visibleActionNumbers(3)) !== "[1,2,3]") {
   throw new Error("visible numbers are not the kept rows");
+}
+const agentKey = load.find((row) => row.name === "Financial Manager")?.key;
+if (agentKey !== "agent:Financial Manager" || ownerLoadPick(agentKey) !== agentKey) {
+  throw new Error(`clicking an agent bucket does not pick that agent: ${agentKey}`);
+}
+if (ownerLoadPick("unassigned") !== null) throw new Error("Unassigned should clear the filter");
+if (
+  !actionMatchesOwnerFilter(
+    { owner_id: null, owner_name: "Financial Manager" },
+    "agent:Financial Manager",
+  )
+) {
+  throw new Error("an agent filter does not match that agent's rows");
 }
 
 console.log("diagnose days guard ok");

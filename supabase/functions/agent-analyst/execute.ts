@@ -301,6 +301,15 @@ function finiteScore(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Scorecard ratios for this client's books. Null when the books cannot be read. */
+async function liveOverviewRatios(ctx: AnalystExecCtx): Promise<Record<string, number> | null> {
+  const booksRes = await ctx.db.from("clients").select("financials").eq("id", ctx.clientId).maybeSingle();
+  if (booksRes.error) return null;
+  const books = asRecord(booksRes.data?.financials);
+  if (!books) return null;
+  return numericFigures(overviewRatios(books, { periodMonths: periodMonthsOf(books) }));
+}
+
 async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx): Promise<unknown> {
   const severity = typeof args.severity === "string" ? args.severity.trim() : "";
   const title = typeof args.title === "string" ? args.title.trim() : "";
@@ -420,11 +429,13 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
   const duplicateRow = duplicate
     ? ((recent ?? []) as Array<Record<string, unknown>>).find((row) => String(row.id) === duplicate.id)
     : undefined;
+  const liveRatios = duplicateRow ? await liveOverviewRatios(ctx) : null;
   const duplicateRejected =
     duplicateRow != null &&
     cachedFindingRejected(
       `${String(duplicateRow.title ?? "")} ${String(duplicateRow.detail ?? "")}`,
       asRecord(duplicateRow.evidence)?.figures,
+      liveRatios,
     );
   if (duplicate && !duplicateRejected) {
     const seenAt = new Date().toISOString();

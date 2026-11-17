@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   IMPLEMENTATION_MANAGER_THINKING,
   InterviewExchange,
+  PastInterviews,
   interviewPairs,
 } from "../src/components/interview-exchange.tsx";
 
@@ -38,9 +39,22 @@ const html = renderToStaticMarkup(
 );
 assert(html.includes('class="setup-partner__question"'), "one heading for the live question");
 assert(html.includes("Who reviews the pack?"), "the heading is the live question");
-assert(html.includes("setup-partner__log-a"), "answers are marked apart from questions");
-assert(html.includes("Earlier answers (1)"), "the log is a single collapsible");
-assert(!html.includes("<details open"), "the log starts collapsed");
+assert(!html.includes("Past interviews"), "the live question is not the log");
+assert(!html.includes("Earlier answers"), "the live question has no earlier-answers dump");
+const log = renderToStaticMarkup(
+  createElement(PastInterviews, {
+    question: "Who reviews the pack?",
+    thinking: false,
+    messages: prior,
+    recordedAt: "2026-11-16T12:00:00.000Z",
+  }),
+);
+assert(log.includes("Past interviews (1)"), "the log shows how many interviews are stored");
+assert(log.includes("<strong>Walk me through month end.</strong>"), "the question is bold");
+assert(log.includes("setup-partner__log-a"), "the answer sits under the question");
+assert(log.includes("2026-11-16T12:00:00.000Z"), "the pair keeps its date");
+assert(log.includes("16 Nov 2026"), "the date is readable");
+assert(!log.includes("<details open"), "the log starts collapsed");
 
 const thinking = renderToStaticMarkup(
   createElement(InterviewExchange, {

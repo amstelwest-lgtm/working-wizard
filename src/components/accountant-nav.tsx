@@ -43,6 +43,7 @@ export type NavDestination = {
     | "/practice/insights"
     | "/practice/marketplace"
     | "/practice/playbooks"
+    | "/practice/setup"
     | "/settings"
     | "/clients"
     | "/clients/queries"

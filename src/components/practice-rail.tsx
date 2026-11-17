@@ -15,7 +15,7 @@ const home = (hash = "") => ({ to: "/dashboard" as const, hash });
 const clients = (hash = "") => ({ to: "/clients" as const, hash });
 const practice = (hash = "") => ({ to: "/practice" as const, hash });
 
-function practiceSections(taxRail: boolean): NavSection[] {
+export function practiceSections(taxRail: boolean): NavSection[] {
   const homeItems = [
     {
       id: "financial_manager",
@@ -70,6 +70,7 @@ function practiceSections(taxRail: boolean): NavSection[] {
             { id: "insights", label: "Insights", to: { to: "/practice/insights" } },
             { id: "marketplace", label: "Marketplace", to: { to: "/practice/marketplace" } },
             { id: "playbooks", label: "Playbooks", to: { to: "/practice/playbooks" } },
+            { id: "implementation", label: "Implementation Manager", to: { to: "/practice/setup" } },
           ],
         },
       ],
@@ -88,6 +89,7 @@ const PRACTICE_PATH: Record<string, string> = {
   "/practice/insights": "insights",
   "/practice/marketplace": "marketplace",
   "/practice/playbooks": "playbooks",
+  "/practice/setup": "implementation",
 };
 
 function barePath(pathname: string): string {
@@ -95,7 +97,7 @@ function barePath(pathname: string): string {
   return pathname;
 }
 
-function practiceSelection(pathname: string, hash: string) {
+export function practiceSelection(pathname: string, hash: string) {
   const bare = hash.replace(/^#/, "");
   const path = barePath(pathname);
   if (path === "/settings" || pathname.startsWith("/settings/")) {

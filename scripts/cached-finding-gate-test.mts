@@ -4,12 +4,14 @@
  * Run: pnpm test:cached-finding-gate
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describeActionHandoff } from "../src/lib/action-handoff.ts";
 import { presentCachedFinding, REFRESHED_FROM_FIGURES } from "../src/lib/cached-finding-gate.ts";
 import type { HealthScoreSnapshot } from "../src/lib/health-snapshot.ts";
-import { findingSentence } from "../src/lib/milon-team-activity.ts";
+import { findingSentence, presentActionWhy } from "../src/lib/milon-team-activity.ts";
+import { renderHealthNarrative } from "../src/lib/health-snapshot.ts";
 import { AGENT_DISPLAY_NAME } from "../src/lib/milon-team-names.ts";
-import { computeRatios, validateRatioInputs } from "../src/lib/ratios.ts";
+import { cachedFindingRejected, computeRatios, validateRatioInputs } from "../src/lib/ratios.ts";
 import { advisoryOutboundBody } from "../src/components/advisory-drafter.tsx";
 
 const chillText = [
@@ -148,5 +150,69 @@ const validHandoff = describeActionHandoff({
 });
 assert.equal(validHandoff.caption?.includes("Debtor days are 33"), true, validHandoff.caption ?? "");
 assert.equal(validHandoff.caption?.includes("Refreshed from current figures"), false, validHandoff.caption ?? "");
+
+const paragraphs = [
+  "Please review the cash position.",
+  "",
+  "Working Capital Days of 162.",
+  "",
+  "We meet on Tuesday.",
+].join("\n");
+const keptBreaks = presentCachedFinding({ text: paragraphs, ratios: chillRatios, live }).text;
+assert.equal(keptBreaks.startsWith("Please review the cash position.\n\n"), true, keptBreaks);
+assert.equal(keptBreaks.endsWith("\n\nWe meet on Tuesday."), true, keptBreaks);
+assert.equal(keptBreaks.includes("Working Capital Days of 162"), false, keptBreaks);
+const untouched = "Please review the cash position.\n\nDebtor days are 33.\n\nWe meet on Tuesday.";
+assert.equal(
+  presentCachedFinding({ text: untouched, ratios: validRatios, live }).text,
+  untouched,
+);
+
+assert.equal(
+  cachedFindingRejected(
+    "Creditors improved. The close took two days.",
+    undefined,
+    chillRatios,
+  ),
+  false,
+);
+const analystLive: HealthScoreSnapshot = {
+  overall: 54,
+  pillars: [
+    { id: "profit", label: "Profit", score: 70 },
+    { id: "assets", label: "Assets", score: 55 },
+    { id: "financing", label: "Financing", score: 48 },
+    { id: "cash", label: "Cash", score: 25 },
+  ],
+  weakestLabel: "Cash",
+  weakestScore: 25,
+  periodLabel: "Full year on file",
+};
+const analystParagraph = renderHealthNarrative(analystLive);
+const analystBlock = `${analystParagraph} ${REFRESHED_FROM_FIGURES} There is no prior period.`;
+const analystShown = presentCachedFinding({
+  text: `${analystBlock} ${analystBlock}`,
+  live: analystLive,
+}).text;
+assert.equal(analystShown.split("Cash is the weakest pillar at 25").length - 1, 1, analystShown);
+assert.equal((analystShown.match(/Refreshed from current figures/g) ?? []).length, 1, analystShown);
+assert.equal((analystShown.match(/There is no prior period/g) ?? []).length, 1, analystShown);
+
+const staleWhy = "Profit weakest at 60. Cash 93. Overall health is 74 (Watch).";
+const actionWhy = presentActionWhy(staleWhy, null, analystLive);
+assert.equal(actionWhy.includes("74"), false, actionWhy);
+assert.equal(actionWhy.includes("Profit weakest at 60"), false, actionWhy);
+assert.equal(actionWhy.includes("Cash is the weakest pillar at 25"), true, actionWhy);
+assert.equal(
+  readFileSync("src/components/action-plan.tsx", "utf8").includes("presentActionWhy(item.outcome_why"),
+  true,
+  "the action row and drawer quote the why through the live snapshot",
+);
+
+assert.equal(cachedFindingRejected("WC days 162.", undefined, undefined), false);
+assert.equal(
+  cachedFindingRejected("WC days 162.", undefined, { "Working Capital Days": Number.NaN }),
+  true,
+);
 
 console.log("cached-finding-gate-test: ok");

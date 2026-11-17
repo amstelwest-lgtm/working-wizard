@@ -720,14 +720,6 @@ export function guardQuotedRatios(
   return out;
 }
 
-const QUOTE_NAME: Record<RatioQuoteKey, string> = {
-  grossMargin: "Gross Margin",
-  debtorDays: "Debtor Days",
-  creditorDays: "Creditor Days",
-  inventoryDays: "Inventory Days",
-  workingCapitalDays: "Working Capital Days",
-};
-
 function figureBag(figures: unknown): Record<string, unknown> {
   if (Array.isArray(figures)) {
     const bag: Record<string, unknown> = {};
@@ -781,7 +773,8 @@ export function findingSentences(text: string): string[] {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i] ?? "";
     buf += ch;
-    const boundary = ch === "!" || ch === "?" || (ch === "." && !/\d/.test(text[i - 1] ?? "") && !/\d/.test(text[i + 1] ?? ""));
+    const decimal = ch === "." && /\d/.test(text[i - 1] ?? "") && /\d/.test(text[i + 1] ?? "");
+    const boundary = ch === "!" || ch === "?" || (ch === "." && !decimal);
     if (boundary) {
       const piece = buf.trim();
       if (piece) parts.push(piece);
@@ -793,31 +786,64 @@ export function findingSentences(text: string): string[] {
   return parts.length ? parts : [text];
 }
 
-/** Metrics named in one sentence, with the number cited beside each name. */
+const DAY_HEAD = "(?:working capital|creditor|inventory|debtor)";
+
+function citedNumber(sentence: string, at: number, length: number, percent: boolean): number | null {
+  const after = sentence.slice(at, Math.min(sentence.length, at + length + 32));
+  const before = sentence.slice(Math.max(0, at - 16), at);
+  const numMatch = after.match(/-?\d+(?:\.\d+)?/);
+  let value = numMatch ? Number(numMatch[0]) : null;
+  if (/\bnegative\s*$/i.test(before)) value = value == null || value > 0 ? -1 : value;
+  if (value != null && percent && /%/.test(after) && Math.abs(value) > 1.5) value = value / 100;
+  return value;
+}
+
+/**
+ * Metrics this sentence actually names. A head word only counts when "days"
+ * follows it, or follows "and" plus another day name. A longer word that
+ * merely contains the name does not count.
+ */
 export function citedRatioValues(sentence: string): CitedMetric[] {
-  const specs = [...METRIC_DIRECTIONS].sort((a, b) => b.name.length - a.name.length);
-  const lower = sentence.toLowerCase();
   const found: CitedMetric[] = [];
   const seen = new Set<RatioQuoteKey>();
-  for (const spec of specs) {
-    const key = spec.key as RatioQuoteKey;
-    if (!(key in QUOTE_NAME) || seen.has(key)) continue;
-    const name = spec.name.toLowerCase();
-    const head = name.replace(/\s+days$/, "");
-    const nameAt = lower.indexOf(name);
-    const headAt = head !== name ? lower.indexOf(head) : -1;
-    const daysAt = lower.search(/\bdays\b/);
-    const nearDays = headAt >= 0 && daysAt >= 0 && Math.abs(headAt - daysAt) <= 48;
-    if (nameAt < 0 && !nearDays) continue;
-    const at = nameAt >= 0 ? nameAt : headAt;
-    const window = sentence.slice(Math.max(0, at - 40), Math.min(sentence.length, at + name.length + 40));
-    const negative = /\bnegative\b/i.test(sentence.slice(Math.max(0, at - 48), at + name.length));
-    const numMatch = window.match(/-?\d+(?:\.\d+)?/);
-    let value = numMatch ? Number(numMatch[0]) : null;
-    if (negative) value = value == null || value > 0 ? -1 : value;
-    if (value != null && /%/.test(window) && Math.abs(value) > 1.5) value = value / 100;
+  const add = (key: RatioQuoteKey, at: number, length: number, percent: boolean) => {
+    if (seen.has(key)) return;
     seen.add(key);
-    found.push({ key, value });
+    found.push({ key, value: citedNumber(sentence, at, length, percent) });
+  };
+
+  const margin = /\bgross margin\b/i.exec(sentence);
+  if (margin?.index != null) add("grossMargin", margin.index, margin[0].length, true);
+
+  const workingCapital = /\b(?:working capital|wc)\s+days\b/i.exec(sentence);
+  if (workingCapital?.index != null) {
+    add("workingCapitalDays", workingCapital.index, workingCapital[0].length, false);
+  }
+
+  const dayName = new RegExp(
+    `\\b${DAY_HEAD}\\b(?:\\s+and\\s+${DAY_HEAD}\\b)?\\s+days\\b`,
+    "gi",
+  );
+  for (const match of sentence.matchAll(dayName)) {
+    const phrase = match[0].toLowerCase();
+    const at = match.index ?? 0;
+    if (phrase.startsWith("working capital")) add("workingCapitalDays", at, match[0].length, false);
+    else if (phrase.startsWith("creditor")) add("creditorDays", at, match[0].length, false);
+    else if (phrase.startsWith("inventory")) add("inventoryDays", at, match[0].length, false);
+    else if (phrase.startsWith("debtor")) add("debtorDays", at, match[0].length, false);
+    const partner = phrase.match(/\band\s+(working capital|creditor|inventory|debtor)\s+days\b/);
+    if (!partner || match.index == null) continue;
+    const partnerAt = sentence.toLowerCase().indexOf(partner[1], match.index);
+    if (partnerAt < 0) continue;
+    const partnerKey =
+      partner[1] === "working capital"
+        ? "workingCapitalDays"
+        : partner[1] === "creditor"
+          ? "creditorDays"
+          : partner[1] === "inventory"
+            ? "inventoryDays"
+            : "debtorDays";
+    add(partnerKey, partnerAt, partner[0].length - "and ".length, false);
   }
   return found;
 }
