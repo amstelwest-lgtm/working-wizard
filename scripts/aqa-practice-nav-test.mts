@@ -126,7 +126,7 @@ assert(
   "the denominator is still clients with a stored trend",
 );
 assert(board.includes("listOpenQueries"), "open queries lists notes from the book");
-assert(board.includes("actionIsOverdue"), "the practice board keeps the shared overdue predicate");
+assert(board.includes("actionCounts("), "the practice board keeps the shared overdue count");
 
 assert(rail.includes("Implementation Manager"), "the practice rail names Implementation Manager");
 assert(!read("src/components/owner-door/owner-shell.tsx").includes("/practice/setup"), "owner has no Implementation Manager page");

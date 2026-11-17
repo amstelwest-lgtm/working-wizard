@@ -62,7 +62,7 @@ assert(
 );
 
 assert(board.includes("setCountsReady(true)"), "enrichment still owns countsReady");
-assert(board.includes("actionIsOverdue"), "the overdue predicate stays on the board");
+assert(board.includes("actionCounts("), "the overdue count stays on the board");
 assert(
   board.includes("!bookLoading && !countsLoading"),
   "needs-attention still waits for the enriched book",
