@@ -1,5 +1,4 @@
 import { createElement, useEffect, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
@@ -37,12 +36,12 @@ import { groupInterviewSessions, type FirmInterviewDraft } from "@/lib/firm-inte
 import {
   buildSetupPartnerFirmMap,
   confirmSetupPartnerFirmMap,
+  discardSetupPartnerRedo,
   fetchFirmInterviewDraft,
   fetchFirmSetupPlan,
   firmInterviewTurn,
 } from "@/lib/setup-partner-client";
 import { InterviewExchange, PastInterviews } from "@/components/interview-exchange";
-import { discardPracticeRedo } from "@/lib/discard-practice-redo.functions";
 import {
   approvalDraftTitles,
   buildPracticeImplementationPlan,
@@ -66,17 +65,23 @@ const SETUP_STEPS = [
 export type ImplementationManagerStep = (typeof SETUP_STEPS)[number]["id"];
 
 /**
- * A saved plan plus the interview that produced it is not a redo.
- * A redo is a draft question that is not already in that transcript.
+ * A redo is persisted data. sessionKind "redo" on the draft is enough.
+ * Otherwise an active draft beside a saved plan is a redo while its question
+ * is still unanswered, including when that question is already in the transcript.
+ * An answered draft beside a saved plan is the idle saved interview.
  */
 export function draftIsActiveRedo(
   hasPlan: boolean,
   question: string,
   messages: readonly { role: string; content: string }[],
+  sessionKind?: string | null,
 ): boolean {
+  if (sessionKind === "redo") return true;
+  if (!hasPlan || !question.trim()) return false;
   const asked = question.trim();
-  if (!hasPlan || !asked) return false;
-  return !messages.some((message) => message.role === "assistant" && message.content === asked);
+  const inTranscript = messages.some((message) => message.role === "assistant" && message.content === asked);
+  if (!inTranscript) return true;
+  return draftContinuesInterview(question, messages);
 }
 
 /** The saved transcript already asks this, and nobody has answered it yet. */
@@ -154,6 +159,7 @@ type AskTurn = (input: {
   messages: FirmInterviewMessage[];
   modelTurns: number;
   sessionId?: string | null;
+  sessionKind?: "redo" | null;
 }) => Promise<{ question: string; done: boolean; modelTurns: number; sessionId?: string }>;
 type DiscardRedo = (firmId: string) => Promise<void>;
 
@@ -212,9 +218,9 @@ export function PracticeSetupInterview({
   const [noFirmWaited, setNoFirmWaited] = useState(false);
   const [recordedAt, setRecordedAt] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionKind, setSessionKind] = useState<"redo" | null>(null);
   const [pastDrafts, setPastDrafts] = useState<FirmInterviewDraft[]>([]);
   const [reviewOpen, setReviewOpen] = useState(false);
-  const discardSavedRedo = useServerFn(discardPracticeRedo);
   const country = parseMarketSelection(firmMarket)?.country ?? null;
   const marketCountry: SetupPartnerCountry | null =
     country === "US" || country === "ZA" ? country : null;
@@ -255,13 +261,17 @@ export function PracticeSetupInterview({
     }
   };
 
-  const requestTurn = async (history: FirmInterviewMessage[], turns: number) => {
+  const requestTurn = async (
+    history: FirmInterviewMessage[],
+    turns: number,
+    kind: "redo" | null = sessionKind === "redo" ? "redo" : null,
+  ) => {
     if (!firmId) return;
     setLoading(true);
     setTurnError(null);
     try {
       const next = await withDeadline(
-        askTurn({ firmId, messages: history, modelTurns: turns, sessionId }),
+        askTurn({ firmId, messages: history, modelTurns: turns, sessionId, sessionKind: kind }),
         PRACTICE_SETUP_INTERVIEW_MS,
       );
       setModelTurns(next.modelTurns);
@@ -329,19 +339,22 @@ export function PracticeSetupInterview({
           setPlan({ steps: dedupePracticeSteps(saved.steps) });
           setPhase("done");
         }
+        if (draft) setPastDrafts(draft.past ?? []);
         if (draft && draft.messages.length > 0) {
           setMessages(draft.messages);
           setArchive(draft.messages);
           if (draft.sessionId) setSessionId(draft.sessionId);
+          if (draft.sessionKind === "redo") setSessionKind("redo");
           const stamped = draft as FirmInterviewDraft & { recordedAt?: string | null };
           if (draft.savedAt || stamped.recordedAt) setRecordedAt(draft.savedAt ?? stamped.recordedAt ?? null);
-          setPastDrafts(draft.past ?? []);
         }
         if (draft?.question) {
           setQuestion(draft.question);
           setModelTurns(draft.modelTurns);
-          if (hasPlan && draftIsActiveRedo(true, draft.question, draft.messages)) setRedoOpen(true);
-          else if (!hasPlan) setPhase("interview");
+          if (hasPlan && draftIsActiveRedo(true, draft.question, draft.messages, draft.sessionKind)) {
+            setRedoOpen(true);
+            setSessionKind("redo");
+          } else if (!hasPlan) setPhase("interview");
           return;
         }
         if (hasPlan) return;
@@ -371,9 +384,11 @@ export function PracticeSetupInterview({
     setError(null);
     setTurnError(null);
     setModelTurns(0);
-    if (plan && plan.steps.length > 0) setRedoOpen(true);
-    else setPhase("interview");
-    void requestTurn([], 0);
+    if (plan && plan.steps.length > 0) {
+      setRedoOpen(true);
+      setSessionKind("redo");
+    } else setPhase("interview");
+    void requestTurn([], 0, plan && plan.steps.length > 0 ? "redo" : null);
   };
 
   const discardRedoDraft = async () => {
@@ -382,15 +397,22 @@ export function PracticeSetupInterview({
     setError(null);
     try {
       if (discardRedo) await discardRedo(firmId);
-      else await discardSavedRedo({ data: { firmId } });
+      else await discardSetupPartnerRedo(firmId);
+      if (messages.some((message) => message.role === "user")) {
+        setPastDrafts((prev) => [
+          ...prev,
+          { messages, question, modelTurns, sessionId, savedAt: recordedAt, sessionKind: "redo" },
+        ]);
+      }
       setRedoOpen(false);
+      setSessionKind(null);
       setMessages([]);
       setQuestion("");
       setDraft("");
       setMap(null);
       setTurnError(null);
       setModelTurns(0);
-      setRecordedAt(null);
+      if (plan && plan.steps.length > 0) setPhase("done");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not discard the redo");
     } finally {

@@ -24,6 +24,8 @@ export type FirmInterviewDraft = {
   /** One interview. Absent on rows saved before sessions existed. */
   sessionId?: string | null;
   savedAt?: string | null;
+  /** Set when this draft is a redo over a saved plan. Absent on a first interview. */
+  sessionKind?: "redo" | null;
   /** Retired interviews loaded with the active draft. Not written back. */
   past?: FirmInterviewDraft[];
 };
@@ -38,7 +40,7 @@ export function interviewDraftWithQuestion(
   messages: readonly FirmInterviewDraftMessage[],
   question: string,
   modelTurns: number,
-  session?: { sessionId?: string | null; savedAt?: string | null },
+  session?: { sessionId?: string | null; savedAt?: string | null; sessionKind?: "redo" | null },
 ): FirmInterviewDraft {
   const questionText = clipContent(question);
   const kept: FirmInterviewDraftMessage[] = [];
@@ -59,6 +61,7 @@ export function interviewDraftWithQuestion(
     modelTurns: Number.isFinite(modelTurns) && modelTurns > 0 ? Math.floor(modelTurns) : 0,
     sessionId: session?.sessionId?.trim() || null,
     savedAt: session?.savedAt ?? null,
+    sessionKind: session?.sessionKind === "redo" ? "redo" : null,
   };
 }
 
@@ -67,10 +70,11 @@ export function interviewDraftRuleText(draft: FirmInterviewDraft): string {
   let turns = draft.modelTurns;
   const sessionId = draft.sessionId?.trim() || null;
   const savedAt = draft.savedAt ?? new Date().toISOString();
-  let text = JSON.stringify({ messages, question: draft.question, modelTurns: turns, sessionId, savedAt });
+  const sessionKind = draft.sessionKind === "redo" ? "redo" : null;
+  let text = JSON.stringify({ messages, question: draft.question, modelTurns: turns, sessionId, savedAt, sessionKind });
   while (text.length > RULE_CHARS && messages.length > 1) {
     messages.shift();
-    text = JSON.stringify({ messages, question: draft.question, modelTurns: turns, sessionId, savedAt });
+    text = JSON.stringify({ messages, question: draft.question, modelTurns: turns, sessionId, savedAt, sessionKind });
   }
   return text;
 }
@@ -90,6 +94,7 @@ export function interviewDraftFromRuleText(raw: string | null | undefined): Firm
     modelTurns?: unknown;
     sessionId?: unknown;
     savedAt?: unknown;
+    sessionKind?: unknown;
   };
   const question = typeof row.question === "string" ? row.question.trim() : "";
   if (!question) return null;
@@ -107,7 +112,8 @@ export function interviewDraftFromRuleText(raw: string | null | undefined): Firm
     typeof row.modelTurns === "number" && row.modelTurns > 0 ? Math.floor(row.modelTurns) : 0;
   const sessionId = typeof row.sessionId === "string" ? row.sessionId : null;
   const savedAt = typeof row.savedAt === "string" ? row.savedAt : null;
-  return interviewDraftWithQuestion(messages, question, modelTurns, { sessionId, savedAt });
+  const sessionKind = row.sessionKind === "redo" ? "redo" : null;
+  return interviewDraftWithQuestion(messages, question, modelTurns, { sessionId, savedAt, sessionKind });
 }
 
 /** Same session_id is one interview. A row with no session_id is its own interview. */

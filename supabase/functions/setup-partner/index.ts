@@ -431,6 +431,7 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     screenshots?: unknown;
     messages?: unknown;
     sessionId?: unknown;
+    sessionKind?: unknown;
   };
   try {
     body = await req.json();
@@ -613,6 +614,18 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     }
   }
 
+  if (action === "discard_redo") {
+    if (clientId) return respond({ error: "discard_redo is the practice interview" }, 400);
+    if (!firmId) return respond({ error: "Firm not accessible" }, 403);
+    try {
+      await retireFirmInterviewDraft(adminClient, firmId);
+    } catch (err) {
+      console.error("setup_partner_discard_redo_failed", err instanceof Error ? err.message : err);
+      return respond({ error: "Could not discard the redo" }, 500);
+    }
+    return respond({ ok: true });
+  }
+
   if (action === "firm_turn") {
     if (clientId) return respond({ error: "firm_turn is the practice interview" }, 400);
     const modelTurns =
@@ -624,13 +637,14 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     const remembered = draftMessages(history);
     const sessionId =
       (typeof body.sessionId === "string" && body.sessionId.trim()) || crypto.randomUUID();
+    const sessionKind = body.sessionKind === "redo" ? "redo" : null;
     const savedAt = new Date().toISOString();
     const persistQuestion = async (question: string, turns: number, messages = remembered) => {
       try {
         await saveFirmInterviewDraft(adminClient, {
           firmId,
           approverId: user.id,
-          draft: interviewDraftWithQuestion(messages, question, turns, { sessionId, savedAt }),
+          draft: interviewDraftWithQuestion(messages, question, turns, { sessionId, savedAt, sessionKind }),
         });
       } catch (err) {
         console.error(

@@ -106,6 +106,7 @@ export async function firmInterviewTurn(input: {
   messages: Array<{ role: "user" | "assistant"; content: string }>;
   modelTurns: number;
   sessionId?: string | null;
+  sessionKind?: "redo" | null;
 }): Promise<FirmInterviewTurn> {
   const body = await invokeSetupPartner<FirmInterviewTurn>({
     action: "firm_turn",
@@ -113,6 +114,7 @@ export async function firmInterviewTurn(input: {
     messages: input.messages,
     modelTurns: input.modelTurns,
     sessionId: input.sessionId ?? null,
+    sessionKind: input.sessionKind ?? null,
   });
   return {
     question: body.question ?? "",
@@ -205,7 +207,6 @@ export async function fetchFirmInterviewDraft(firmId: string): Promise<FirmInter
   if (error) throw new Error(error.message);
   const row = data?.[0];
   const draft = interviewDraftFromRuleText(row?.rule_text);
-  if (!draft) return null;
   const pastBuilder = (
     supabase as unknown as {
       from: (table: string) => { select: (columns: string) => DraftQuery };
@@ -223,7 +224,16 @@ export async function fetchFirmInterviewDraft(firmId: string): Promise<FirmInter
   const past = (pastRes.error ? [] : (pastRes.data ?? []))
     .map((item) => interviewDraftFromRuleText(item.rule_text))
     .filter((item): item is FirmInterviewDraft => item != null);
+  if (!draft) {
+    if (!past.length) return null;
+    return { messages: [], question: "", modelTurns: 0, past };
+  }
   return { ...draft, savedAt: draft.savedAt ?? row?.created_at ?? null, past };
+}
+
+/** Retire the redo draft. Confirmed workflow rules stay active. */
+export async function discardSetupPartnerRedo(firmId: string): Promise<{ ok: boolean }> {
+  return invokeSetupPartner<{ ok: boolean }>({ action: "discard_redo", firmId });
 }
 
 export async function confirmSetupPartnerFirmMap(

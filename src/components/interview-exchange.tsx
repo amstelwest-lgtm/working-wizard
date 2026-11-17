@@ -47,11 +47,11 @@ export function InterviewExchange({
   questionTotal?: number;
 }) {
   const count =
-    questionIndex && questionIndex > 0
-      ? questionTotal && questionTotal > 0
+    thinking || !questionIndex || questionIndex <= 0
+      ? null
+      : questionTotal && questionTotal > 0
         ? `Question ${questionIndex} of ~${questionTotal}`
-        : `Question ${questionIndex}`
-      : null;
+        : `Question ${questionIndex}`;
   return (
     <div className="setup-partner__exchange" data-interview-exchange="">
       {count ? <p className="im-qcount">{count}</p> : null}
