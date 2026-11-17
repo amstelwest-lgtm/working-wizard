@@ -159,3 +159,39 @@ Proposed fix: pass the same display rule into `planAutomation` and `countActionP
 The owner dropdown (`action-plan.tsx`) is `value={ownerFilter ?? ""}` and its options are `employees[].id` plus “All owners”. A bucket click sets `ownerFilter` to the row key. An agent key (`agent:Financial Manager`) is not one of those options, so the control stays on “All owners” while the list is already filtered. A person id that is not in `employees` does the same.
 
 Proposed fix: the select value must be one of its options. Add the active bucket (the agent name, or the employee whose id was picked) as an option when it is selected. Test: pick an agent bucket and assert the select value is that agent, not `""`.
+
+## B. Past interviews still does not render (second fail, no code)
+
+AQA on prod `d2c5a7d5`, firm Theo (`fca0f102-a597-4ec6-8f45-825c57f78797`), page `/practice/setup`. The action JSON fix and J4 pass. Past interviews still does not render. No code in this note.
+
+### The real interview row
+
+One active firm-wide row, `milon_brain_rules.id` `e168adc5-556f-4fd0-b390-2a2266d453c7`, `status` `active`, `task_type` `practice_setup_interview`, `source_event` `setup_partner_interview`, `client_id` null. Created 2026-11-13. The transcript is `rule_text`, 259 characters, JSON with three keys: `messages`, `question`, `modelTurns`.
+
+`modelTurns` is 1. `messages` has one element. Its role is `assistant`. There are zero `user` messages. `question` is 91 characters and is equal to that only message. There is no answered turn.
+
+`fetchFirmInterviewDraft` (`src/lib/setup-partner-client.ts`) reads that `rule_text` and `interviewDraftFromRuleText` (`src/lib/firm-interview-draft.ts`) parses it. The confirmed plan is the other active rows (`source_event` `setup_partner_confirm`), so the page is in phase `done` with this draft still open.
+
+### Why “transcript has answers” is false
+
+`PastInterviews` (`src/components/interview-exchange.tsx`) returns null when `interviewPairs` is empty. `interviewPairs` drops the live question when it is the last message and the model is not thinking. On this row that drop removes the only message. Nothing with a `user` role remains, so the log is not mounted. #968 did not change that filter. It only kept an archive across a redo and stopped labeling this draft as a redo. The condition is false because the stored transcript has no answer, not because the component failed to read a longer history.
+
+### Why test:practice-setup-route passed
+
+The route test’s saved-interview fixture (`scripts/practice-setup-route-test.mts`) is built with `interviewDraftWithQuestion` from an assistant question plus a user answer, then a second question. That row has a `user` message, so `interviewPairs` keeps a pair and `[data-past-interviews]` renders. The prod row is `{ messages: [{ role: "assistant", content: <question> }], question: <same>, modelTurns: 1 }`. The fixture never used that shape, so it could not fail.
+
+### Proposed fix, and the test
+
+Render the log when `messages.length > 0`, including a transcript whose only turn is the unanswered opening question. Do not drop that sole message just because it is also the live question. `PastInterviews` should mount for this row.
+
+The test loads `PracticeSetupInterview` with a saved plan and this draft shape: one assistant message, `question` equal to that message, `modelTurns` 1, no user message. It asserts `[data-past-interviews]` is present and that its text includes the question.
+
+### Redo, on this same screen
+
+AQA sees no Redo button. The controls are Next, “That’s enough, map it”, Review proposals, and Back to practice.
+
+Redo is this condition in `PracticeSetupInterview` (`src/components/practice-setup-panel.tsx`): `phase === "done" && !showInterview`. Back to practice is `phase === "done"`, so it shows while a plan is saved. Next and “That’s enough, map it” render only while `showInterview` is true. Review proposals sits on the next-steps card, which also shows because the phase is `done`.
+
+On this firm `showInterview` is true: the draft question is already in `messages` and no user message follows it, so `draftContinuesInterview` is true. Redo is therefore omitted on purpose. It is not missing from an idle page.
+
+Recommend keeping Redo only in the Saved / idle state, when no question is on screen. An interview that is already open does not need a second control to start one. AQA cannot click Redo from the current screen. To reach it, answer the open question, choose “That’s enough, map it”, and confirm the map so the interview panel closes. Status becomes Saved, and Redo interview sits with Back to practice. A fixture with a saved plan and a draft whose question already has a user reply (so `draftContinuesInterview` is false and `redoOpen` is false) lands on that idle screen directly.
