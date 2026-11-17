@@ -193,3 +193,50 @@ Redo is this condition in `PracticeSetupInterview` (`src/components/practice-set
 On this firm `showInterview` is true: the draft question is already in `messages` and no user message follows it, so `draftContinuesInterview` is true. Redo is therefore omitted on purpose. It is not missing from an idle page.
 
 Recommend keeping Redo only in the Saved / idle state, when no question is on screen. An interview that is already open does not need a second control to start one. AQA cannot click Redo from the current screen. To reach it, answer the open question, choose “That’s enough, map it”, and confirm the map so the interview panel closes. Status becomes Saved, and Redo interview sits with Back to practice. A fixture with a saved plan and a draft whose question already has a user reply (so `draftContinuesInterview` is false and `redoOpen` is false) lands on that idle screen directly.
+
+## D addendum. Other counters still use the stored row (`8eabc34c`)
+
+AQA on Chill Pepper `79c4c485`. The plan summary is `3 open, including 1 overdue`. Action health on the same page says `3 open, including 3 overdue · 1 done`. Home says `3 open, 3 overdue`. Only action 4 is overdue. Actions 2 and 3 show 100% and `Done by …` and still count as open. No code in this note.
+
+### Product rule
+
+A row at 100% with `Done by <bot>` is done. It is not open and not overdue. The exception is an action that still needs a person to approve or sign off (`actionNeedsHumanClose` in `src/lib/action-handoff.ts`: a draft id, or a title that says sign-off, approval, or approve). That row is `awaiting sign-off`: neither done nor overdue, and its own count where a surface shows counts. Overdue means not done, past due, and not awaiting sign-off. Nothing is written back to the plan.
+
+### How a 100% row is classified today
+
+The action row uses `actionRowDisplayState`. A pickup that starts `Done by` and a status that is not `done` sets progress to at least 100, health to `complete`, and overdue to false, unless the row needs a person, in which case health stays open (`on_track`) and overdue is still false. That function returns no count.
+
+`countActionPlan` (`src/lib/action-plan-counts.ts`) treats done as the stored status only. The display rule only skips the overdue increment, so a 100% bot row stays in `open`. That is the summary: `3 open, including 1 overdue`.
+
+`deriveActionHealth` (`src/lib/action-item-health.ts`) never sees the pickup or the 100% bar. Status not `done` and a past due date is `overdue`.
+
+### Every counter
+
+| Surface | Where | What it counts |
+| --- | --- | --- |
+| Plan summary | `formatActionPlanCounts(planCounts)` in `src/components/action-plan.tsx` (~1660, ~1888), via `countActionPlan` | Display rule on overdue only. Open is stored status. |
+| Suggested | `planAutomation` in `src/lib/action-plan-automation.ts`, rendered by `src/components/action-plan-automation.tsx` | Display rule clears the overdue flag. Follow-up becomes waiting or none, not done. |
+| Action health | `healthCounts` (~1726) and `formatActionHealthSummary` / `HealthDonut` (~4195) in `src/components/action-plan.tsx` | `deriveActionHealth`. Stored due date. The donut’s open number is the same buckets. |
+| Overdue filter and Chase overdue | `filtered` (~1703) and `chaseableItems` (~573) in `src/components/action-plan.tsx` | The same stored `health`. |
+| Home | `src/routes/_authenticated/clients.$clientId.tsx` (~2104, ~2244). Heading `homeActionNeeds` in `src/lib/owner-needs.ts` (~68). Brief `src/lib/financial-manager-brief.ts`. Attention `src/lib/home-attention.ts` | SQL `status != done` for the open titles. `countActionPlan` with no pickup label, so overdue is the stored due date. `3 open, 3 overdue`. |
+| Practice board | `src/components/practice-board.tsx` (~1556), passed into `toClientRow` in `src/lib/practice-client-row.ts` | SQL `status != done`, then `actionIsOverdue` with no pickup. |
+| Portfolio | `src/lib/portfolio.functions.ts` (~193, ~240). Labels in `src/lib/portfolio.ts` and `src/lib/portfolio-dashboard.ts` | Same stored status and `actionIsOverdue`. |
+| Next step | `src/lib/next-step.functions.ts` (~270). Copy in `src/lib/next-step.ts` | SQL `status != done`, and `due_date` before today. |
+| Advisory pack | `src/lib/advisory-pack.functions.ts` (~439). Sentence in `src/lib/advisory-pack.ts` | SQL head counts, status and due date. |
+| Agent work list | `src/lib/agent-work.ts` | Reads the portfolio counts above. |
+
+### Why #969 missed them
+
+#969 passed the pickup caption into `planCounts` and `planAutomation` only, and `countActionPlan` only stopped counting those rows as overdue. `healthCounts` still buckets `deriveActionHealth`. Home calls `countActionPlan` without a pickup caption, and its open number is the `status != done` query. The other lists never load the caption.
+
+### Proposed fix, and the test
+
+One shared selector, `actionCounts(rows)`, built on `actionRowDisplayState`. It returns open, overdue, done, and awaiting sign-off. A 100% `Done by` row with no human close is done. A 100% `Done by` row that needs a person is awaiting sign-off. Overdue is what remains that is past due. Every row in the table calls this function. No second counter, and no SQL.
+
+The test renders each surface from one Chill Pepper-shaped fixture: two 100% `Done by` rows, one still-overdue row (action 4), and the stored done row. Every surface reports the same counts. The two 100% rows are done, and only one row is overdue.
+
+### Grammar on the data-request reason
+
+`guardQuotedRatios` (`src/lib/ratios.ts`) splices `not enough data` in place, so the reason reads `creditor days are not enough data and inventory days are not enough data` and still opens with `The stored ratios contradict each other`. That opener is stored client copy. There is no template for it in `src/`.
+
+Client copy should say `Not enough data for creditor days` and `Not enough data for inventory days`, the same per-metric sentence as `ratioSentence` in `src/lib/milon-team-activity.ts`. When the guard replaces a value, drop or soften a leading `stored ratios contradict` clause on the title and the reason. No SQL.
