@@ -126,9 +126,9 @@ export async function loadActionCountInputs(
     runsByAction.set(id, list);
   }
   for (const action of actions) {
-    const id = text(action, "id");
     const clientId = text(action, "client_id");
-    if (!id || !clientId) continue;
+    if (!clientId) continue;
+    const id = text(action, "id");
     const mine = (runsByAction.get(id) ?? []).slice().sort((a, b) => text(b, "queued_at").localeCompare(text(a, "queued_at")));
     const newest = mine[0];
     const agent = text(newest ?? {}, "agent");
