@@ -30,6 +30,7 @@ import { settleWithin } from "@/lib/bounded-load";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { handoffAssigneeName, handoffCommitError } from "@/lib/owner-handoff";
 import { actionRowDisplayState, assignedToast, describeActionHandoff, handoffDrawerFace, handoffRowChip, handoffRowShowsNotSent } from "@/lib/action-handoff";
+import { healthBuckets } from "@/lib/action-count-load";
 import { handoffStillAwaitingRun } from "@/lib/agent-activity-poll";
 import { AssignmentNotes, type AssignmentNoteRow } from "@/components/assignment-notes";
 import { HandoffRunStatus } from "@/components/handoff-run-status";
@@ -1738,21 +1739,21 @@ export default function ActionPlanPanel({
   }, [enriched, plan]);
 
   const healthCounts = useMemo(() => {
-    const c: Record<Health, number> = {
-      on_track: 0,
-      at_risk: 0,
-      off_track: 0,
-      overdue: 0,
-      not_started: 0,
-      complete: 0,
-      awaiting_sign_off: 0,
-    };
-    listed.forEach((i) => {
-      const key = i.health && i.health in c ? i.health : "on_track";
-      c[key]++;
-    });
-    return c;
-  }, [listed]);
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    return healthBuckets(
+      listed.map((item) => ({
+        status: item.status,
+        dueDate: item.due_date,
+        createdAt: item.created_at,
+        planTarget: plan?.target_date ?? null,
+        title: item.title,
+        pickupLabel: handoffByItem.get(item.id)?.caption ?? null,
+        draftId: handoffByItem.get(item.id)?.draftId ?? null,
+      })),
+      today,
+    );
+  }, [listed, plan?.target_date, handoffByItem]);
 
   const emailByOwnerId = useMemo(() => {
     const map: Record<string, string | null> = {};

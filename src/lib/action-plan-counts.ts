@@ -21,6 +21,7 @@ export type ActionCountInput = {
   draftId?: string | null;
   title?: string | null;
   progressPct?: number | null;
+  createdAt?: string | null;
 };
 
 export type ActionPlanCounts = {

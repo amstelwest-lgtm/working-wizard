@@ -362,7 +362,7 @@ import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { DRAFT_NEEDS_ACCOUNTANT, draftFindingKindLabel, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { isVisibleAgentFinding } from "@/lib/milon-team-activity";
-import { describeActionHandoff, findingForAction } from "@/lib/action-handoff";
+import { findingForAction } from "@/lib/action-handoff";
 import { handoffRowStillWorking } from "@/lib/agent-activity-poll";
 import { ownerPresence, steerOpenHandoffs, withCardHandoffRuns } from "@/lib/owner-presence";
 import {
@@ -390,7 +390,8 @@ import {
   type RowAssignment,
 } from "@/lib/open-plan-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, spokenCashStrain, type OwnerBooks } from "@/lib/owner-answers";
-import { actionCounts, actionDisplayClass, actionOverdueInput, keptOpenPlanRows } from "@/lib/action-plan-counts";
+import { keptOpenPlanRows } from "@/lib/action-plan-counts";
+import { loadHomeActionCounts } from "@/lib/action-count-load";
 import { homeActionNeeds, openActionSentence, presentHomeDraftBody, presentHomeDraftTitle } from "@/lib/owner-needs";
 import { healthSnapshotFromBooks, readStoredScoreSnapshotHash, renderHealthNarrative } from "@/lib/health-snapshot";
 import { draftStoredFiguresHash, draftStoredHealth, latestFiguresStamp } from "@/lib/draft-figures";
@@ -2100,21 +2101,12 @@ function ClientView() {
     void (async () => {
       const now = new Date();
       const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-      const [itemsRes, planRes] = await Promise.all([
-        supabase
-          .from("action_items_v")
-          .select("id, title, due_date, status, owner_name, created_at")
-          .eq("client_id", clientId)
-          .neq("status", "done")
-          .order("seq"),
-        supabase
-          .from("action_plans")
-          .select("target_date")
-          .eq("client_id", clientId)
-          .eq("is_active", true)
-          .order("created_at", { ascending: false })
-          .limit(1),
-      ]);
+      const itemsRes = await supabase
+        .from("action_items_v")
+        .select("id, title, due_date, status, owner_name, created_at")
+        .eq("client_id", clientId)
+        .neq("status", "done")
+        .order("seq");
       if (cancelled) return;
       const { data, error } = itemsRes;
       if (error) {
@@ -2135,8 +2127,6 @@ function ClientView() {
         created_at?: string | null;
         owner_name?: string | null;
       }[];
-      const planTarget =
-        (planRes.data?.[0] as { target_date?: string | null } | undefined)?.target_date ?? null;
       const visible = keptOpenPlanRows(
         rows.flatMap((row) => {
           const id = row.id?.trim() ?? "";
@@ -2150,82 +2140,9 @@ function ClientView() {
       const [noteLog, runs] = ids.length
         ? await Promise.all([loadActionNotes(ids), loadActionHandoffRuns(ids)])
         : [new Map(), new Map()];
-      const runIds = [...runs.values()].map((run) => run.id).filter((id): id is string => Boolean(id));
-      const findingRes = runIds.length
-        ? await (
-            supabase as unknown as {
-              from(table: string): {
-                select(columns: string): {
-                  in(
-                    column: string,
-                    values: string[],
-                  ): Promise<{
-                    data:
-                      | {
-                          id?: string;
-                          run_id?: string | null;
-                          status?: string | null;
-                          superseded_by?: unknown;
-                          dismissed_reason?: string | null;
-                        }[]
-                      | null;
-                    error: { message?: string } | null;
-                  }>;
-                };
-              };
-            }
-          )
-            .from("agent_findings")
-            .select("id, run_id, status, superseded_by, dismissed_reason")
-            .in("run_id", runIds)
-        : { data: [], error: null };
-      const findings = (findingRes.data ?? []).flatMap((row) => {
-        const id = typeof row.id === "string" ? row.id : "";
-        if (!id) return [];
-        return [
-          {
-            id,
-            run_id: typeof row.run_id === "string" ? row.run_id : null,
-            status: typeof row.status === "string" ? row.status : null,
-            superseded_by: row.superseded_by,
-            dismissed_reason: typeof row.dismissed_reason === "string" ? row.dismissed_reason : null,
-          },
-        ];
-      });
-      const runList = [...runs.entries()].map(([actionId, run]) => ({
-        id: run.id,
-        agent: run.agent,
-        status: run.status,
-        at: run.at,
-        queued_at: run.at,
-        action_item_id: actionId,
-      }));
-      const counted = visible.map((row) => {
-        const handoff = describeActionHandoff({
-          actionItemId: row.id,
-          assignee: row.owner_name,
-          notes: noteLog.get(row.id) ?? [],
-          storedRun: runs.get(row.id) ?? null,
-          runs: runList,
-          findings,
-          findingsReady: !findingRes.error,
-        });
-        return {
-          status: row.status,
-          dueDate: row.due_date,
-          createdAt: row.created_at ?? null,
-          planTarget,
-          title: row.title,
-          pickupLabel: handoff.caption,
-          draftId: handoff.draftId,
-        };
-      });
-      const judged = counted.map((row) => actionOverdueInput(row, today));
-      const counts = actionCounts(judged, today);
-      const titles = visible.flatMap((row, index) => {
-        const klass = actionDisplayClass(judged[index]!, today);
-        return klass === "open" || klass === "overdue" ? [row.title] : [];
-      });
+      const homeCounts = await loadHomeActionCounts(supabase, clientId, today);
+      const counts = homeCounts.counts;
+      const titles = [...homeCounts.titles];
       const assignments = assignmentsFromNotes(noteLog);
       if (cancelled) return;
       const pendings = [...pendingHandoffs.current.values()].filter(

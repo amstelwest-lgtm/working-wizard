@@ -20,7 +20,12 @@ import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import { recordedActorIdentity, type RecordedActor } from "@/lib/accountant-identity";
 import type { LooseSb } from "@/lib/advisory-state.functions";
 import { isSamplePracticeSignoff } from "@/lib/review-signoff-stamp";
-import { actionCounts } from "@/lib/action-plan-counts";
+import { judgedActionCounts, loadActionCountInputs, type ActionCountDb } from "@/lib/action-count-load";
+
+export async function loadPackActionCounts(sb: ActionCountDb, clientId: string, today: string) {
+  const rows = (await loadActionCountInputs(sb, [clientId])).get(clientId) ?? [];
+  return judgedActionCounts(rows, today);
+}
 import { assertStarterTrialAllowsNewWork } from "@/lib/firm-client-cap.server";
 import { gatePrecardGeneration, recordPrecardGeneration } from "@/lib/precard-cap.server";
 import { PRECARD_CAP_CODE, finishPrecardAttempt } from "@/lib/precard-cap";
@@ -436,11 +441,7 @@ export async function gatherPackInputs(
       .eq("client_id", clientId)
       .in("status", ["open", "sent"])
       .limit(50),
-    sb
-      .from("action_items")
-      .select("status, due_date, created_at, title")
-      .eq("client_id", clientId)
-      .neq("status", "done"),
+    loadPackActionCounts(sb, clientId, now.slice(0, 10)),
     sb
       .from("recommendation_outcomes")
       .select("*")
@@ -503,17 +504,7 @@ export async function gatherPackInputs(
     market: overview.market,
   });
 
-  const actionTotals = actionsRes.error
-    ? { open: 0, overdue: 0 }
-    : actionCounts(
-        ((actionsRes.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-          status: typeof row.status === "string" ? row.status : "",
-          dueDate: typeof row.due_date === "string" ? row.due_date : null,
-          createdAt: typeof row.created_at === "string" ? row.created_at : null,
-          title: typeof row.title === "string" ? row.title : null,
-        })),
-        now.slice(0, 10),
-      );
+  const actionTotals = actionsRes;
   return {
     clientName: client.name ?? "",
     firmName,

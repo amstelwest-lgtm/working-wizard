@@ -19,7 +19,7 @@ import { coerceMarketSelection, parseMarketSelection } from "@/lib/market/parse"
 import { resolveMarket } from "@/lib/market/resolve";
 import { onlyActiveClients } from "@/lib/archive-client";
 import { collapseDuplicateClientShells, loadClientDisplayNames } from "@/lib/client-display-name";
-import { actionCounts, actionOverdueInput } from "@/lib/action-plan-counts";
+import { loadPortfolioActionMaps } from "@/lib/action-count-load";
 import { countUnreviewedSends } from "@/lib/client-agent-done";
 import {
   rankPortfolio,
@@ -172,7 +172,7 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
     const ids = clients.map((c) => c.id);
     const cycleIds = clients.map((c) => c.advisory_cycle_id).filter((x): x is string => Boolean(x));
 
-    const [cycles, snaps, requests, actions, recs, packs, outcomes, planRows, agentSends] =
+    const [cycles, snaps, requests, actionMaps, recs, packs, outcomes, agentSends] =
       await Promise.all([
       cycleIds.length
         ? sb
@@ -190,9 +190,7 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
       groupCount(sb, "data_requests", ids, "client_id, severity, status", (q) =>
         (q as { in: (c: string, v: string[]) => unknown }).in("status", ["open", "sent"]),
       ),
-      groupCount(sb, "action_items", ids, "client_id, status, due_date, created_at, title", (q) =>
-        (q as { neq: (c: string, v: string) => unknown }).neq("status", "done"),
-      ),
+      loadPortfolioActionMaps(sb, ids, today),
       groupCount(sb, "proposed_next_steps", ids, "client_id, status", (q) =>
         (q as { eq: (c: string, v: string) => unknown }).eq("status", "proposed"),
       ),
@@ -208,9 +206,6 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
         "recommendation_outcomes",
         ids,
         "client_id, recommendation_id, metric, expected_amount, actual_amount, measured_at",
-      ),
-      groupCount(sb, "action_plans", ids, "client_id, target_date", (q) =>
-        (q as { eq: (c: string, v: boolean) => unknown }).eq("is_active", true),
       ),
       groupCount(sb, "client_agent_sends", ids, "client_id, completed_at, reviewed_at"),
     ]);
@@ -229,48 +224,11 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
     }>) {
       if (!latestSnap.has(s.client_id)) latestSnap.set(s.client_id, s.period_date);
     }
-    const planTarget = new Map<string, string>();
-    for (const row of planRows) {
-      const id = String(row.client_id ?? "");
-      const target = typeof row.target_date === "string" ? row.target_date : "";
-      if (id && target && !planTarget.has(id)) planTarget.set(id, target);
-    }
     const openReq = tally(requests);
     const blockingReq = tally(requests, (r) => r.severity === "critical");
-    const rowsByClient = new Map<
-      string,
-      {
-        status: string;
-        dueDate: string | null;
-        createdAt: string | null;
-        planTarget: string | null;
-        title: string | null;
-      }[]
-    >();
-    for (const row of actions) {
-      const id = String(row.client_id ?? "");
-      if (!id) continue;
-      const list = rowsByClient.get(id) ?? [];
-      list.push({
-        status: typeof row.status === "string" ? row.status : "",
-        dueDate: typeof row.due_date === "string" ? row.due_date : null,
-        createdAt: typeof row.created_at === "string" ? row.created_at : null,
-        planTarget: planTarget.get(id) ?? null,
-        title: typeof row.title === "string" ? row.title : null,
-      });
-      rowsByClient.set(id, list);
-    }
-    const openAct: CountMap = new Map();
-    const overdueAct: CountMap = new Map();
-    for (const [id, rows] of rowsByClient) {
-      const counts = actionCounts(
-        rows.map((row) => actionOverdueInput(row, today)),
-        today,
-      );
-      if (counts.open) openAct.set(id, counts.open);
-      if (counts.overdue) overdueAct.set(id, counts.overdue);
-    }
-    const blockedAct = tally(actions, (r) => r.status === "blocked");
+    const openAct = actionMaps.openAct;
+    const overdueAct = actionMaps.overdueAct;
+    const blockedAct = actionMaps.blockedAct;
     const proposed = tally(recs);
 
     // Latest live pack per client (highest version).

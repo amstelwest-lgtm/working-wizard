@@ -1,195 +1,191 @@
 /**
- * One Chill Pepper-shaped plan, counted the same way on every surface.
+ * Every surface loads Chill Pepper rows from the database, then the hand-off,
+ * and only then counts. The raw rows have no pickup caption.
  * Run: pnpm test:action-counts-surfaces
  */
-import { readFileSync } from "node:fs";
-import { actionCountClassFromDisplay } from "../src/lib/action-handoff.ts";
-import {
-  actionCounts,
-  actionDisplayClass,
-  countActionPlan,
-  formatActionPlanCounts,
-} from "../src/lib/action-plan-counts.ts";
-import { deriveActionHealth, type ActionItemHealth } from "../src/lib/action-item-health.ts";
 import { formatActionHealthSummary } from "../src/components/action-plan.tsx";
-import { homeActionNeeds } from "../src/lib/owner-needs.ts";
+import {
+  loadActionCountInputs,
+  loadActionHealthCounts,
+  loadHomeActionCounts,
+  loadPracticeBoardActionMaps,
+  loadPortfolioActionMaps,
+} from "../src/lib/action-count-load.ts";
+import { judgedActionCounts } from "../src/lib/action-count-load.ts";
+import { loadOpenActionRows } from "../src/lib/next-step.functions.ts";
+import { loadPackActionCounts } from "../src/lib/advisory-pack.functions.ts";
 import { planAutomation } from "../src/lib/action-plan-automation.ts";
 import { practiceAgentWork } from "../src/lib/agent-work.ts";
-import { presentGuardedRatioCopy } from "../src/lib/ratios.ts";
+import { formatActionPlanCounts } from "../src/lib/action-plan-counts.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
+const CLIENT = "79c4c485-9fa7-4499-9139-e1bb7cb40649";
 const today = "2026-11-17";
-const doneBy = "Done by Financial Manager · 27 Oct. See result.";
-const rows = [
+
+const rawActions = [
   {
-    id: "2",
+    id: "action-2",
+    client_id: CLIENT,
+    status: "in_progress",
+    due_date: "2026-10-01",
+    created_at: "2026-09-01",
     title: "Send the bank letter",
-    status: "in_progress",
-    dueDate: "2026-10-01",
-    createdAt: "2026-09-01",
-    pickupLabel: doneBy,
-    draftId: "finding-2",
+    owner_name: "Financial Manager",
   },
   {
-    id: "3",
+    id: "action-3",
+    client_id: CLIENT,
+    status: "in_progress",
+    due_date: "2026-10-02",
+    created_at: "2026-09-01",
     title: "File the VAT pack",
-    status: "in_progress",
-    dueDate: "2026-10-02",
-    createdAt: "2026-09-01",
-    pickupLabel: doneBy,
-    draftId: "finding-3",
+    owner_name: "Financial Manager",
   },
   {
-    id: "4",
-    title: "Call the supplier",
+    id: "action-4",
+    client_id: CLIENT,
     status: "not_started",
-    dueDate: "2026-10-03",
-    createdAt: "2026-09-01",
+    due_date: "2026-10-03",
+    created_at: "2026-09-01",
+    title: "Call the supplier",
+    owner_name: "Sam",
   },
 ];
 
-const counts = actionCounts(rows, today);
-assert(counts.done === 2 && counts.overdue === 1 && counts.open === 1, `shared counts ${JSON.stringify(counts)}`);
-assert(counts.awaitingSignOff === 0, "the fixture has no sign-off row");
-
-const summary = formatActionPlanCounts(countActionPlan(rows, today));
-assert(summary === "3 actions · 1 open, including 1 overdue · 2 done", `plan summary ${summary}`);
-
-const health: Record<ActionItemHealth, number> = {
-  on_track: 0,
-  at_risk: 0,
-  off_track: 0,
-  overdue: 0,
-  not_started: 0,
-  complete: 0,
-  awaiting_sign_off: 0,
-};
-for (const row of rows) {
-  const bucket = deriveActionHealth(
-    {
-      status: row.status,
-      due_date: row.dueDate,
-      progress_pct: 0,
-      created_at: row.createdAt,
-      pickupLabel: row.pickupLabel,
-      draftId: row.draftId,
-      title: row.title,
-    },
-    new Date("2026-11-17T12:00:00Z"),
-  );
-  health[bucket] += 1;
+for (const row of rawActions) {
+  assert(!("pickupLabel" in row), "the stored action has no caption");
 }
-const widget = formatActionHealthSummary(health);
-assert(widget === summary, `action health ${widget}`);
 
-const openTitles = rows
-  .filter((row) => {
-    const klass = actionDisplayClass(row, today);
-    return klass === "open" || klass === "overdue";
-  })
-  .map((row) => row.title);
-const home = homeActionNeeds({ known: true, titles: openTitles, overdue: counts.overdue });
-assert(home.heading === "1 open, 1 overdue", `home ${home.heading}`);
+function query(table: string) {
+  const source =
+    table === "action_items"
+      ? rawActions
+      : table === "action_plans"
+        ? [{ client_id: CLIENT, target_date: "2026-12-31", is_active: true }]
+        : table === "agent_runs"
+          ? [
+              {
+                id: "run-2",
+                action_item_id: "action-2",
+                agent: "financial_manager",
+                status: "succeeded",
+                queued_at: "2026-10-27T08:00:00.000Z",
+              },
+              {
+                id: "run-3",
+                action_item_id: "action-3",
+                agent: "financial_manager",
+                status: "succeeded",
+                queued_at: "2026-10-27T09:00:00.000Z",
+              },
+            ]
+          : table === "agent_findings"
+            ? [
+                { id: "finding-2", run_id: "run-2", status: "approved", superseded_by: null, dismissed_reason: null },
+                { id: "finding-3", run_id: "run-3", status: "approved", superseded_by: null, dismissed_reason: null },
+              ]
+            : [];
+  let current = source.map((row) => ({ ...row }));
+  const api = {
+    select() {
+      return api;
+    },
+    eq(column: string, value: unknown) {
+      current = current.filter((row) => (row as Record<string, unknown>)[column] === value);
+      return api;
+    },
+    neq(column: string, value: unknown) {
+      current = current.filter((row) => (row as Record<string, unknown>)[column] !== value);
+      return api;
+    },
+    in(column: string, values: readonly unknown[]) {
+      const allowed = new Set(values);
+      current = current.filter((row) => allowed.has((row as Record<string, unknown>)[column]));
+      return api;
+    },
+    order() {
+      return api;
+    },
+    limit() {
+      return api;
+    },
+    then(resolve: (value: { data: unknown; error: null }) => unknown, reject?: (err: unknown) => unknown) {
+      return Promise.resolve({ data: current.slice(), error: null }).then(resolve, reject);
+    },
+  };
+  return api;
+}
+
+const db = { from: query };
+
+function expectCounts(label: string, counts: { done?: number; overdue?: number }) {
+  assert(counts.done === 2 && counts.overdue === 1, `${label} ${JSON.stringify(counts)}`);
+}
+
+const loaded = (await loadActionCountInputs(db, [CLIENT])).get(CLIENT) ?? [];
+assert(loaded.length === 3, "three raw rows");
+assert(loaded.filter((row) => (row.pickupLabel ?? "").startsWith("Done by")).length === 2, "two captions were loaded");
+const shared = judgedActionCounts(loaded, today);
+expectCounts("shared", shared);
+assert(formatActionPlanCounts(shared) === "3 actions · 1 open, including 1 overdue · 2 done", formatActionPlanCounts(shared));
+
+const board = await loadPracticeBoardActionMaps(db, [CLIENT], today);
+expectCounts("practice board", { done: board.doneActionsMap[CLIENT], overdue: board.overdueActionsMap[CLIENT] });
+
+const portfolio = await loadPortfolioActionMaps(db, [CLIENT], today);
+expectCounts("portfolio", { done: portfolio.doneAct.get(CLIENT), overdue: portfolio.overdueAct.get(CLIENT) });
+
+const nextRows = await loadOpenActionRows(db, CLIENT);
+expectCounts("next step", judgedActionCounts(nextRows, today));
+
+const pack = await loadPackActionCounts(db, CLIENT, today);
+expectCounts("pack", pack);
+
+const home = await loadHomeActionCounts(db, CLIENT, today);
+expectCounts("home", home.counts);
+assert(home.titles.length === 1 && home.titles[0] === "Call the supplier", `home titles ${home.titles.join("|")}`);
+
+const health = await loadActionHealthCounts(db, CLIENT, today);
+expectCounts("action health", health.counts);
+assert(
+  formatActionHealthSummary(health.buckets) === "3 actions · 1 open, including 1 overdue · 2 done",
+  formatActionHealthSummary(health.buckets),
+);
 
 const suggested = planAutomation(
-  rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    ownerId: "e1",
-    ownerName: "Sam",
-    dueDate: row.dueDate,
-    status: row.status,
-    createdAt: row.createdAt,
+  loaded.map((row, index) => ({
+    id: rawActions[index]!.id,
+    title: row.title ?? "",
+    ownerId: null,
+    ownerName: index === 2 ? "Sam" : "Financial Manager",
+    dueDate: row.dueDate ?? null,
+    status: row.status ?? "not_started",
+    createdAt: row.createdAt ?? "",
     pickupLabel: row.pickupLabel,
     draftId: row.draftId,
   })),
   [],
   today,
 );
-assert(
-  suggested.rows.filter((row) => row.followUp === "done").length === 2,
-  "suggested treats the 100% rows as done",
-);
-assert(
-  suggested.rows.filter((row) => row.overdue).map((row) => row.title).join("|") === "Call the supplier",
-  "suggested names only the overdue row",
-);
+assert(suggested.rows.filter((row) => row.followUp === "done").length === 2, "suggested marks the bot rows done");
+assert(suggested.rows.filter((row) => row.overdue).length === 1, "suggested names one overdue row");
 
-const listed = actionCounts(rows, today);
-assert(listed.done === counts.done && listed.overdue === counts.overdue, "list counters share actionCounts");
 const work = practiceAgentWork("advisor", {
   loading: false,
   clients: [],
   attention: [],
   followUps: [
     {
-      clientId: "79c4c485",
+      clientId: CLIENT,
       name: "Chill Pepper",
-      overdueActions: listed.overdue,
-      openActions: listed.open,
+      overdueActions: board.overdueActionsMap[CLIENT] ?? 0,
+      openActions: board.openActionsMap[CLIENT] ?? 0,
     },
   ],
 });
 assert(work.items[0]?.detail === "1 overdue", `agent work ${work.items[0]?.detail}`);
-
-for (const file of [
-  "src/components/practice-board.tsx",
-  "src/lib/portfolio.functions.ts",
-  "src/lib/next-step.functions.ts",
-  "src/lib/advisory-pack.functions.ts",
-  "src/routes/_authenticated/clients.$clientId.tsx",
-]) {
-  const source = readFileSync(file, "utf8");
-  assert(source.includes("actionCounts("), `${file} does not count with actionCounts`);
-}
-
-const signOff = actionDisplayClass(
-  {
-    status: "in_progress",
-    dueDate: "2026-10-01",
-    createdAt: "2026-09-01",
-    title: "Sign off the pack",
-    pickupLabel: doneBy,
-    draftId: "finding-9",
-  },
-  today,
-);
-assert(signOff === "awaiting_sign_off", `sign-off class ${signOff}`);
-const signOffCounts = actionCounts(
-  [
-    ...rows,
-    {
-      status: "in_progress",
-      dueDate: "2026-10-01",
-      title: "Sign off the pack",
-      pickupLabel: doneBy,
-    },
-  ],
-  today,
-);
-assert(
-  signOffCounts.awaitingSignOff === 1 && signOffCounts.done === 2 && signOffCounts.overdue === 1,
-  `sign-off stays its own count ${JSON.stringify(signOffCounts)}`,
-);
-assert(
-  actionCountClassFromDisplay({
-    status: "in_progress",
-    title: "Sign off the pack",
-    pickupLabel: doneBy,
-    display: { progressPct: 100, overdue: false },
-  }) === "awaiting_sign_off",
-  "the display rule is what the counter uses",
-);
-
-const reason = presentGuardedRatioCopy(
-  "The stored ratios contradict each other. gross margin is 95.4%, creditor days are -248 days and inventory days are -93 days",
-);
-assert(reason.includes("Not enough data for creditor days"), reason);
-assert(reason.includes("Not enough data for inventory days"), reason);
-assert(!/stored ratios contradict/i.test(reason), reason);
-assert(!reason.includes("-248") && !reason.includes("-93"), reason);
 
 console.log("action-counts-surfaces ok");

@@ -33,7 +33,7 @@ import {
   isMilonItMember,
 } from "@/lib/user-roles";
 import { scoreTier, type OverallHealth } from "@/lib/health-score";
-import { actionCounts, actionDisplayClass, actionOverdueInput } from "@/lib/action-plan-counts";
+import { loadPracticeBoardActionMaps } from "@/lib/action-count-load";
 import {
   buildAttentionItems,
   buildFollowUpQueue,
@@ -1552,50 +1552,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       try {
         const now = new Date();
         const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-        const [{ data: actions, error: actErr }, { data: plans }] = await Promise.all([
-          supabase
-            .from("action_items")
-            .select("client_id, status, due_date, created_at, title")
-            .in("client_id", clientIds)
-            .neq("status", "done"),
-          supabase
-            .from("action_plans")
-            .select("client_id, target_date")
-            .in("client_id", clientIds)
-            .eq("is_active", true),
-        ]);
-        const targetByClient = new Map<string, string>();
-        for (const plan of plans ?? []) {
-          if (!targetByClient.has(plan.client_id)) targetByClient.set(plan.client_id, plan.target_date);
-        }
-        if (!actErr && actions) {
-          const grouped = new Map<string, { status: string; dueDate: string | null; createdAt: string | null; planTarget: string | null; title: string }[]>();
-          for (const a of actions) {
-            const title = typeof a.title === "string" ? a.title.trim() : "";
-            const list = grouped.get(a.client_id) ?? [];
-            list.push({
-              status: a.status,
-              dueDate: a.due_date,
-              createdAt: a.created_at,
-              planTarget: targetByClient.get(a.client_id) ?? null,
-              title,
-            });
-            grouped.set(a.client_id, list);
-          }
-          for (const [clientId, rows] of grouped) {
-            const judged = rows.map((row) => actionOverdueInput(row, today));
-            const counts = actionCounts(judged, today);
-            if (counts.open) openActionsMap[clientId] = counts.open;
-            if (counts.overdue) overdueActionsMap[clientId] = counts.overdue;
-            for (const row of judged) {
-              if (!row.title) continue;
-              const klass = actionDisplayClass(row, today);
-              if (klass !== "open" && klass !== "overdue") continue;
-              chaseActionsMap[clientId] = chaseActionsMap[clientId] ?? [];
-              chaseActionsMap[clientId].push({ title: row.title, overdue: klass === "overdue" });
-            }
-          }
-        }
+        const maps = await loadPracticeBoardActionMaps(supabase, clientIds, today);
+        Object.assign(openActionsMap, maps.openActionsMap);
+        Object.assign(overdueActionsMap, maps.overdueActionsMap);
+        Object.assign(chaseActionsMap, maps.chaseActionsMap);
       } catch {
         // non-fatal
       }

@@ -115,6 +115,6 @@ const lightAt = board.indexOf("const lightRows = rawClients.map");
 assert(lightAt > 0, "the slim list paints before enrichment");
 const lightBlock = board.slice(lightAt, board.indexOf("const historyPromise", lightAt));
 assert(!lightBlock.includes("setBookEnriched(true)"), "the slim paint never flips bookEnriched true");
-assert(board.includes("actionCounts("), "the overdue count stays on the board");
+assert(board.includes("loadPracticeBoardActionMaps"), "the overdue count stays on the board");
 
 console.log("needs-attention-ready: ok");
