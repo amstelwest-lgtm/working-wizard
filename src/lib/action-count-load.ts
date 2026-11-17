@@ -3,8 +3,6 @@
  * pickup caption. This loads the same hand-off the plan uses and attaches
  * "Done by …" before actionCounts runs.
  */
-import { describeActionHandoff } from "./action-handoff.ts";
-import type { AgentKey } from "./milon-team-feed.ts";
 import { deriveActionHealth, type ActionItemHealth } from "./action-item-health.ts";
 import {
   actionCounts,
@@ -38,6 +36,35 @@ function text(row: Raw, key: string): string {
   return typeof value === "string" ? value : "";
 }
 
+const BOT_NAME: Record<string, string> = {
+  financial_manager: "Financial Manager",
+  analyst: "Analyst",
+  advisor: "Advisor",
+};
+
+/** Same finished line as handoffProgressCaption, without the plan page's clock. */
+function pickupCaption(assignee: string, agent: string, status: string, draftId: string): string | null {
+  const name = BOT_NAME[agent];
+  if (!name) return null;
+  const who = assignee.trim();
+  if (who !== name && who !== agent) return null;
+  if (status !== "succeeded" && status !== "partial") return null;
+  if (!draftId) return null;
+  return `Done by ${name}. See result.`;
+}
+
+function findingIdForRun(runId: string, findings: readonly Raw[]): string {
+  const matches = findings.filter((row) => {
+    if (text(row, "run_id") !== runId || !text(row, "id")) return false;
+    if (row.superseded_by) return false;
+    if (text(row, "status") === "dismissed") return false;
+    if (text(row, "dismissed_reason").trim()) return false;
+    return true;
+  });
+  const open = matches.find((row) => text(row, "status") !== "approved");
+  return text(open ?? matches[0] ?? {}, "id");
+}
+
 /** Raw action rows plus the hand-off caption. Nothing here is written back. */
 export async function loadActionCountInputs(
   db: ActionCountDb,
@@ -69,24 +96,15 @@ export async function loadActionCountInputs(
     if (clientId && date && !target.has(clientId)) target.set(clientId, date);
   }
   const actionIds = actions.map((row) => text(row, "id")).filter(Boolean);
-  const [runs, notes] = actionIds.length
-    ? await Promise.all([
-        read(
-          db
-            .from("agent_runs")
-            .select("id, action_item_id, agent, status, queued_at")
-            .in("action_item_id", actionIds)
-            .order("queued_at", { ascending: false }),
-        ),
-        read(
-          db
-            .from("action_updates")
-            .select("action_item_id, note, created_at")
-            .in("action_item_id", actionIds)
-            .order("created_at", { ascending: false }),
-        ),
-      ])
-    : [[], []];
+  const runs = actionIds.length
+    ? await read(
+        db
+          .from("agent_runs")
+          .select("id, action_item_id, agent, status, queued_at")
+          .in("action_item_id", actionIds)
+          .order("queued_at", { ascending: false }),
+      )
+    : [];
   const runIds = runs.map((row) => text(row, "id")).filter(Boolean);
   const findings = runIds.length
     ? await read(
@@ -109,14 +127,6 @@ export async function loadActionCountInputs(
       },
     ];
   });
-  const notesByAction = new Map<string, { note: string | null; at: string }[]>();
-  for (const note of notes) {
-    const id = text(note, "action_item_id");
-    if (!id) continue;
-    const list = notesByAction.get(id) ?? [];
-    list.push({ note: text(note, "note") || null, at: text(note, "created_at") });
-    notesByAction.set(id, list);
-  }
   const runsByAction = new Map<string, Raw[]>();
   for (const run of runs) {
     const id = text(run, "action_item_id");
@@ -132,37 +142,8 @@ export async function loadActionCountInputs(
     const mine = (runsByAction.get(id) ?? []).slice().sort((a, b) => text(b, "queued_at").localeCompare(text(a, "queued_at")));
     const newest = mine[0];
     const agent = text(newest ?? {}, "agent");
-    const storedRun =
-      newest && (agent === "financial_manager" || agent === "analyst" || agent === "advisor")
-        ? {
-            id: text(newest, "id"),
-            agent: agent as AgentKey,
-            status: text(newest, "status"),
-            at: text(newest, "queued_at"),
-          }
-        : null;
-    const handoff = describeActionHandoff({
-      actionItemId: id,
-      assignee: text(action, "owner_name") || null,
-      notes: notesByAction.get(id) ?? [],
-      storedRun,
-      runs: mine.flatMap((run) => {
-        const runAgent = text(run, "agent");
-        if (runAgent !== "financial_manager" && runAgent !== "analyst" && runAgent !== "advisor") return [];
-        return [
-          {
-            id: text(run, "id"),
-            agent: runAgent as AgentKey,
-            status: text(run, "status"),
-            at: text(run, "queued_at"),
-            queued_at: text(run, "queued_at"),
-            action_item_id: id,
-          },
-        ];
-      }),
-      findings: findingRefs,
-      findingsReady: true,
-    });
+    const runId = text(newest ?? {}, "id");
+    const draftId = runId ? findingIdForRun(runId, findingRefs) : "";
     const list = out.get(clientId) ?? [];
     list.push({
       status: text(action, "status") || null,
@@ -170,8 +151,8 @@ export async function loadActionCountInputs(
       createdAt: text(action, "created_at") || null,
       planTarget: target.get(clientId) ?? null,
       title: text(action, "title") || null,
-      pickupLabel: handoff.caption,
-      draftId: handoff.draftId,
+      pickupLabel: newest ? pickupCaption(text(action, "owner_name"), agent, text(newest, "status"), draftId) : null,
+      draftId: draftId || null,
     });
     out.set(clientId, list);
   }
