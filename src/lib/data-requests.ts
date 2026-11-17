@@ -15,7 +15,7 @@
 import type { Json } from "../integrations/supabase/types.ts";
 import type { AdvisoryState } from "./advisory-state.ts";
 import { ratiosStatementFigures } from "./deliverable-input-config.ts";
-import { creditorDaysHealthyBand, guardQuotedRatios, peerMedian } from "./ratios.ts";
+import { creditorDaysHealthyBand, peerMedian, presentGuardedRatioCopy } from "./ratios.ts";
 
 export const DATA_REQUEST_KINDS = [
   "bank_statement",
@@ -240,7 +240,7 @@ export function creditorDaysReason(days: number): string {
 /** Stored asks still say 45. The card shows the same benchmark What matters uses. */
 export function displayedDataRequestReason(reason: string): string {
   const days = DEBTOR_DAYS_AGEING_THRESHOLD;
-  return guardQuotedRatios(reason.replace(/\b45-day benchmark\b/g, `${days}-day benchmark`));
+  return presentGuardedRatioCopy(reason.replace(/\b45-day benchmark\b/g, `${days}-day benchmark`));
 }
 
 /**

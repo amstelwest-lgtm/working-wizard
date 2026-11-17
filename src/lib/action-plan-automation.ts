@@ -1,4 +1,4 @@
-import { actionRowDisplayState } from "@/lib/action-handoff";
+import { actionCountClassFromDisplay, actionRowDisplayState } from "@/lib/action-handoff";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 
 /**
@@ -166,7 +166,16 @@ export function planAutomation(
       draftId: item.draftId,
       title: item.title,
     });
-    if (followUp === "overdue" && !display.overdue) followUp = hasOwner ? "waiting" : "none";
+    const klass = actionCountClassFromDisplay({
+      status: item.status,
+      title: item.title,
+      pickupLabel: item.pickupLabel,
+      display,
+    });
+    if (klass === "done") followUp = "done";
+    else if (klass === "awaiting_sign_off") followUp = "none";
+    else if (klass === "overdue") followUp = "overdue";
+    else if (followUp === "overdue") followUp = hasOwner ? "waiting" : "none";
     return {
       id: item.id,
       title: item.title,

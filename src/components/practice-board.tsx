@@ -33,7 +33,7 @@ import {
   isMilonItMember,
 } from "@/lib/user-roles";
 import { scoreTier, type OverallHealth } from "@/lib/health-score";
-import { actionIsOverdue, actionOverdueInput } from "@/lib/action-plan-counts";
+import { loadPracticeBoardActionMaps } from "@/lib/action-count-load";
 import {
   buildAttentionItems,
   buildFollowUpQueue,
@@ -1552,47 +1552,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       try {
         const now = new Date();
         const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-        const [{ data: actions, error: actErr }, { data: plans }] = await Promise.all([
-          supabase
-            .from("action_items")
-            .select("client_id, status, due_date, created_at, title")
-            .in("client_id", clientIds)
-            .neq("status", "done"),
-          supabase
-            .from("action_plans")
-            .select("client_id, target_date")
-            .in("client_id", clientIds)
-            .eq("is_active", true),
-        ]);
-        const targetByClient = new Map<string, string>();
-        for (const plan of plans ?? []) {
-          if (!targetByClient.has(plan.client_id)) targetByClient.set(plan.client_id, plan.target_date);
-        }
-        if (!actErr && actions) {
-          for (const a of actions) {
-            openActionsMap[a.client_id] = (openActionsMap[a.client_id] ?? 0) + 1;
-            const overdue = actionIsOverdue(
-              actionOverdueInput(
-                {
-                  status: a.status,
-                  dueDate: a.due_date,
-                  createdAt: a.created_at,
-                  planTarget: targetByClient.get(a.client_id) ?? null,
-                },
-                today,
-              ),
-              today,
-            );
-            if (overdue) {
-              overdueActionsMap[a.client_id] = (overdueActionsMap[a.client_id] ?? 0) + 1;
-            }
-            const title = typeof a.title === "string" ? a.title.trim() : "";
-            if (title) {
-              chaseActionsMap[a.client_id] = chaseActionsMap[a.client_id] ?? [];
-              chaseActionsMap[a.client_id].push({ title, overdue });
-            }
-          }
-        }
+        const maps = await loadPracticeBoardActionMaps(supabase, clientIds, today);
+        Object.assign(openActionsMap, maps.openActionsMap);
+        Object.assign(overdueActionsMap, maps.overdueActionsMap);
+        Object.assign(chaseActionsMap, maps.chaseActionsMap);
       } catch {
         // non-fatal
       }

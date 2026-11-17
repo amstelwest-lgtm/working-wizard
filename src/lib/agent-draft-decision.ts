@@ -4,7 +4,7 @@
  * A second approve returns that row. Nothing here sends email or signs off.
  */
 
-import { guardQuotedRatios } from "./ratios.ts";
+import { presentGuardedRatioCopy } from "./ratios.ts";
 
 export const DRAFT_DECISIONS = ["approve", "dismiss"] as const;
 export type DraftDecision = (typeof DRAFT_DECISIONS)[number];
@@ -201,8 +201,8 @@ export function liveRecordForDraft(input: {
         row: {
           client_id: input.clientId,
           kind: "other",
-          title: guardQuotedRatios(input.title),
-          reason: input.detail ? guardQuotedRatios(input.detail) : null,
+          title: presentGuardedRatioCopy(input.title),
+          reason: input.detail ? presentGuardedRatioCopy(input.detail) : null,
           severity: dataRequestSeverity(input.severity),
           status: "open",
           source: input.seat === "owner" ? "owner" : "accountant",

@@ -720,6 +720,28 @@ export function guardQuotedRatios(
   return out;
 }
 
+const STORED_RATIO_CONTRADICTION = /^(?:the )?stored ratios contradict each other[.:,]?\s*/i;
+
+/**
+ * Client copy after the day-count guard. Each replaced metric reads
+ * "Not enough data for creditor days". A leading "stored ratios contradict"
+ * clause drops only when a value was replaced.
+ */
+export function presentGuardedRatioCopy(
+  text: string,
+  ratios?: Record<string, number | null> | null,
+): string {
+  const guarded = guardQuotedRatios(text, ratios);
+  if (!text || guarded === text) return guarded;
+  const rewritten = guarded
+    .replace(STORED_RATIO_CONTRADICTION, "")
+    .replace(
+      /\b(creditor days|inventory days|debtor days|working capital days|stock days|days payable outstanding|days sales outstanding)\b(?:\s+(?:ratio|figure|reading|are|is|of|at|currently|about|around|now))*\s+not enough data/gi,
+      (_match, label: string) => `Not enough data for ${label.toLowerCase()}`,
+    );
+  return rewritten.replace(/[ \t]{2,}/g, " ").trim();
+}
+
 function figureBag(figures: unknown): Record<string, unknown> {
   if (Array.isArray(figures)) {
     const bag: Record<string, unknown> = {};

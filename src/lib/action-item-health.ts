@@ -4,7 +4,7 @@
  * progress, while the target is still ahead, is Not started — that is not
  * On track.
  */
-import { actionIsOverdue, actionOverdueInput } from "./action-plan-counts.ts";
+import { actionDisplayClass, actionOverdueInput } from "./action-plan-counts.ts";
 
 export type ActionItemHealth =
   | "on_track"
@@ -12,7 +12,8 @@ export type ActionItemHealth =
   | "off_track"
   | "overdue"
   | "complete"
-  | "not_started";
+  | "not_started"
+  | "awaiting_sign_off";
 
 export function deriveActionHealth(
   it: {
@@ -21,26 +22,29 @@ export function deriveActionHealth(
     progress_pct: number;
     created_at: string;
     plan_target?: string | null;
+    pickupLabel?: string | null;
+    draftId?: string | null;
+    title?: string | null;
   },
   now = new Date(),
 ): ActionItemHealth {
-  if (it.status === "done") return "complete";
-  if (
-    actionIsOverdue(
-      actionOverdueInput(
-        {
-          status: it.status,
-          dueDate: it.due_date,
-          createdAt: it.created_at,
-          planTarget: it.plan_target ?? null,
-        },
-        now,
-      ),
-      now,
-    )
-  ) {
-    return "overdue";
-  }
+  const judged = actionOverdueInput(
+    {
+      status: it.status,
+      dueDate: it.due_date,
+      createdAt: it.created_at,
+      planTarget: it.plan_target ?? null,
+      pickupLabel: it.pickupLabel,
+      draftId: it.draftId,
+      title: it.title,
+      progressPct: it.progress_pct,
+    },
+    now,
+  );
+  const klass = actionDisplayClass(judged, now);
+  if (klass === "done") return "complete";
+  if (klass === "awaiting_sign_off") return "awaiting_sign_off";
+  if (klass === "overdue") return "overdue";
   if (it.status === "blocked") return "off_track";
   if (!it.due_date) return (it.progress_pct ?? 0) <= 0 ? "not_started" : "on_track";
   const pace = actionPace(it, now);

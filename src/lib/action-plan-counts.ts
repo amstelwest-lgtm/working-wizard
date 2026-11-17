@@ -5,7 +5,11 @@
  * A suggested due (created + 14 days) is that item's own due date.
  */
 
-import { actionRowDisplayState } from "./action-handoff.ts";
+import {
+  actionCountClassFromDisplay,
+  actionRowDisplayState,
+  type ActionCountClass,
+} from "./action-handoff.ts";
 import { duplicateActionIds, effectiveActionDue } from "./action-plan-automation.ts";
 
 export type ActionCountInput = {
@@ -16,6 +20,8 @@ export type ActionCountInput = {
   pickupLabel?: string | null;
   draftId?: string | null;
   title?: string | null;
+  progressPct?: number | null;
+  createdAt?: string | null;
 };
 
 export type ActionPlanCounts = {
@@ -23,6 +29,8 @@ export type ActionPlanCounts = {
   open: number;
   done: number;
   overdue: number;
+  /** Neither open nor done. Omitted by older callers. */
+  awaitingSignOff?: number;
 };
 
 function isoDay(d: Date): string {
@@ -58,6 +66,7 @@ export function actionOverdueInput(
     pickupLabel?: string | null;
     draftId?: string | null;
     title?: string | null;
+    progressPct?: number | null;
   },
   today: string | Date = new Date(),
 ): ActionCountInput {
@@ -73,7 +82,49 @@ export function actionOverdueInput(
     pickupLabel: item.pickupLabel,
     draftId: item.draftId,
     title: item.title,
+    progressPct: item.progressPct,
   };
+}
+
+/** Done, awaiting sign-off, overdue, or open. Built on actionRowDisplayState. */
+export function actionDisplayClass(row: ActionCountInput, today: string | Date = new Date()): ActionCountClass {
+  const storedDone = isDoneStatus(row.status);
+  const pastDue = !storedDone && actionIsOverdue(row, today);
+  const display = actionRowDisplayState({
+    health: storedDone ? "complete" : pastDue ? "overdue" : "on_track",
+    progressPct: row.progressPct ?? 0,
+    status: row.status ?? "not_started",
+    pickupLabel: row.pickupLabel,
+    draftId: row.draftId,
+    title: row.title,
+  });
+  return actionCountClassFromDisplay({
+    status: row.status,
+    title: row.title,
+    pickupLabel: row.pickupLabel,
+    display,
+  });
+}
+
+/** One counter for the plan, Home, the health widget, and the practice lists. */
+export function actionCounts(
+  rows: readonly ActionCountInput[],
+  today: string | Date = new Date(),
+): ActionPlanCounts {
+  let open = 0;
+  let done = 0;
+  let overdue = 0;
+  let awaitingSignOff = 0;
+  for (const row of rows) {
+    const klass = actionDisplayClass(row, today);
+    if (klass === "done") done += 1;
+    else if (klass === "awaiting_sign_off") awaitingSignOff += 1;
+    else {
+      open += 1;
+      if (klass === "overdue") overdue += 1;
+    }
+  }
+  return { total: rows.length, open, done, overdue, awaitingSignOff };
 }
 
 export function actionIsOverdue(item: ActionCountInput, today: string | Date = new Date()): boolean {
@@ -95,28 +146,7 @@ export function countActionPlan(
   items: readonly ActionCountInput[],
   today: string | Date = new Date(),
 ): ActionPlanCounts {
-  let open = 0;
-  let done = 0;
-  let overdue = 0;
-  for (const item of items) {
-    if (isDoneStatus(item.status)) {
-      done += 1;
-      continue;
-    }
-    open += 1;
-    if (actionIsOverdue(item, today)) {
-      const shown = actionRowDisplayState({
-        health: "overdue",
-        progressPct: 0,
-        status: item.status ?? "not_started",
-        pickupLabel: item.pickupLabel,
-        draftId: item.draftId,
-        title: item.title,
-      });
-      if (shown.overdue) overdue += 1;
-    }
-  }
-  return { total: items.length, open, done, overdue };
+  return actionCounts(items, today);
 }
 
 /** "3 actions · 2 open, including 2 overdue · 1 done" */
@@ -125,6 +155,9 @@ export function formatActionPlanCounts(counts: ActionPlanCounts): string {
   let text = `${actions} · ${counts.open} open`;
   if (counts.overdue > 0) text += `, including ${counts.overdue} overdue`;
   if (counts.done > 0) text += ` · ${counts.done} done`;
+  if (counts.awaitingSignOff) {
+    text += ` · ${counts.awaitingSignOff} awaiting sign-off`;
+  }
   return text;
 }
 

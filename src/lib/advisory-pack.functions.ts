@@ -20,6 +20,12 @@ import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import { recordedActorIdentity, type RecordedActor } from "@/lib/accountant-identity";
 import type { LooseSb } from "@/lib/advisory-state.functions";
 import { isSamplePracticeSignoff } from "@/lib/review-signoff-stamp";
+import { judgedActionCounts, loadActionCountInputs, type ActionCountDb } from "@/lib/action-count-load";
+
+export async function loadPackActionCounts(sb: ActionCountDb, clientId: string, today: string) {
+  const rows = (await loadActionCountInputs(sb, [clientId])).get(clientId) ?? [];
+  return judgedActionCounts(rows, today);
+}
 import { assertStarterTrialAllowsNewWork } from "@/lib/firm-client-cap.server";
 import { gatePrecardGeneration, recordPrecardGeneration } from "@/lib/precard-cap.server";
 import { PRECARD_CAP_CODE, finishPrecardAttempt } from "@/lib/precard-cap";
@@ -421,7 +427,7 @@ export async function gatherPackInputs(
   now: string,
 ): Promise<Parameters<typeof buildAdvisoryPack>[0] | null> {
   const nowDate = new Date(now);
-  const [overview, recsRes, reqsRes, openRes, overdueRes, outcomesRes, artifactsRes] = await Promise.all([
+  const [overview, recsRes, reqsRes, actionsRes, outcomesRes, artifactsRes] = await Promise.all([
     loadOverviewContext(sb, clientId, Number.isFinite(nowDate.getTime()) ? nowDate : new Date()),
     sb
       .from("proposed_next_steps")
@@ -435,17 +441,7 @@ export async function gatherPackInputs(
       .eq("client_id", clientId)
       .in("status", ["open", "sent"])
       .limit(50),
-    sb
-      .from("action_items")
-      .select("id", { count: "exact", head: true })
-      .eq("client_id", clientId)
-      .neq("status", "done"),
-    sb
-      .from("action_items")
-      .select("id", { count: "exact", head: true })
-      .eq("client_id", clientId)
-      .neq("status", "done")
-      .lt("due_date", now.slice(0, 10)),
+    loadPackActionCounts(sb, clientId, now.slice(0, 10)),
     sb
       .from("recommendation_outcomes")
       .select("*")
@@ -508,6 +504,7 @@ export async function gatherPackInputs(
     market: overview.market,
   });
 
+  const actionTotals = actionsRes;
   return {
     clientName: client.name ?? "",
     firmName,
@@ -536,8 +533,8 @@ export async function gatherPackInputs(
     runwayLabel: overview.metrics.runwayLabel,
     recommendations,
     dataRequests,
-    openActions: openRes.error ? 0 : (openRes.count ?? 0),
-    overdueActions: overdueRes.error ? 0 : (overdueRes.count ?? 0),
+    openActions: actionTotals.open,
+    overdueActions: actionTotals.overdue,
     outcomes: outcomeStories(
       recommendations,
       (outcomesRes.error ? [] : (outcomesRes.data ?? [])) as RecommendationOutcome[],

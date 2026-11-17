@@ -219,6 +219,31 @@ export function actionRowDisplayState(input: {
   };
 }
 
+export type ActionCountClass = "done" | "awaiting_sign_off" | "overdue" | "open";
+
+const SIGN_OFF_TITLE = /\b(sign[\s-]?off|approval|approve)\b/i;
+
+/**
+ * Count class for one row after actionRowDisplayState.
+ * A 100% "Done by …" row is done. The same row that still needs approval or
+ * sign-off is awaiting sign-off. Overdue is not done, past due, and not awaiting.
+ */
+export function actionCountClassFromDisplay(input: {
+  status?: string | null;
+  title?: string | null;
+  pickupLabel?: string | null;
+  display: { progressPct: number; overdue: boolean };
+}): ActionCountClass {
+  const status = (input.status ?? "").trim().toLowerCase();
+  const storedDone = status === "done" || status === "complete";
+  const botDone = /^Done by\b/i.test(input.pickupLabel ?? "") && input.display.progressPct >= 100;
+  const signOff = SIGN_OFF_TITLE.test(input.title ?? "");
+  if (storedDone || (botDone && !signOff)) return "done";
+  if (botDone && signOff) return "awaiting_sign_off";
+  if (!storedDone && input.display.overdue) return "overdue";
+  return "open";
+}
+
 export function handoffProgressCaption(
   agent: AgentKey,
   status: string | null | undefined,

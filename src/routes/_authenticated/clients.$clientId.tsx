@@ -390,7 +390,8 @@ import {
   type RowAssignment,
 } from "@/lib/open-plan-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, spokenCashStrain, type OwnerBooks } from "@/lib/owner-answers";
-import { actionOverdueInput, countActionPlan, keptOpenPlanRows } from "@/lib/action-plan-counts";
+import { keptOpenPlanRows } from "@/lib/action-plan-counts";
+import { loadHomeActionCounts } from "@/lib/action-count-load";
 import { homeActionNeeds, openActionSentence, presentHomeDraftBody, presentHomeDraftTitle } from "@/lib/owner-needs";
 import { healthSnapshotFromBooks, readStoredScoreSnapshotHash, renderHealthNarrative } from "@/lib/health-snapshot";
 import { draftStoredFiguresHash, draftStoredHealth, latestFiguresStamp } from "@/lib/draft-figures";
@@ -2100,21 +2101,12 @@ function ClientView() {
     void (async () => {
       const now = new Date();
       const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-      const [itemsRes, planRes] = await Promise.all([
-        supabase
-          .from("action_items_v")
-          .select("id, title, due_date, status, owner_name, created_at")
-          .eq("client_id", clientId)
-          .neq("status", "done")
-          .order("seq"),
-        supabase
-          .from("action_plans")
-          .select("target_date")
-          .eq("client_id", clientId)
-          .eq("is_active", true)
-          .order("created_at", { ascending: false })
-          .limit(1),
-      ]);
+      const itemsRes = await supabase
+        .from("action_items_v")
+        .select("id, title, due_date, status, owner_name, created_at")
+        .eq("client_id", clientId)
+        .neq("status", "done")
+        .order("seq");
       if (cancelled) return;
       const { data, error } = itemsRes;
       if (error) {
@@ -2135,8 +2127,6 @@ function ClientView() {
         created_at?: string | null;
         owner_name?: string | null;
       }[];
-      const planTarget =
-        (planRes.data?.[0] as { target_date?: string | null } | undefined)?.target_date ?? null;
       const visible = keptOpenPlanRows(
         rows.flatMap((row) => {
           const id = row.id?.trim() ?? "";
@@ -2145,13 +2135,14 @@ function ClientView() {
           return [{ ...row, id, title }];
         }),
       );
-      const titles = visible.map((row) => row.title);
       setOpenPlanUnavailable(false);
-      setOpenPlanTitles(titles);
       const ids = visible.map((row) => row.id);
       const [noteLog, runs] = ids.length
         ? await Promise.all([loadActionNotes(ids), loadActionHandoffRuns(ids)])
         : [new Map(), new Map()];
+      const homeCounts = await loadHomeActionCounts(supabase, clientId, today);
+      const counts = homeCounts.counts;
+      const titles = [...homeCounts.titles];
       const assignments = assignmentsFromNotes(noteLog);
       if (cancelled) return;
       const pendings = [...pendingHandoffs.current.values()].filter(
@@ -2240,22 +2231,7 @@ function ClientView() {
         }
       }
       setOpenPlanTitles(titles);
-      setOpenPlanOverdue(
-        countActionPlan(
-          visible.map((row) =>
-            actionOverdueInput(
-              {
-                status: row.status,
-                dueDate: row.due_date,
-                createdAt: row.created_at ?? null,
-                planTarget,
-              },
-              today,
-            ),
-          ),
-          today,
-        ).overdue,
-      );
+      setOpenPlanOverdue(counts.overdue);
       paintAssignments(labelled, merged, paintedNotes, paintedRuns);
     })();
     return () => {
