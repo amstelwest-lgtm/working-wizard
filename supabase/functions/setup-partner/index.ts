@@ -430,6 +430,7 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     modelTurns?: unknown;
     screenshots?: unknown;
     messages?: unknown;
+    sessionId?: unknown;
   };
   try {
     body = await req.json();
