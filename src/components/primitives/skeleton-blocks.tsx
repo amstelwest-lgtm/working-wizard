@@ -14,7 +14,7 @@ export function SkeletonTile({ className }: BlockProps) {
 /** First paint of the accountant shell, before the portal chunk arrives. */
 export function BootSkeleton() {
   return (
-    <div className="min-h-screen bg-[#f4f6fa] px-4 py-8" role="status" aria-live="polite">
+    <div className="min-h-screen bg-[#f4f6fa] px-4 py-8" data-shell-paint="" role="status" aria-live="polite">
       <span className="sr-only">Loading…</span>
       <DashboardSkeleton />
     </div>

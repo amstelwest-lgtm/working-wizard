@@ -11,10 +11,20 @@ function FirmShellLoading() {
 
 type GateModule = { AuthGate: ComponentType };
 let gateLoaderForTests: (() => Promise<GateModule>) | null = null;
+let gateFlight: { attempt: number; promise: Promise<GateModule> } | null = null;
+
+function loadGateChunk(attempt: number): Promise<GateModule> {
+  if (gateFlight?.attempt === attempt) return gateFlight.promise;
+  const load = gateLoaderForTests ?? (() => import("./_authenticated.gate"));
+  const promise = load();
+  gateFlight = { attempt, promise };
+  return promise;
+}
 
 /** Tests substitute the gate chunk so the shell timer can be observed. */
 export function setAuthenticatedGateLoaderForTests(loader: (() => Promise<GateModule>) | null): void {
   gateLoaderForTests = loader;
+  gateFlight = null;
 }
 
 function ShellLoadRetry({ onRetry }: { onRetry: () => void }) {
@@ -64,11 +74,15 @@ export function AuthenticatedShell() {
     };
   }, [gateAttempt]);
 
+  // Download the gate chunk immediately. Do not render it until chrome exists.
+  useEffect(() => {
+    void loadGateChunk(gateAttempt);
+  }, [gateAttempt]);
+
   useEffect(() => {
     if (!chromeReady) return;
     let cancelled = false;
-    const load = gateLoaderForTests ?? (() => import("./_authenticated.gate"));
-    void load().then((mod) => {
+    void loadGateChunk(gateAttempt).then((mod) => {
       if (cancelled) return;
       if (shellTimer.current) {
         window.clearTimeout(shellTimer.current);
