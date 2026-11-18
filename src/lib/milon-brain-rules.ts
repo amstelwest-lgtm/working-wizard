@@ -4,7 +4,10 @@
  */
 import { ADVISOR_DRAFT_KINDS } from "./agent-advisor.ts";
 import { FM_DRAFT_KINDS } from "./agent-financial-manager.ts";
-import { SETUP_PARTNER_TASK_FEATURE, SETUP_PARTNER_TASK_WORKFLOW } from "./setup-partner.ts";
+
+/** Same values as setup-partner.ts — inlined so Deno does not hit a setup-partner ↔ brain-rules init cycle. */
+const SETUP_PARTNER_TASK_WORKFLOW = "onboarding_workflow";
+const SETUP_PARTNER_TASK_FEATURE = "feature_idea";
 
 export const MILON_BRAIN_SOURCE_AGENT_DRAFT = "agent_draft_decision";
 export const MILON_BRAIN_SOURCE_REMEMBER = "agent_draft_remember";
@@ -117,10 +120,10 @@ export function appliedBrainRuleSummariesFromEvidence(evidence: unknown): string
   return labels.filter((text): text is string => typeof text === "string" && text.trim().length > 0);
 }
 
-export function withAppliedBrainRules(
-  evidence: Record<string, unknown>,
+export function withAppliedBrainRules<T extends object>(
+  evidence: T,
   ruleSummaries: readonly string[],
-): Record<string, unknown> {
+): T {
   if (ruleSummaries.length === 0) return evidence;
   return { ...evidence, [APPLIED_BRAIN_RULE_SUMMARIES_KEY]: [...ruleSummaries] };
 }

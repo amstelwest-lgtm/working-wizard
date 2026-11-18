@@ -228,10 +228,7 @@ export async function recordAgentDraft(
   if (liveSnapshot) {
     prepared.evidence = { ...prepared.evidence, ...snapshotEvidenceFields(liveSnapshot) };
   }
-  prepared.evidence = withAppliedBrainRules(
-    prepared.evidence as Record<string, unknown>,
-    ctx.appliedBrainRuleSummaries ?? [],
-  );
+  prepared.evidence = withAppliedBrainRules(prepared.evidence, ctx.appliedBrainRuleSummaries ?? []);
   const reconciledCopy = persistReconciledFindingCopy({
     title: prepared.title,
     detail: prepared.detail,
