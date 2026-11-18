@@ -235,6 +235,7 @@
     "test:setup-partner-gap": "vite-node --config scripts/vite-test.config.ts scripts/setup-partner-gap-test.mts",
     "test:practice-setup-route": "vite-node --config scripts/vite-test.config.ts scripts/practice-setup-route-test.mts",
     "test:im-interview-session": "vite-node --config scripts/vite-test.config.ts scripts/im-interview-session-test.mts",
+    "test:im-replay-harness": "vite-node --config scripts/vite-test.config.ts scripts/im-replay-harness-test.mts",
     "test:im-redo-reload": "vite-node --config scripts/vite-test.config.ts scripts/im-redo-reload-test.mts",
     "test:interview-exchange": "vite-node --config scripts/vite-test.config.ts scripts/interview-exchange-test.mts",
     "test:im-page-client-view": "vite-node --config scripts/vite-test.config.ts scripts/im-page-client-view-test.mts",
