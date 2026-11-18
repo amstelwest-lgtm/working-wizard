@@ -263,17 +263,23 @@ setStrike7FirmDelay(9_000);
 setStrike7FirmPick("my-practice");
 setFirmBillingGateCheckForTests(() => new Promise(() => {}));
 warns.length = 0;
+const lateFirmArmed = clock.armed8s();
 await mountGate();
 await advance(8_000);
 assert(
-  html().includes("Couldn't check billing"),
-  "the mount timer shows Retry before the firm row arrives",
+  !html().includes("Couldn't check billing"),
+  "the billing deadline must not fire before the firm row exists",
 );
 await advance(1_000);
 await advance(50);
+await advance(8_000);
 assert(
   html().includes("Couldn't check billing") && !html().includes("Loading dashboard"),
-  "a firm row that arrives after the deadline must not drop Retry for the skeleton",
+  "a hung check after the firm row arrives must show Retry, not the skeleton",
+);
+assert(
+  clock.armed8s() - lateFirmArmed === 1,
+  "the 8s timer arms once the firm row is in hand",
 );
 await unmountGate();
 setStrike7FirmDelay(50);
