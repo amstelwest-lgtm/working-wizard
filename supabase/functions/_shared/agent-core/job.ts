@@ -107,6 +107,7 @@ export type QueueJobConfig = {
     db: SupabaseClient;
     pool: StoredFigures[];
     recordedKeys: Set<string>;
+    appliedBrainRuleSummaries?: readonly string[];
     market?: unknown;
     prepareLibraryArtifact?: (artifactId: string) => Promise<void>;
   }) => Promise<unknown>;
