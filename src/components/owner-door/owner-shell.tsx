@@ -20,6 +20,7 @@ export type OwnerScreen =
   | "profit"
   | "pnl"
   | "moves"
+  | "routines"
   | "accountant"
   | "deliverables"
   | "plan"
@@ -33,6 +34,7 @@ const RAIL: { id: string; label: string; screen: OwnerScreen }[] = [
   { id: "profit", label: "Profit", screen: "profit" },
   { id: "budget", label: "Budget", screen: "budget" },
   { id: "moves", label: "Next moves", screen: "moves" },
+  { id: "routines", label: "Routines", screen: "routines" },
   { id: "accountant", label: "Accountant portal", screen: "accountant" },
 ];
 

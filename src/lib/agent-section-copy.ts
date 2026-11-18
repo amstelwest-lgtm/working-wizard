@@ -4,6 +4,7 @@
  */
 export type AgentSectionKey =
   | "work"
+  | "rules"
   | "noticed"
   | "offered"
   | "activity"
@@ -16,6 +17,10 @@ export const AGENT_SECTION_COPY: Record<AgentSectionKey, { title: string; purpos
   work: {
     title: "Where I work",
     purpose: "The pages I keep up to date for this client. Open one to see the full figures.",
+  },
+  rules: {
+    title: "Rules",
+    purpose: "Private firm and client preferences that shape this bot's drafts. Nothing here posts to a ledger.",
   },
   noticed: {
     title: "What I noticed",

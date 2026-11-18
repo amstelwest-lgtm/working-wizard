@@ -34,6 +34,7 @@ import {
 } from "@/lib/milon-team-activity";
 import type { DateMarket, MoneyMarket } from "@/lib/market/format";
 import {
+  DRAFT_NEEDS_ACCOUNTANT,
   DRAFT_NEEDS_OWNER,
   draftFindingKindLabel,
   draftFindingLabel,
@@ -95,6 +96,10 @@ export function OwnerDraftCard({
   const kindLabel = draftFindingKindLabel(row);
   const ownerOk = label === DRAFT_NEEDS_OWNER;
   const handoffDecision = decisionSeat === "firm" && kindLabel === "Accountant hand-off";
+  const firmDraftDecision =
+    decisionSeat === "firm" &&
+    label != null &&
+    (label === DRAFT_NEEDS_ACCOUNTANT || label === DRAFT_NEEDS_OWNER);
   const contextMarket = useMarket().market;
   const market = marketProp ?? contextMarket;
   const figures = findingFigureEntries(row.evidence);
@@ -111,6 +116,7 @@ export function OwnerDraftCard({
   const [message, setMessage] = useState<string | null>(null);
   const [invite, setInvite] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [rememberThis, setRememberThis] = useState(false);
 
   useEffect(() => subscribeDraftDecisionButtons(() => setBlocked(true)), []);
 
@@ -124,7 +130,7 @@ export function OwnerDraftCard({
   const recordId =
     (optimistic?.phase === "approved" ? optimistic.recordId : null) ?? row.approved_row_id ?? null;
   const link = approved ? approvedLiveLink(table) : null;
-  const showActions = (ownerOk || handoffDecision) && !blocked && !approved;
+  const showActions = (ownerOk || handoffDecision || firmDraftDecision) && !blocked && !approved;
   const fromSnapshot =
     health && row.kind !== "data_request_draft"
       ? findingSentence({
@@ -186,6 +192,7 @@ export function OwnerDraftCard({
       findingId: row.id,
       decision: "approve",
       edits: { title: nextTitle, detail: nextDetail },
+      rememberThis: decisionSeat === "firm" ? rememberThis : undefined,
     });
     setBusy(false);
     if (!result.ok) {
@@ -253,6 +260,16 @@ export function OwnerDraftCard({
         Detail
         <textarea rows={3} value={detail} onChange={(event) => setDetail(event.target.value)} />
       </label>
+      {decisionSeat === "firm" ? (
+        <label className="owner-draft-remember">
+          <input
+            type="checkbox"
+            checked={rememberThis}
+            onChange={(event) => setRememberThis(event.target.checked)}
+          />{" "}
+          Remember this as a private rule
+        </label>
+      ) : null}
     </div>
   ) : null;
 

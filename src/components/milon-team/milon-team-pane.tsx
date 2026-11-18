@@ -19,6 +19,7 @@ import { AgentStage } from "./agent-stage";
 import { AgentSection } from "./agent-section";
 import { AgentWork } from "./agent-work";
 import { MilonTeamDesk } from "./milon-team-desk";
+import { AgentBotRulesPanel } from "@/components/agent-bot-rules-panel";
 
 type MilonTeamPaneProps = {
   clientId: string;
@@ -37,6 +38,7 @@ type MilonTeamPaneProps = {
   audience?: "owner" | "accountant";
   /** clients.is_demo. Passed through to the team-row chip. */
   sampleClient?: boolean;
+  firmId?: string | null;
   /** Live scorecard ratios. Draft sentences quote these. */
   canonicalRatios?: Record<string, number> | null;
   /** The Ask widget host. An open agent shows it beside the hero; the team desk shows it last. */
@@ -64,6 +66,7 @@ export function MilonTeamPaneView({
   marketCountry = null,
   audience = "accountant",
   sampleClient = false,
+  firmId = null,
   canonicalRatios = null,
   chat = null,
   taxClient = null,
@@ -160,6 +163,11 @@ export function MilonTeamPaneView({
       <AgentSection section="work">
         <AgentWork items={clientAgentWork(agent, clientId)} />
       </AgentSection>
+      {audience === "accountant" && firmId ? (
+        <AgentSection section="rules">
+          <AgentBotRulesPanel firmId={firmId} clientId={clientId} tab={agent} />
+        </AgentSection>
+      ) : null}
       {desk}
     </AgentStage>
   );

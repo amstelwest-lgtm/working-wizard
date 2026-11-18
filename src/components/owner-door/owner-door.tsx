@@ -99,6 +99,7 @@ import { type OwnerSubscribeView } from "@/lib/owner-subscribe";
 import { readPriceQuote } from "@/lib/pricing/price-quote.functions";
 import { LazyOwnerBillingBridge } from "@/components/lazy-route-panels";
 import { OwnerAccountant, OwnerFirst, OwnerPlan, OwnerSettings } from "./owner-pages";
+import { OwnerRoutinesMonth } from "./owner-routines-month";
 import { OwnerShell, type OwnerScreen } from "./owner-shell";
 
 type Signoff = {
@@ -1176,6 +1177,7 @@ export function OwnerDoor({
       {railScreen === "profit" ? restored?.profit : null}
       {railScreen === "pnl" ? restored?.pnl : null}
       {railScreen === "moves" ? restored?.moves : null}
+      {railScreen === "routines" && clientId ? <OwnerRoutinesMonth clientId={clientId} /> : null}
       {railScreen === "chat" && active ? (
         <OwnerChat
           market={market}

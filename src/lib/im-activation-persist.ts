@@ -9,6 +9,13 @@ export const IM_ACTIVATION_SOURCE = "setup_partner_activation";
 export const IM_ACTIVATION_DOC_TYPE = "im_routine_map";
 export const IM_ACTIVATION_MOVE_PREFIX = "im_activation";
 
+/** Count only a newly inserted agent_run toward activation enqueue totals. */
+export type DraftRunEnqueue = { runId: string; created: boolean };
+
+export function countNewlyEnqueuedRun(result: DraftRunEnqueue | null): number {
+  return result?.created ? 1 : 0;
+}
+
 export type ImActivationRoutine = ImRoutineMap["routine"];
 
 export function activationActionMoveKey(

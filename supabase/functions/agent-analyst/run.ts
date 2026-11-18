@@ -31,6 +31,8 @@ import {
 import { executeAnalystTool } from "./execute.ts";
 import { HANDOFF_COST_STOP, handoffFinding, handoffFinishNote } from "../../../src/lib/owner-handoff.ts";
 import { agentDisplayNameFromKey } from "../../../src/lib/milon-team-names.ts";
+import { brainRuleTaskTypesForRunner } from "../../../src/lib/milon-brain-rules.ts";
+import { loadMilonBrainRulesForPrompt } from "../_shared/agent-shared-reads.ts";
 
 /** Analyst stays on the global default. CLAUDE_MODEL still overrides it. */
 const analystModel = modelForAgent("analyst", { standard: CLAUDE_MODEL });
@@ -156,6 +158,11 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
     .eq("id", job.clientId)
     .maybeSingle();
   const firmId = (client?.firm_id as string | null) ?? null;
+  const brainRules = await loadMilonBrainRulesForPrompt(db, {
+    firmId,
+    clientId: job.clientId,
+    taskTypes: brainRuleTaskTypesForRunner("analyst"),
+  });
   const pool: StoredFigures[] = [];
   const recordedKeys = new Set<string>();
   let inputTokens = 0;
@@ -202,7 +209,7 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
           p_run_id: existing.run_id,
         });
         const round = await callClaudeRound(
-          ANALYST_SYSTEM + zaPromptMoneyLine(client?.market),
+          ANALYST_SYSTEM + zaPromptMoneyLine(client?.market) + brainRules.block,
           agentTurnMessages(ctx),
           analystToolSchemas(),
           { model: analystModel, toolChoice: { type: "any" }, maxTokens: 700, cachePrompt: true },
@@ -226,6 +233,7 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
           db,
           pool,
           recordedKeys,
+          appliedBrainRuleSummaries: brainRules.ruleSummaries,
           market: client?.market,
         });
         if (name !== "record_finding") {

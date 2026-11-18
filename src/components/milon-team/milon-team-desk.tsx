@@ -41,6 +41,7 @@ import {
 import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
 import { draftFindingLabel, ownerRunPhase, ownerRunPhaseLabel, ownerRunPhaseMuted } from "@/hooks/owner-agent-ui";
 import { OwnerDraftCard, type ApprovedDraftTarget } from "@/components/owner-draft-card";
+import { AppliedBrainRulesLine } from "@/components/applied-brain-rules-line";
 import { SourceCheckChip } from "@/components/source-check-chip";
 import { cachedFindingRejected } from "@/lib/ratios";
 import { HealthNarrativeLine } from "@/components/health-narrative-line";
@@ -337,6 +338,7 @@ export function MilonTeamDesk({
     const when = formatAsOf(row.created_at, clock, live?.market ?? marketForClient(null));
     const meta = (
       <div className="milon-desk-meta">
+        <AppliedBrainRulesLine evidence={row.evidence} audience={audience} />
         {draft || row.status === "approved" || rejected ? (
           <SourceCheckChip
             writtenAt={row.created_at}
