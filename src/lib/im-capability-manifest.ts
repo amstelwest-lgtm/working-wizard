@@ -16,7 +16,8 @@ import {
   FM_TOOLS,
 } from "./agent-financial-manager.ts";
 import { SHARED_DELIVERABLE_TOOL_LABELS } from "./agent-shared-reads.ts";
-import { LIBRARY_UPLOAD_ACCEPT } from "./connections-library-upload.ts";
+/** Kept inline so Deno edge checks do not pull `connections-library-upload.ts`. */
+const LIBRARY_UPLOAD_ACCEPT = ".pdf,.csv,.xlsx,.xls,.xlsm";
 import { setupPartnerCoverage, type SetupPartnerCountry } from "./setup-partner.ts";
 import type { PracticeGapBucket, PracticeGapEffort, PracticePlanStep } from "./setup-partner-plan.ts";
 import { practiceGapSlug } from "./setup-partner-plan.ts";
