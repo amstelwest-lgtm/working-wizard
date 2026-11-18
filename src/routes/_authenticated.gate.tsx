@@ -189,16 +189,18 @@ export function AuthGate() {
   const [wallTrialEligible, setWallTrialEligible] = useState(false);
   const [clientGate, setClientGate] = useState<FirmClientGateContext | null>(null);
   const [gateAttempt, setGateAttempt] = useState(0);
-  // One 8s clock from the moment this gate mounts. It does not wait for the
-  // firm row, and it does not wait for the auth client import to finish.
+  const firmIdReady = firmsLoaded && Boolean(firmId?.trim());
+  // The 8s clock starts with the billing check. A mount-time deadline used to
+  // set billingUnknown before the firm row or server fn ran and flashed Retry.
   useEffect(() => {
+    if (!firmIdReady) return;
     const timer = window.setTimeout(() => {
       if (settledRef.current) return;
       setBillingDeadlinePassed(true);
       setBillingUnknown(true);
     }, SHELL_GATE_TIMEOUT_MS);
     return () => window.clearTimeout(timer);
-  }, [gateAttempt]);
+  }, [gateAttempt, firmIdReady]);
   const failuresRef = useRef(0);
   const clientGateRef = useRef<FirmClientGateContext | null>(null);
   const pendingWallRef = useRef(false);
@@ -332,8 +334,8 @@ export function AuthGate() {
     const attemptFirmId = startFirmId;
     settledRef.current = null;
     setClientGate(null);
-    // A deadline that already fired stays up until this check settles.
-    // Clearing it here, after the mount timer has run, left no clock to re-arm.
+    setBillingUnknown(false);
+    setBillingDeadlinePassed(false);
 
     const knownKind = () => {
       const known = lastKnownEntitlementForFirm(userId, latest.current.firmId);
@@ -560,14 +562,15 @@ export function AuthGate() {
   });
   const knownRecord = userId ? lastKnownEntitlementForFirm(userId, firmId) : null;
   const knownKind = !knownRecord ? "none" : knownRecord.entitled ? "entitled" : "unpaid";
-  const failureSurface = billingUnknown
-    ? surfaceAfterBillingCheckFailure({
-        known: knownKind,
-        pathname,
-        firmClientCount: clientGate?.firmClientCount ?? null,
-        firstClientId: clientGate?.firstClientId ?? null,
-      })
-    : null;
+  const failureSurface =
+    billingUnknown && firmIdReady
+      ? surfaceAfterBillingCheckFailure({
+          known: knownKind,
+          pathname,
+          firmClientCount: clientGate?.firmClientCount ?? null,
+          firstClientId: clientGate?.firstClientId ?? null,
+        })
+      : null;
   const deadlineHoldsRetry = skeletonAfterBillingDeadline({
     deadlinePassed: billingDeadlinePassed,
     firmEntitled,
