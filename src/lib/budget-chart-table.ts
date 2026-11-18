@@ -121,6 +121,7 @@ export function statementPaceBudgetMonths(
     revenue: pace.revenue,
     cogs: pace.cogs,
     overheadsTotal: pace.fixedCosts,
+    ebit: pace.ebit,
   });
   return fyMonths(doc.fyStart).map((month) => ({ month, totals }));
 }
@@ -294,37 +295,84 @@ export function budgetChartPeriodCaption(months: readonly CaptionMonth[]): strin
   return `YTD ${name(first)} ${year(first)}\u2013${name(last)} ${year(last)}`;
 }
 
+export type AlignedMonths = {
+  values: (number | null)[];
+  caption: string | null;
+  /** True when stored months were scaled onto the year. An even split is not a rescale. */
+  scaled: boolean;
+};
+
+/**
+ * One month series and the year figure the header already shows.
+ * A series that already sums to the year stays as stored. A stored series
+ * that does not is scaled onto the year. With no stored months, the year is
+ * split evenly. A blank year stays blank.
+ */
+export function alignMonthsToYear(input: {
+  months: readonly (number | null)[];
+  year: number | null;
+  stored: boolean;
+}): AlignedMonths {
+  const raw = input.months.map((value) =>
+    typeof value === "number" && Number.isFinite(value) ? value : null,
+  );
+  const year = input.year;
+  const yearOk = typeof year === "number" && Number.isFinite(year);
+  if (!yearOk) {
+    if (!input.stored) return { values: raw.map(() => null), caption: CHART_ACTUALS_NONE, scaled: false };
+    return { values: raw, caption: null, scaled: false };
+  }
+  const present = raw.filter((value): value is number => value != null);
+  const sum = present.reduce((total, value) => total + value, 0);
+  if (input.stored && present.length > 0 && Math.abs(sum - year) < 1) {
+    return { values: raw, caption: null, scaled: false };
+  }
+  if (!input.stored || present.length === 0 || Math.abs(sum) < 1) {
+    return { values: splitMoney(raw.length, year), caption: CHART_ACTUALS_EVEN_SPLIT, scaled: false };
+  }
+  return { values: scaleMoney(raw, year, sum), caption: CHART_ACTUALS_SCALED, scaled: true };
+}
+
 /**
  * Actual bars for the revenue chart. They use the same year revenue as the
- * header (`budgetStatementDisplayTotals`). Uploaded months that already sum
- * to that year stay as stored, with no note. A series that does not is scaled
- * to the header, so the bars add up to the year instead of the raw book months.
- * With no stored months, a statement pace is an even split of the year.
+ * header (`budgetStatementDisplayTotals`) via `alignMonthsToYear`.
  */
 export function chartRevenueActuals(input: {
   views: readonly { actual: { revenue: number } | null }[];
   yearRevenue: number | null;
   storedMonths: boolean;
 }): { actuals: (number | null)[]; caption: string | null } {
-  const raw = input.views.map((row) => {
-    const revenue = row.actual?.revenue;
-    return typeof revenue === "number" && Number.isFinite(revenue) ? revenue : null;
+  const aligned = alignMonthsToYear({
+    months: input.views.map((row) => row.actual?.revenue ?? null),
+    year: input.yearRevenue,
+    stored: input.storedMonths,
   });
-  const year = input.yearRevenue;
-  const yearOk = typeof year === "number" && Number.isFinite(year);
-  if (!yearOk) {
-    if (!input.storedMonths) return { actuals: raw.map(() => null), caption: CHART_ACTUALS_NONE };
-    return { actuals: raw, caption: null };
+  return { actuals: aligned.values, caption: aligned.caption };
+}
+
+/** The table uses the same rescale sentence as the chart when a series is scaled. */
+export function budgetActualsNote(input: {
+  views: readonly { actual: { revenue: number; ebit: number } | null }[];
+  yearRevenue: number | null;
+  yearOperatingProfit: number | null;
+}): string | null {
+  const stored = input.views.some((row) => row.actual);
+  if (!stored) return null;
+  const revenue = alignMonthsToYear({
+    months: input.views.map((row) => row.actual?.revenue ?? null),
+    year: input.yearRevenue,
+    stored: true,
+  });
+  const profit = alignMonthsToYear({
+    months: input.views.map((row) => row.actual?.ebit ?? null),
+    year: input.yearOperatingProfit,
+    stored: true,
+  });
+  if (revenue.scaled || profit.scaled) return CHART_ACTUALS_SCALED;
+  if (revenue.caption === CHART_ACTUALS_EVEN_SPLIT || profit.caption === CHART_ACTUALS_EVEN_SPLIT) {
+    return CHART_ACTUALS_EVEN_SPLIT;
   }
-  const present = raw.filter((value): value is number => value != null);
-  const sum = present.reduce((total, value) => total + value, 0);
-  if (input.storedMonths && present.length > 0 && Math.abs(sum - year) < 1) {
-    return { actuals: raw, caption: null };
-  }
-  if (!input.storedMonths || present.length === 0 || Math.abs(sum) < 1) {
-    return { actuals: splitMoney(input.views.length, year), caption: CHART_ACTUALS_EVEN_SPLIT };
-  }
-  return { actuals: scaleMoney(raw, year, sum), caption: CHART_ACTUALS_SCALED };
+  return null;
 }
 
 function splitMoney(count: number, year: number): number[] {
@@ -391,20 +439,31 @@ export function budgetPeriodTotalCell(
   key: VarianceLine["key"],
   label: string,
   higherIsBetter: boolean,
+  yearActual?: number | null,
 ): BudgetTableCell {
   let budget: number | null = null;
-  let actual = 0;
   let budgetCompared = 0;
   let hasActual = false;
   for (const item of cells) {
     if (item.budget != null) budget = (budget ?? 0) + item.budget;
     if (item.actual != null) {
       hasActual = true;
-      actual += item.actual;
       budgetCompared += item.budget ?? 0;
     }
   }
   if (!hasActual) return { budget, actual: null, variance: null };
+  const aligned =
+    yearActual != null
+      ? alignMonthsToYear({
+          months: cells.map((item) => item.actual),
+          year: yearActual,
+          stored: true,
+        })
+      : null;
+  const actual = (aligned ? aligned.values : cells.map((item) => item.actual)).reduce<number>(
+    (sum, value) => sum + (value ?? 0),
+    0,
+  );
   return {
     budget,
     actual,
@@ -455,10 +514,30 @@ function cell(
  * Category rows × month. Actuals stay blank where the month has none.
  * `revenueLabel` only renames or hides a revenue line. Amounts stay on the stored line.
  */
+function alignTableRow(
+  row: BudgetTableRow,
+  year: number | null,
+  key: VarianceLine["key"],
+): BudgetTableRow {
+  if (year == null || !row.cells.some((item) => item.actual != null)) return row;
+  const aligned = alignMonthsToYear({
+    months: row.cells.map((item) => item.actual),
+    year,
+    stored: true,
+  });
+  return {
+    ...row,
+    cells: row.cells.map((item, index) =>
+      cell(item.budget, aligned.values[index] ?? null, key, row.label, row.higherIsBetter),
+    ),
+  };
+}
+
 export function budgetTableRows(
   doc: BudgetDocument,
   views: readonly BudgetMonthView[],
   revenueLabel?: (name: string, index: number) => string | null,
+  year?: { revenue: number | null; operatingProfit: number | null } | null,
 ): BudgetTableRow[] {
   const months = fyMonths(doc.fyStart);
   const viewByMonth = new Map(views.map((row) => [row.month, row]));
@@ -512,7 +591,7 @@ export function budgetTableRows(
     ),
   });
 
-  return [
+  const rows = [
     ...revenueLines,
     across("revenue", "Revenue", "subtotal", true, "revenue", (row) => row.budget.revenue, (totals) => totals.revenue),
     across("cogs", "Cost of sales", "line", false, "cogs", (row) => row.budget.cogs, (totals) => totals.cogs),
@@ -554,4 +633,10 @@ export function budgetTableRows(
       (totals) => totals.ebit,
     ),
   ];
+  if (!year) return rows;
+  return rows.map((row) => {
+    if (row.id === "revenue") return alignTableRow(row, year.revenue, "revenue");
+    if (row.id === "profit") return alignTableRow(row, year.operatingProfit, "ebit");
+    return row;
+  });
 }
