@@ -9,6 +9,7 @@ import {
   type RoutineRunRow,
 } from "@/lib/client-routines";
 import { IM_ACTIVATION_SOURCE } from "@/lib/im-activation-persist";
+import { formatLastRun } from "@/lib/milon-team";
 
 export function ClientRoutinesPanel({
   clientId,
@@ -126,7 +127,7 @@ export function ClientRoutinesPanel({
                   </div>
                   <div>{step.approvalLabel}</div>
                   <div>
-                    Last run: {step.lastRunAt ? step.lastRunAt.slice(0, 16).replace("T", " ") : "—"} · Next:{" "}
+                    Last run: {step.lastRunAt ? formatLastRun(step.lastRunAt) ?? "—" : "—"} · Next:{" "}
                     {step.nextRunLabel ?? "—"}
                   </div>
                 </li>

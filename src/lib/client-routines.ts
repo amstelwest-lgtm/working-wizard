@@ -2,6 +2,7 @@
  * Routines tab — parse routine_map artifacts and derived run timing. No prompts or rule ids in owner copy.
  */
 import type { ImRoutineMapStep } from "./im-activation-planner.ts";
+import { formatLastRun } from "./milon-team.ts";
 import {
   IM_ACTIVATION_DOC_TYPE,
   IM_ACTIVATION_MOVE_PREFIX,
@@ -116,7 +117,7 @@ function nextRunLabel(runs: RoutineRunRow[], status: AccountantRoutineStep["stat
   if (status === "running") return "Running now";
   if (status === "done") return "On cadence";
   const queued = runs.find((run) => run.status === "queued");
-  if (queued?.queued_at) return `Queued ${queued.queued_at.slice(0, 10)}`;
+  if (queued?.queued_at) return `Queued ${formatLastRun(queued.queued_at) ?? "soon"}`;
   return status === "waiting" ? "Waiting on books or trigger" : null;
 }
 
