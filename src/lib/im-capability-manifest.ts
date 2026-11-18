@@ -191,6 +191,22 @@ const BASE_COVERED: readonly Omit<ImStepClassifier, "fitNote" | "priority">[] = 
     effort: "S",
   },
   {
+    re: /\b(cash|collections?|debtors?|debtor|early warning)\b/i,
+    capability: "financial-manager",
+    stepType: "cash_collections",
+    bucket: "covered",
+    covers: "Financial Manager — cash and collections drafts",
+    effort: "S",
+  },
+  {
+    re: /\b(budget.*actual|variance|drift)\b/i,
+    capability: "analyst",
+    stepType: "budget_variance",
+    bucket: "covered",
+    covers: "Analyst — budget versus actual drift",
+    effort: "S",
+  },
+  {
     re: /\breconcil/i,
     capability: "financial-manager",
     stepType: "reconciliation",

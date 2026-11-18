@@ -246,6 +246,7 @@
     "test:im-routine-proposal": "vite-node --config scripts/vite-test.config.ts scripts/im-routine-proposal-test.mts",
     "test:im-planner": "vite-node --config scripts/vite-test.config.ts scripts/im-planner-test.mts",
     "test:im-activation": "vite-node --config scripts/vite-test.config.ts scripts/im-activation-test.mts",
+    "test:im-routine-schedule": "vite-node --config scripts/vite-test.config.ts scripts/im-routine-schedule-test.mts",
     "test:agent-draft-decision": "vite-node --config scripts/vite-test.config.ts scripts/agent-draft-decision-test.mts",
     "test:agent-draft-decision-client": "vite-node --config scripts/vite-test.config.ts scripts/agent-draft-decision-client-test.mts",
     "test:claude-model": "vite-node --config scripts/vite-test.config.ts scripts/claude-model-default-test.mts",

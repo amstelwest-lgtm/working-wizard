@@ -5,6 +5,7 @@ import {
   ownerRoutineMonthLines,
   parseRoutineMapMeta,
   routineHoursSavedLine,
+  routineTitle,
   type RoutineActionRow,
   type RoutineRunRow,
 } from "@/lib/client-routines";
@@ -15,10 +16,13 @@ export function ClientRoutinesPanel({
   clientId,
   firmId,
   ownerSeat,
+  routinePeriodKey,
 }: {
   clientId: string;
   firmId: string | null;
   ownerSeat: boolean;
+  /** Same JHB month key the schedule engine uses (owner parity with accountant tab). */
+  routinePeriodKey?: string;
 }) {
   const [artifacts, setArtifacts] = useState<Record<string, unknown>[]>([]);
   const [actions, setActions] = useState<RoutineActionRow[]>([]);
@@ -67,7 +71,12 @@ export function ClientRoutinesPanel({
 
   if (ownerSeat) {
     return (
-      <section className="im-card" data-owner-routines="" style={{ borderColor: "#DBEAFE", background: "#fff" }}>
+      <section
+        className="im-card"
+        data-owner-routines=""
+        data-im-routine-period={routinePeriodKey ?? undefined}
+        style={{ borderColor: "#DBEAFE", background: "#fff" }}
+      >
         <h2 style={{ color: "#102A43" }}>This month</h2>
         {ownerLines.length === 0 ? (
           <p style={{ color: "#102A43" }}>Milōn has no pilot routines queued for you this month yet.</p>
@@ -114,9 +123,7 @@ export function ClientRoutinesPanel({
         const hoursLine = routineHoursSavedLine(meta, completed);
         return (
           <article key={meta.idempotency_key} className="im-card" style={{ borderColor: "#DBEAFE", background: "#fff" }}>
-            <h2 style={{ color: "#102A43" }}>
-              {meta.routine === "document_chase" ? "Document chase routine" : "Monthly pack routine"}
-            </h2>
+            <h2 style={{ color: "#102A43" }}>{routineTitle(meta.routine)}</h2>
             {hoursLine ? <p style={{ color: "#102A43" }}>{hoursLine}</p> : null}
             <ol>
               {steps.map((step) => (

@@ -11,7 +11,7 @@ import {
 import { pickPilotClients, buildActivationPlan } from "../src/lib/im-activation-planner.ts";
 import { classifyPracticeStep } from "../src/lib/setup-partner-plan.ts";
 import { activationAcceptWritesNothing, planActivationAccept } from "../src/lib/im-activation-accept.ts";
-import { imActivationTriggerMet } from "../src/lib/im-activation-triggers.ts";
+import { imRoutineTriggerMet } from "../src/lib/im-routine-schedule.ts";
 import {
   activationActionMoveKey,
   countNewlyEnqueuedRun,
@@ -75,7 +75,7 @@ if (replay.status === "ready") {
   });
   assert(accept.writeArtifact && accept.actionKeys.length > 0, "accept plans writes");
   assert(
-    accept.enqueue.length > 0 || map.steps.some((step) => imActivationTriggerMet(step.trigger, { hasLedger: true, hasUpload: false })),
+    accept.enqueue.length > 0 || map.steps.some((step) => imRoutineTriggerMet(step.trigger, { hasLedger: true, hasUpload: false, now: new Date() }, true)),
     "trigger met enqueues when books allow",
   );
   assert(activationAcceptWritesNothing(null), "null accept writes nothing");
@@ -103,7 +103,7 @@ if (replay.status === "ready") {
   assert(noTrigger.enqueue.length === 0, "no enqueue when trigger not met");
 }
 
-assert(!imActivationTriggerMet("calendar_month_end", { hasLedger: false, hasUpload: false }), "month-end needs books");
+assert(!imRoutineTriggerMet("calendar_month_end", { hasLedger: false, hasUpload: false, now: new Date() }, true), "month-end needs books");
 assert(hoursSavedDisplay(null, 3) === null, "hours blank without estimate");
 assert(hoursSavedDisplay(2, 3) === "6 hours saved (2 × 3 runs)", "hours only with estimate");
 
