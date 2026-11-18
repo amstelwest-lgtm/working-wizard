@@ -12,12 +12,14 @@ import {
   budgetUniformNote,
   presentBudgetOnStatementWindow,
   budgetVersusStatement,
+  statementMonthActuals,
 } from "../src/lib/budget.bridges";
 import { marketForClient } from "../src/lib/market/scope";
 import {
   budgetChartAmount,
   budgetChartDomain,
   budgetChartSeries,
+  budgetActualsNote,
   budgetChartPeriodCaption,
   chartRevenueActuals,
   CHART_ACTUALS_EVEN_SPLIT,
@@ -34,7 +36,7 @@ import {
   niceBudgetAxis,
   revenueYtd,
 } from "../src/lib/budget-chart-table";
-import { formatVariancePct, varianceLine } from "../src/lib/budget.variance";
+import { formatVariancePct, normalizeTaxonomyTotals, varianceLine } from "../src/lib/budget.variance";
 import { formatMoney } from "../src/lib/market/format";
 import { ZA_MARKET } from "../src/lib/market/resolve";
 import { applyForecastRent, budgetRentHint, forecastRentPayment } from "../src/lib/budget-forecast-rent";
@@ -554,5 +556,85 @@ const aqaMonths = [
 const aqa = budgetRangeTotals(aqaMonths);
 assert(aqa.expenses === 189_000, `header Expenses excludes cost of sales, got ${aqa.expenses}`);
 assert(aqa.expenses !== 171_000 + 189_000, "header Expenses is not cost of sales plus overheads");
+
+const derivedProfit = normalizeTaxonomyTotals({ revenue: 120_000, cogs: 40_000, overheadsTotal: 30_000 });
+assert(
+  Math.abs(derivedProfit.ebit - (derivedProfit.grossProfit - 30_000)) < 0.02,
+  `a missing operating profit is derived, got ${derivedProfit.ebit}`,
+);
+assert(derivedProfit.ebit !== 0, "a missing operating profit is not stored as zero");
+const explicitZero = normalizeTaxonomyTotals({
+  revenue: 120_000,
+  cogs: 40_000,
+  overheadsTotal: 30_000,
+  ebit: 0,
+});
+assert(explicitZero.ebit === 0, "an entered zero stays zero");
+const paceMonth = statementMonthActuals(
+  { revenue: 412_000, cogs: 171_000, fixedCosts: 189_000, ebit: 52_000 },
+  "Statement pace",
+);
+assert(paceMonth != null && paceMonth.ebit != null && Math.abs(paceMonth.ebit) > 1, "statement pace keeps operating profit");
+
+function seriesSum(values: readonly (number | null)[]) {
+  return values.reduce<number>((total, value) => total + (value ?? 0), 0);
+}
+
+const zaYear = { revenue: header.revenue, operatingProfit: header.operatingProfit };
+const zaRows = budgetTableRows(doc, bookViews, undefined, zaYear);
+const zaRevenue = zaRows.find((row) => row.id === "revenue");
+const zaProfit = zaRows.find((row) => row.id === "profit");
+assert(zaRevenue != null && zaProfit != null, "the table has revenue and operating profit");
+const zaRevenueTotal = budgetPeriodTotalCell(zaRevenue.cells, "revenue", "Revenue", true, header.revenue);
+const zaProfitTotal = budgetPeriodTotalCell(zaProfit.cells, "ebit", "Operating profit", true, header.operatingProfit);
+const zaChart = chartRevenueActuals({ views: bookViews, yearRevenue: header.revenue, storedMonths: true });
+const zaNote = budgetActualsNote({
+  views: bookViews,
+  yearRevenue: header.revenue,
+  yearOperatingProfit: header.operatingProfit,
+});
+assert(Math.abs(seriesSum(zaRevenue.cells.map((item) => item.actual)) - (header.revenue ?? 0)) < 0.02, "ZA table months sum to the year revenue");
+assert(Math.abs((zaRevenueTotal.actual ?? 0) - (header.revenue ?? 0)) < 0.02, "ZA table total equals the year revenue");
+assert(Math.abs(seriesSum(zaChart.actuals) - (header.revenue ?? 0)) < 0.02, "ZA chart months sum to the year revenue");
+assert(Math.abs((zaProfitTotal.actual ?? 0) - (header.operatingProfit ?? 0)) < 0.02, "ZA table operating profit equals the year");
+assert(zaNote === CHART_ACTUALS_SCALED && zaChart.caption === CHART_ACTUALS_SCALED, "the table uses the chart rescale caption");
+
+const usBooks = {
+  revenue: 412_000,
+  cogs: 171_000,
+  fixedCosts: 189_000,
+  ebit: 52_000,
+  periodStart: "2026-01-01",
+  periodEnd: "2026-09-30",
+  periodMonths: 9,
+};
+const usYearDoc = createBudgetDocument({
+  templateId: "services_hours",
+  fyStart: "2026-01",
+  fyStartMonth: 1,
+  qualification: doc.qualification,
+});
+const usSlice = fiscalStatementSlice(usBooks, 1);
+const usViews = budgetMonthViews(usYearDoc, [], usBooks);
+const usHeader = budgetStatementDisplayTotals({
+  period: usSlice,
+  planTotals: budgetRangeTotals(usViews),
+});
+const usYear = { revenue: usHeader.revenue, operatingProfit: usHeader.operatingProfit };
+const usRows = budgetTableRows(usYearDoc, usViews, undefined, usYear);
+const usRevenue = usRows.find((row) => row.id === "revenue");
+const usProfit = usRows.find((row) => row.id === "profit");
+assert(usRevenue != null && usProfit != null, "the US table has revenue and operating profit");
+const usRevenueTotal = budgetPeriodTotalCell(usRevenue.cells, "revenue", "Revenue", true, usHeader.revenue);
+const usProfitTotal = budgetPeriodTotalCell(usProfit.cells, "ebit", "Operating profit", true, usHeader.operatingProfit);
+const usChart = chartRevenueActuals({ views: usViews, yearRevenue: usHeader.revenue, storedMonths: false });
+assert(usHeader.revenue === 412_000, `US year revenue ${usHeader.revenue}`);
+assert(usHeader.operatingProfit === 52_000, `US year operating profit ${usHeader.operatingProfit}`);
+assert(Math.abs(seriesSum(usRevenue.cells.map((item) => item.actual)) - 412_000) < 0.02, "US table revenue months sum to the year");
+assert(Math.abs((usRevenueTotal.actual ?? 0) - 412_000) < 0.02, "US table revenue total equals the year");
+assert(Math.abs(seriesSum(usChart.actuals) - 412_000) < 0.02, "US chart months sum to the year revenue");
+assert(Math.abs(seriesSum(usProfit.cells.map((item) => item.actual)) - 52_000) < 0.02, "US table operating profit months sum to the year");
+assert(Math.abs((usProfitTotal.actual ?? 0) - 52_000) < 0.02, "US table operating profit total equals the year");
+assert((usProfitTotal.actual ?? 0) !== 0, "US operating profit is not zero");
 
 console.log("budget chart table ok");

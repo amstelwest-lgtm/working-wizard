@@ -136,6 +136,12 @@ export function normalizeTaxonomyTotals(
     t.overheadsSales +
     t.overheadsOther;
   if (!t.overheadsTotal && bucketSum) t.overheadsTotal = bucketSum;
+  const ebitMissing = partial?.ebit == null || !Number.isFinite(Number(partial.ebit));
+  const hasProfitComponents =
+    Math.abs(t.grossProfit) >= 0.5 || Math.abs(t.overheadsTotal) >= 0.5 || Math.abs(t.depreciation) >= 0.5;
+  if (ebitMissing && hasProfitComponents) {
+    t.ebit = Math.round((t.grossProfit - t.overheadsTotal - t.depreciation) * 100) / 100;
+  }
   return t;
 }
 

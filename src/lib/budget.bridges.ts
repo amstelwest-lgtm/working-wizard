@@ -125,8 +125,9 @@ export function statementMonthActuals(
     revenue: month(presentNumber(annual.revenue)),
     cogs: month(bridge.cogs),
     fixedCosts: month(bridge.operatingExpenses),
+    ebit: month(bridge.ebit),
   };
-  if (!(actuals.revenue || actuals.cogs || actuals.fixedCosts)) return null;
+  if (!(actuals.revenue || actuals.cogs || actuals.fixedCosts || actuals.ebit)) return null;
   return actuals;
 }
 

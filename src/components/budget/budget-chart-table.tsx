@@ -39,6 +39,7 @@ import {
   budgetPlanIsSet,
   budgetRangeTotals,
   budgetStatementDisplayTotals,
+  budgetActualsNote,
   budgetTableRows,
   budgetYtdSentence,
   budgetYtdSignal,
@@ -647,9 +648,18 @@ function BudgetMonthTable({
   /** Full-viewport sheet. The card keeps the short scroll frame. */
   sheet?: boolean;
 }) {
-  const rows = budgetTableRows(doc, views, (name, index) =>
-    hotelLineDisplayName(displayTemplateId, name, index),
+  const year = { revenue: totals.revenue, operatingProfit: totals.operatingProfit };
+  const rows = budgetTableRows(
+    doc,
+    views,
+    (name, index) => hotelLineDisplayName(displayTemplateId, name, index),
+    year,
   );
+  const note = budgetActualsNote({
+    views,
+    yearRevenue: totals.revenue,
+    yearOperatingProfit: totals.operatingProfit,
+  });
   const months = views.map((row) => row.month);
   const periodTotal = [
     `Revenue ${tileText(totals.revenue, money)}`,
@@ -694,7 +704,13 @@ function BudgetMonthTable({
                   <MonthCells key={`${row.id}-${months[index]}`} item={item} money={money} />
                 ))}
                 <MonthCells
-                  item={budgetPeriodTotalCell(row.cells, "ebit", row.label, row.higherIsBetter)}
+                  item={budgetPeriodTotalCell(
+                    row.cells,
+                    "ebit",
+                    row.label,
+                    row.higherIsBetter,
+                    row.id === "revenue" ? totals.revenue : row.id === "profit" ? totals.operatingProfit : null,
+                  )}
                   money={money}
                 />
               </tr>
@@ -709,6 +725,11 @@ function BudgetMonthTable({
           </tfoot>
         </table>
       </ScrollableTable>
+      {note ? (
+        <p className="mt-2 text-[13px] text-[#3D5270] dark:text-slate-400" data-budget-table-note="">
+          {note}
+        </p>
+      ) : null}
     </div>
   );
 }
