@@ -1,0 +1,35 @@
+{
+  "label": "Small bookkeeping practice (ZA, Xero, ~10 clients)",
+  "country": "ZA",
+  "hours_saved_estimate": null,
+  "pilots": [
+    { "id": "za-xero-1", "name": "Client with Xero", "hasLedger": true, "hasUpload": false },
+    { "id": "za-xero-2", "name": "Second Xero client", "hasLedger": true, "hasUpload": false }
+  ],
+  "rules": [
+    {
+      "rule_text": "Practice: Run monthly bookkeeping for about ten owner-managed clients on Xero — Owner/accountant; Xero; Monthly — Firm setting for the practice. Saved as a private rule.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    },
+    {
+      "rule_text": "Practice: Prepare a short management report for each client — Owner/accountant; Monthly — Already in Milōn: Analyst: client reporting.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    },
+    {
+      "rule_text": "Practice: Chase missing bank statements by email — Owner/accountant; Manual email; Monthly — Firm setting for the practice. Saved as a private rule.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    },
+    {
+      "rule_text": "Practice: File VAT201 returns for VAT-registered clients — Practice; Monthly — Fits the universal finance function. Not in Milōn yet.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    }
+  ]
+}

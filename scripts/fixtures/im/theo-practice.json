@@ -1,0 +1,110 @@
+{
+  "label": "Practice A replay",
+  "country": "ZA",
+  "hours_saved_estimate": null,
+  "pilots": [
+    { "id": "pilot-agri-1", "name": "Agri client (Xero)", "hasLedger": true, "hasUpload": false },
+    { "id": "pilot-tech-1", "name": "Electrician client (Sage)", "hasLedger": true, "hasUpload": false },
+    { "id": "pilot-upload-1", "name": "Upload-only client", "hasLedger": false, "hasUpload": true }
+  ],
+  "rules": [
+    {
+      "rule_text": "Practice: Serve a client base made up mainly of agricultural businesses and local technical businesses such as electricians — Practice — Outside the universal finance function. Logged only.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null,
+      "task_type": "onboarding_workflow"
+    },
+    {
+      "rule_text": "Practice: Look after about 30 clients in total across the agricultural, electrician and other segments — Practice — Outside the universal finance function. Logged only.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null,
+      "task_type": "onboarding_workflow"
+    },
+    {
+      "rule_text": "Practice: Give each client tax work, a management report and up-to-date bookkeeping — Practice; Monthly — Already in Milōn: Analyst: client reporting.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null,
+      "task_type": "onboarding_workflow"
+    },
+    {
+      "rule_text": "Practice: Prepare the management report for each client — Owner/accountant; Monthly — Already in Milōn: Analyst: client reporting.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null,
+      "task_type": "onboarding_workflow"
+    },
+    {
+      "rule_text": "Practice: Review management reports before they go out to the client — Owner/accountant (same person who prepares them); Monthly; Nobody else reviews the reports, so there is no separate check — Already in Milōn: Financial Manager: draft review.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null,
+      "task_type": "onboarding_workflow"
+    },
+    {
+      "rule_text": "Practice: Send the management report to each client — Owner/accountant; End of the month — Already in Milōn: Analyst: client reporting.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null,
+      "task_type": "onboarding_workflow"
+    },
+    {
+      "rule_text": "Practice: Receive client receipts, invoices and bank statements — Clients; Email, direct send, Dext; Monthly — Firm setting for the practice. Saved as a private rule.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null,
+      "task_type": "onboarding_workflow"
+    },
+    {
+      "rule_text": "Practice: Keep client books up to date in each client's accounting software — Owner/accountant; Sage Pastel, Sage Online, some Xero; Monthly; Work is spread across several different accounting systems — Firm setting for the practice. Saved as a private rule.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null,
+      "task_type": "onboarding_workflow"
+    },
+    {
+      "rule_text": "Practice: Get information from clients and give them feedback during month-end — Owner/accountant; Monthly; Takes the most time of all month-end work across 30 clients — Already in Milōn: Financial Manager: month-end close pack.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null,
+      "task_type": "onboarding_workflow"
+    },
+    {
+      "rule_text": "Practice: Chase clients for missing documents or answers — Owner/accountant; Manual email; Monthly; Chasing is done by hand — Firm setting for the practice. Saved as a private rule.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null,
+      "task_type": "onboarding_workflow"
+    },
+    {
+      "rule_text": "Practice: Give clients feedback once their books and management report are done — Owner/accountant; Phone call or email; Monthly — Firm setting for the practice. Saved as a private rule.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null,
+      "task_type": "onboarding_workflow"
+    },
+    {
+      "rule_text": "Practice: Prepare tax work: VAT201s, EMP201s, provisional tax and annual returns — Practice; Monthly, periodic and annual — Fits the universal finance function. Not in Milōn yet.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null,
+      "task_type": "onboarding_workflow"
+    },
+    {
+      "rule_text": "Practice: Price monthly work with set retainer rates and increase them each year — Practice; Annual rate increase — Outside the universal finance function. Logged only.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null,
+      "task_type": "onboarding_workflow"
+    },
+    {
+      "rule_text": "Practice: Track each client's VAT, EMP201 and provisional tax deadlines — Owner/accountant; Client folders on desktop, email; Deadlines are scattered across folders and emails with no central tracker — Outside the universal finance function. Logged only.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null,
+      "task_type": "onboarding_workflow"
+    }
+  ]
+}

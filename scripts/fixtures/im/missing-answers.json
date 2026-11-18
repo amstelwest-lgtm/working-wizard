@@ -1,0 +1,12 @@
+{
+  "label": "Incomplete replay fixture",
+  "pilots": [],
+  "rules": [
+    {
+      "rule_text": "Practice: Chase clients for missing documents — Owner/accountant; Manual email; Monthly — Firm setting for the practice. Saved as a private rule.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    }
+  ]
+}

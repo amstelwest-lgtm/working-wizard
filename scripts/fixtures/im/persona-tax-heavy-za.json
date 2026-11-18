@@ -1,0 +1,35 @@
+{
+  "label": "Tax-heavy practice (ZA VAT201 / EMP201 / provisional)",
+  "country": "ZA",
+  "hours_saved_estimate": null,
+  "pilots": [
+    { "id": "tax-vat", "name": "VAT201 client", "hasLedger": true, "hasUpload": false },
+    { "id": "tax-payroll", "name": "EMP201 client", "hasLedger": false, "hasUpload": true }
+  ],
+  "rules": [
+    {
+      "rule_text": "Practice: Prepare VAT201, EMP201, and provisional tax for the book — Practice; Monthly and periodic — Fits the universal finance function. Not in Milōn yet.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    },
+    {
+      "rule_text": "Practice: Track VAT201 and EMP201 deadlines in folders and email — Owner/accountant; Client folders on desktop, email — Outside the universal finance function. Logged only.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    },
+    {
+      "rule_text": "Practice: Month-end management packs after tax checks — Owner/accountant; Monthly — Already in Milōn: Analyst: client reporting.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    },
+    {
+      "rule_text": "Practice: Chase clients for tax supporting documents — Owner/accountant; Manual email; Monthly — Firm setting for the practice. Saved as a private rule.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    }
+  ]
+}
