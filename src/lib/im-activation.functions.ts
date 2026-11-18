@@ -22,6 +22,7 @@ import {
   type DraftRunEnqueue,
 } from "@/lib/im-activation-persist";
 import { planActivationAccept } from "@/lib/im-activation-accept";
+import { imRoutinePeriodKey, scheduledRunInputs } from "@/lib/im-routine-schedule";
 import { SETUP_PARTNER_SOURCE_EVENT, SETUP_PARTNER_TASK_WORKFLOW } from "@/lib/setup-partner";
 import { CLAUDE_OPUS_55, CLAUDE_SONNET_55 } from "@/lib/claude-request";
 
@@ -196,6 +197,7 @@ async function enqueueDraftRun(input: {
   clientId: string;
   firmId: string;
   actionItemId: string;
+  periodKey?: string;
 }): Promise<DraftRunEnqueue | null> {
   const decision = handoffDecision(input.agent);
   if (!decision.ok) return null;
@@ -203,7 +205,8 @@ async function enqueueDraftRun(input: {
   const setting = await db.from("agent_settings").select("value").eq("key", decision.settingKey).maybeSingle();
   if (setting.error || !runnerEnabled(setting.data?.value)) return null;
 
-  const inputs = activationRunInputs(input.actionItemId);
+  const periodKey = input.periodKey ?? imRoutinePeriodKey();
+  const inputs = scheduledRunInputs(input.actionItemId, periodKey);
   const idempotencyKey = await agentIdempotencyKey({
     agent: input.agent,
     clientId: input.clientId,
@@ -296,7 +299,12 @@ const acceptSchema = z.object({
   pilotIds: z.array(z.string().uuid()).min(1).max(3),
   accepts: z.array(
     z.object({
-      routine: z.enum(["document_chase", "monthly_pack"]),
+      routine: z.enum([
+        "document_chase",
+        "monthly_pack",
+        "cash_debtor_early_warning",
+        "budget_actual_drift",
+      ]),
       accepted: z.boolean(),
       hoursSavedPerRun: z.number().positive().max(40).optional().nullable(),
     }),

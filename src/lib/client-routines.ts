@@ -1,8 +1,13 @@
 /**
  * Routines tab — parse routine_map artifacts and derived run timing. No prompts or rule ids in owner copy.
  */
-import type { ImRoutineMapStep } from "./im-activation-planner.ts";
-import { formatLastRun } from "./milon-team.ts";
+import type { ImRoutineKind, ImRoutineMapStep } from "./im-activation-planner.ts";
+import {
+  imRoutinePeriodKey,
+  routineStepLastRunAt,
+  routineStepNextRunLabel,
+  type ImRoutineEventContext,
+} from "./im-routine-schedule.ts";
 import {
   IM_ACTIVATION_DOC_TYPE,
   IM_ACTIVATION_MOVE_PREFIX,
@@ -46,7 +51,13 @@ export function parseRoutineMapMeta(meta: unknown): ImRoutineMapArtifactMeta | n
   if (row.doc_type !== IM_ACTIVATION_DOC_TYPE) return null;
   if (row.source !== IM_ACTIVATION_SOURCE) return null;
   const routine = row.routine;
-  if (routine !== "document_chase" && routine !== "monthly_pack") return null;
+  const allowed: ImRoutineKind[] = [
+    "document_chase",
+    "monthly_pack",
+    "cash_debtor_early_warning",
+    "budget_actual_drift",
+  ];
+  if (!allowed.includes(routine as ImRoutineKind)) return null;
   const steps = Array.isArray(row.steps) ? row.steps : [];
   const parsedSteps: ImRoutineMapStep[] = [];
   for (const step of steps) {
@@ -78,7 +89,7 @@ export function parseRoutineMapMeta(meta: unknown): ImRoutineMapArtifactMeta | n
     doc_type: IM_ACTIVATION_DOC_TYPE,
     source: IM_ACTIVATION_SOURCE,
     firm_id: typeof row.firm_id === "string" ? row.firm_id : "",
-    routine,
+    routine: routine as ImRoutineKind,
     idempotency_key: typeof row.idempotency_key === "string" ? row.idempotency_key : "",
     steps: parsedSteps,
     hours_saved_per_run: typeof hours === "number" && Number.isFinite(hours) ? hours : null,
@@ -107,28 +118,21 @@ function stepStatus(
   return "waiting";
 }
 
-function lastRunAt(runs: RoutineRunRow[]): string | null {
-  const finished = runs
-    .filter((run) => run.finished_at)
-    .sort((a, b) => (b.finished_at ?? "").localeCompare(a.finished_at ?? ""));
-  return finished[0]?.finished_at ?? null;
-}
-
-function nextRunLabel(runs: RoutineRunRow[], status: AccountantRoutineStep["status"]): string | null {
-  if (status === "running") return "Running now";
-  if (status === "done") return "On cadence";
-  const queued = runs.find((run) => run.status === "queued");
-  if (queued?.queued_at) return `Queued ${formatLastRun(queued.queued_at) ?? "soon"}`;
-  return status === "waiting" ? "Waiting on books or trigger" : null;
-}
-
 export function accountantRoutineSteps(input: {
   firmId: string;
   clientId: string;
   meta: ImRoutineMapArtifactMeta;
   actions: readonly RoutineActionRow[];
   runs: readonly RoutineRunRow[];
+  scheduleContext?: ImRoutineEventContext;
 }): AccountantRoutineStep[] {
+  const now = input.scheduleContext?.now ?? new Date();
+  const scheduleContext: ImRoutineEventContext = {
+    hasLedger: input.scheduleContext?.hasLedger ?? false,
+    hasUpload: input.scheduleContext?.hasUpload ?? false,
+    ...input.scheduleContext,
+    now,
+  };
   return input.meta.steps.map((step) => {
     const key = moveKeyForStep(input.firmId, input.clientId, input.meta.routine, step.id);
     const action = input.actions.find((row) => row.source_move_key === key);
@@ -142,11 +146,27 @@ export function accountantRoutineSteps(input: {
       ownerLabel: step.botOwner,
       status,
       approvalLabel: step.approvalGate.description.replace(/\bMilōn\b/g, "Milōn"),
-      lastRunAt: lastRunAt(relatedRuns),
-      nextRunLabel: nextRunLabel(relatedRuns, status),
+      lastRunAt: routineStepLastRunAt(relatedRuns),
+      nextRunLabel: routineStepNextRunLabel({
+        step,
+        runs: relatedRuns,
+        context: scheduleContext,
+        status,
+        now,
+      }),
     };
   });
 }
+
+export function routineTitle(routine: ImRoutineKind): string {
+  if (routine === "document_chase") return "Document chase routine";
+  if (routine === "monthly_pack") return "Monthly pack routine";
+  if (routine === "cash_debtor_early_warning") return "Cash and debtor early warning";
+  if (routine === "budget_actual_drift") return "Budget-versus-actual drift check";
+  return "Pilot routine";
+}
+
+export { imRoutinePeriodKey };
 
 export type OwnerMonthLine = {
   id: string;

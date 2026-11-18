@@ -113,6 +113,14 @@ if (theoReplay.status === "ready") {
     "routine maps ready for client_artifacts",
   );
   assert(activation.artifactShape.tagged.includes("action_items"), "action_items tag");
+  assert(
+    activation.routineMaps.some((map) => map.routine === "cash_debtor_early_warning"),
+    "cash and debtor early warning template",
+  );
+  assert(
+    activation.routineMaps.some((map) => map.routine === "budget_actual_drift"),
+    "budget versus actual drift template",
+  );
   for (const map of activation.routineMaps) {
     for (const step of map.steps) {
       assert(step.botOwner.length > 0, "every step has bot owner");

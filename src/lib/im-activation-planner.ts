@@ -35,9 +35,15 @@ export type ImRoutineMapStep = {
   sends: false;
 };
 
+export type ImRoutineKind =
+  | "document_chase"
+  | "monthly_pack"
+  | "cash_debtor_early_warning"
+  | "budget_actual_drift";
+
 export type ImRoutineMap = {
   kind: "routine_map";
-  routine: "document_chase" | "monthly_pack";
+  routine: ImRoutineKind;
   tags: string[];
   steps: ImRoutineMapStep[];
 };
@@ -131,6 +137,76 @@ function routineSteps(
   }));
 }
 
+const CASH_DEBTOR_MAP: ImRoutineMap = {
+  kind: "routine_map",
+  routine: "cash_debtor_early_warning",
+  tags: ["action_items", "routine_map", "cash_debtor_early_warning"],
+  steps: [
+    {
+      id: "cash_debtor_early_warning-1",
+      title: "Detect cash or collections pressure from ledger data",
+      botOwner: "Analyst",
+      trigger: "event_cash_collections_risk",
+      cadence: "monthly",
+      approvalGate: SEND_GATE,
+      sends: false,
+    },
+    {
+      id: "cash_debtor_early_warning-2",
+      title: "Draft collection or cash action (unsent)",
+      botOwner: "Financial Manager",
+      trigger: "event_prior_step_succeeded",
+      cadence: "monthly",
+      approvalGate: SEND_GATE,
+      sends: false,
+    },
+    {
+      id: "cash_debtor_early_warning-3",
+      title: "Accountant approves before anything is sent",
+      botOwner: "Accountant",
+      trigger: "human_approval_gate",
+      cadence: "monthly",
+      approvalGate: SEND_GATE,
+      sends: false,
+    },
+  ],
+};
+
+const BUDGET_DRIFT_MAP: ImRoutineMap = {
+  kind: "routine_map",
+  routine: "budget_actual_drift",
+  tags: ["action_items", "routine_map", "budget_actual_drift"],
+  steps: [
+    {
+      id: "budget_actual_drift-1",
+      title: "Flag budget versus actual drift",
+      botOwner: "Analyst",
+      trigger: "event_budget_drift_check",
+      cadence: "monthly",
+      approvalGate: SEND_GATE,
+      sends: false,
+    },
+    {
+      id: "budget_actual_drift-2",
+      title: "Draft commentary on the drift (unsent)",
+      botOwner: "Advisor",
+      trigger: "event_prior_step_succeeded",
+      cadence: "monthly",
+      approvalGate: SEND_GATE,
+      sends: false,
+    },
+    {
+      id: "budget_actual_drift-3",
+      title: "Accountant reviews before anything is sent",
+      botOwner: "Accountant",
+      trigger: "human_approval_gate",
+      cadence: "monthly",
+      approvalGate: SEND_GATE,
+      sends: false,
+    },
+  ],
+};
+
 export function buildRoutineMaps(
   plan: PracticeImplementationPlan,
   manifest: ImCapabilityManifest,
@@ -149,6 +225,8 @@ export function buildRoutineMaps(
       tags: ["action_items", "routine_map", "monthly_pack"],
       steps: routineSteps(steps, "monthly_pack", manifest),
     },
+    CASH_DEBTOR_MAP,
+    BUDGET_DRIFT_MAP,
   ];
 }
 

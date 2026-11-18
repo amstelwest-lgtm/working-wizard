@@ -5,6 +5,7 @@ import {
   ownerRoutineMonthLines,
   parseRoutineMapMeta,
   routineHoursSavedLine,
+  routineTitle,
   type RoutineActionRow,
   type RoutineRunRow,
 } from "@/lib/client-routines";
@@ -114,9 +115,7 @@ export function ClientRoutinesPanel({
         const hoursLine = routineHoursSavedLine(meta, completed);
         return (
           <article key={meta.idempotency_key} className="im-card" style={{ borderColor: "#DBEAFE", background: "#fff" }}>
-            <h2 style={{ color: "#102A43" }}>
-              {meta.routine === "document_chase" ? "Document chase routine" : "Monthly pack routine"}
-            </h2>
+            <h2 style={{ color: "#102A43" }}>{routineTitle(meta.routine)}</h2>
             {hoursLine ? <p style={{ color: "#102A43" }}>{hoursLine}</p> : null}
             <ol>
               {steps.map((step) => (

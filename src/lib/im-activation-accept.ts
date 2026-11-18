@@ -7,7 +7,8 @@ import {
   activationArtifactKey,
   type ImActivationRoutine,
 } from "./im-activation-persist.ts";
-import { botOwnerToAgentKey, imActivationTriggerMet, type ImBooksContext } from "./im-activation-triggers.ts";
+import { botOwnerToAgentKey, type ImBooksContext } from "./im-activation-triggers.ts";
+import { imRoutineTriggerMet } from "./im-routine-schedule.ts";
 
 export type ImActivationAcceptInput = {
   firmId: string;
@@ -44,7 +45,7 @@ export function planActivationAccept(input: ImActivationAcceptInput): ImActivati
     if (!input.existingActionKeys.has(moveKey)) actionKeys.push(moveKey);
     const agent = botOwnerToAgentKey(step.botOwner);
     if (!agent) continue;
-    if (!imActivationTriggerMet(step.trigger, input.books)) continue;
+    if (!imRoutineTriggerMet(step.trigger, { ...input.books, now: new Date() }, true)) continue;
     if (enqueue.some((row) => row.routine === input.routine)) continue;
     enqueue.push({
       routine: input.routine,

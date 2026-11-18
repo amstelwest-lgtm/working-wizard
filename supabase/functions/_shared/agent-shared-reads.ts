@@ -26,6 +26,7 @@ import {
   MILON_BRAIN_RULES_PROMPT_LIMIT,
   milonBrainRulesPromptLines,
   orderMilonBrainRulesNewestFirst,
+  redactAppliedBrainRuleSummary,
   type MilonBrainRuleRow,
 } from "../../../src/lib/milon-brain-rules.ts";
 import {
@@ -531,7 +532,9 @@ export async function loadMilonBrainRulesForPrompt(
   const ruleIds = deduped
     .map((row) => row.id)
     .filter((id): id is string => typeof id === "string" && id.length > 0);
-  const ruleSummaries = deduped.map((row) => row.rule_text).filter((text) => text.trim().length > 0);
+  const ruleSummaries = deduped
+    .map((row) => redactAppliedBrainRuleSummary(row.rule_text))
+    .filter((text) => text.trim().length > 0);
   return { block: applyRedaction(block, session), ruleIds, ruleSummaries };
 }
 
