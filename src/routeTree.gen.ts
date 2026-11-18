@@ -619,6 +619,7 @@ export interface FileRoutesById {
   '/_authenticated/practice_/marketplace': typeof AuthenticatedPracticeMarketplaceRoute
   '/_authenticated/practice_/needs-attention': typeof AuthenticatedPracticeNeedsAttentionRoute
   '/_authenticated/practice_/playbooks': typeof AuthenticatedPracticePlaybooksRoute
+  '/_authenticated/practice_/setup': typeof AuthenticatedPracticeSetupRoute
   '/_authenticated/practice_/tax': typeof AuthenticatedPracticeTaxRoute
   '/_authenticated/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/_authenticated/settings/brand': typeof AuthenticatedSettingsBrandRoute

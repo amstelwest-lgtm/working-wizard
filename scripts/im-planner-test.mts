@@ -3,7 +3,8 @@
  * Run: pnpm test:im-planner
  */
 import { readFileSync } from "node:fs";
-import { buildCapabilityManifest, matchManifestClassifier } from "../src/lib/im-capability-manifest.ts";
+import { FM_TOOLS } from "../src/lib/agent-financial-manager.ts";
+import { buildCapabilityManifest } from "../src/lib/im-capability-manifest.ts";
 import {
   activationPlanSendsNothing,
   activationStepsHaveOwners,
@@ -81,29 +82,16 @@ if (missingReplay.status === "needs_questions") {
   );
 }
 
-const baseManifest = buildCapabilityManifest("ZA");
-const withFixture = buildCapabilityManifest("ZA", {
-  extraClassifiers: [
-    {
-      re: /fixture-tool-demo-step/i,
-      capability: "fixture-tool",
-      stepType: "fixture_tool",
-      bucket: "covered",
-      covers: "Financial Manager — fixture tool demo",
-      effort: "S",
-      fitNote: "Already in Milōn: Financial Manager: fixture tool demo.",
-      priority: 95,
-    },
-  ],
-  extraAgentTools: [{ agentKey: "financial_manager", tool: "fixture_tool_demo", label: "Fixture tool demo" }],
-});
-assert(!matchManifestClassifier("fixture-tool-demo-step only", baseManifest), "base manifest ignores fixture step");
-const fixtureMatch = matchManifestClassifier("fixture-tool-demo-step for month-end", withFixture);
-assert(fixtureMatch?.stepType === "fixture_tool", "fixture classifier attaches");
+assert(FM_TOOLS.includes("get_cash_13_week"), "FM_TOOLS exposes get_cash_13_week");
+const registryManifest = buildCapabilityManifest("ZA");
+const cashStep = classifyPracticeStep("Refresh the 13-week cash forecast every Monday", { manifest: registryManifest });
+assert(cashStep.step_type === "cash_forecast", "FM_TOOLS registry drives classification");
 assert(
-  withFixture.agents.find((row) => row.agentKey === "financial_manager")?.tools.includes("Fixture tool demo"),
-  "registry copy picked up fixture tool",
+  registryManifest.agents.find((row) => row.agentKey === "financial_manager")?.tools.includes("13-week cash"),
+  "FM tool label is on the manifest",
 );
+const replayManifest = replayFixture(theo);
+assert(replayManifest.status === "ready" && "manifest" in replayManifest, "replay carries manifest");
 
 const deadlineStep =
   "Track each client's VAT, EMP201 and provisional tax deadlines — Owner/accountant; Client folders on desktop, email; Deadlines are scattered";

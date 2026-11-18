@@ -160,6 +160,7 @@ function clientSections(
           items: subs("books", [
             { id: "documents", label: "Client library" },
             { id: "connections", label: "Connections" },
+            { id: "routines", label: "Routines" },
             ...(showSendAgent ? [{ id: "send-agent", label: "Send an agent" }] : []),
           ]),
         },

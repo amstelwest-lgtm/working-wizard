@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import { PracticeRail } from "@/components/practice-rail";
 import { PRACTICE_SETUP_TOASTER_ID, PracticeSetupPanel } from "@/components/practice-setup-panel";
+import { ImActivationStep } from "@/components/im-activation-step";
 
 export const Route = createFileRoute("/_authenticated/practice_/setup")({
   component: PracticeSetupPage,
@@ -18,6 +19,7 @@ function PracticeSetupPage() {
           <PracticeRail />
           <div className="deliverable-main">
             <PracticeSetupPanel />
+            <ImActivationStep />
             <Toaster
               id={PRACTICE_SETUP_TOASTER_ID}
               position="top-right"

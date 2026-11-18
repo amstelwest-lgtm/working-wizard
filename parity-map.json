@@ -24,6 +24,14 @@
       "accountant": ["src/lib/financial-manager-brief.ts"]
     },
     {
+      "id": "im-routines",
+      "owner": ["src/components/owner-door/owner-routines-month.tsx"],
+      "accountant": [
+        "src/components/client-routines-panel.tsx",
+        "src/routes/_authenticated/clients.$clientId.tsx"
+      ]
+    },
+    {
       "id": "tax-specialist",
       "owner": [
         "src/components/owner-door/owner-door.tsx",

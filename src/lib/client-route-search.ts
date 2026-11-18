@@ -217,6 +217,7 @@ function destinationForSection(
   if (section === "send-agent") return { tab: "portal", section: "send-agent" };
   if (section === "sent") return { tab: "reports", section: "sent" };
   if (section === "connections") return { tab: "portal", section: "connections" };
+  if (section === "routines") return { tab: "portal", section: "routines" };
   if (section === "moves" || section === "strategic-moves") return { tab: "moves" };
   if (section === "tax" || section === "tax-specialist") return { tab: "tax" };
   if (section === "compliance") return { tab: "compliance" };
@@ -301,6 +302,7 @@ function explicitRail(
   }
   if (tab === "portal") {
     if (section === "connections") return { tab: "portal", section: "connections" };
+    if (section === "routines") return { tab: "portal", section: "routines" };
     if (section === "documents" || section === "library" || section === "client-library") {
       return { tab: "portal", section: "documents" };
     }
@@ -410,6 +412,7 @@ export function canonicalizeAccountantSearch(input: {
     return finish({ tab: "home" });
   if (tab === "books") {
     if (section === "connections") return finish({ tab: "portal", section: "connections" });
+    if (section === "routines") return finish({ tab: "portal", section: "routines" });
     if (section === "documents" || section === "library" || section === "client-library") {
       return finish({ tab: "portal", section: "documents" });
     }
@@ -683,6 +686,7 @@ export function clientRailSelection(input: {
       return { headingId: "compliance", subId: null };
     case "portal":
       if (section === "connections") return { headingId: "books", subId: "connections" };
+      if (section === "routines") return { headingId: "books", subId: "routines" };
       if (section === "documents") return { headingId: "books", subId: "documents" };
       if (section === "send-agent") return { headingId: "send-agent", subId: null };
       return { headingId: "books", subId: null };
@@ -872,6 +876,7 @@ const SECTION_HASHES: Record<string, CanonicalClientSearch> = {
   "reports-sent": { tab: "reports", section: "sent" },
   scorecard: { tab: "reports", section: "scorecard" },
   connections: { tab: "portal", section: "connections" },
+  routines: { tab: "portal", section: "routines" },
   "accounting-connect": { tab: "portal", section: "connections" },
   documents: { tab: "portal", section: "documents" },
   library: { tab: "portal", section: "documents" },
