@@ -206,4 +206,16 @@ assert(
 );
 assert(read("src/routes/index.tsx").includes("onEmailSignedIn"), "homepage sign-in lands a code");
 
+const magicTpl = read("supabase/templates/magic_link.html");
+const magicFold = magicTpl.toLowerCase();
+const configToml = read("supabase/config.toml");
+assert(configToml.includes('subject = "Sign in to Milōn"'), "magic-link subject is sign-in");
+assert(magicTpl.includes("<h1") && magicTpl.includes("Sign in to Milōn</h1>"), "sign-in headline");
+assert(magicTpl.includes(">Sign in</a>"), "sign-in primary button");
+assert(magicTpl.includes("one-time sign-in link"), "sign-in body names the one-time link");
+assert(magicTpl.includes("If you did not ask to sign in"), "sign-in ignore line");
+assert(magicTpl.includes(">Milōn</p>"), "sign-in signs off Milōn");
+assert(!magicFold.includes("verify your email"), "sign-in mail is not the verify headline");
+assert(!magicFold.includes("your board is already open"), "sign-in mail is not the verify body");
+
 console.log("email-sign-in-test: ok");
