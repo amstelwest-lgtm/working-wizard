@@ -43,6 +43,7 @@ function ymdInTimeZone(now: Date, timeZone: string): string {
 }
 
 function isWeekdayInTimeZone(instant: Date, timeZone: string): boolean {
+  // date-ok: weekday probe only for business-day math, not printed copy
   const day = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(instant);
   return day !== "Sat" && day !== "Sun";
 }
