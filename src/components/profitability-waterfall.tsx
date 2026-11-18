@@ -46,6 +46,8 @@ import {
   warnIfPdfArchiveFailed,
 } from "@/lib/advisory-deliveries";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
+import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
+import { reviewDeliverableUnsigned } from "@/lib/review-signoff-stamp";
 import { profitStepBand } from "@/lib/health-score";
 import { estimatedTaxNote } from "@/lib/estimated-tax-note";
 import { ownerOutflow } from "@/lib/owner-money";
@@ -552,6 +554,10 @@ async function exportPDF(opts: {
   tax: number;
   accountantProfile: import("@/contexts/accountant-profile").AccountantProfile;
   reviewSignoff?: ReportSignoffStamp | null;
+  /** Tab sign-off row — draft watermark follows this when set. */
+  reviewSignoffSource?: ClientReviewSignoff | null;
+  reviewSignoffStale?: boolean;
+  draft?: boolean;
   createdBy?: string | null;
   firmId?: string | null;
   market?: import("@/lib/market").ResolvedMarket;
@@ -591,12 +597,22 @@ async function exportPDF(opts: {
     net_margin_pct: revenue ? netProfit / revenue : 0,
   };
 
+  const unsigned =
+    opts.draft ??
+    (opts.reviewSignoffSource
+      ? reviewDeliverableUnsigned({
+          signoff: opts.reviewSignoffSource,
+          isStale: opts.reviewSignoffStale ?? false,
+        })
+      : !opts.reviewSignoff);
+
   const blob = await pdf(
     ProfitabilityWaterfallPDF({
       smeData: { name, period },
       profitabilityData,
       accountantProfile: opts.accountantProfile,
       reviewSignoff: opts.reviewSignoff ?? null,
+      draft: unsigned,
       market: opts.market,
     }) as Parameters<typeof pdf>[0],
   ).toBlob();
@@ -872,6 +888,8 @@ export function ProfitabilityWaterfall({
   businessName,
   clientId,
   reviewSignoff = null,
+  reviewSignoffSource = null,
+  reviewSignoffStale = false,
   periodLabel = null,
   preferPeriod = false,
   yearToDate = null,
@@ -892,6 +910,9 @@ export function ProfitabilityWaterfall({
   businessName?: string | null;
   clientId?: string;
   reviewSignoff?: ReportSignoffStamp | null;
+  /** Profit scope sign-off on file. Watermark follows this, not the footer stamp alone. */
+  reviewSignoffSource?: ClientReviewSignoff | null;
+  reviewSignoffStale?: boolean;
   /** Explicit statement range, "1 Sep 2026 – 21 Sep 2026". */
   periodLabel?: string | null;
   /** Xero (or another ledger) statement wins over weekly totals. */
@@ -1117,6 +1138,8 @@ export function ProfitabilityWaterfall({
       tax,
       accountantProfile: profile,
       reviewSignoff,
+      reviewSignoffSource,
+      reviewSignoffStale,
       createdBy: user?.id ?? null,
       firmId,
       market,

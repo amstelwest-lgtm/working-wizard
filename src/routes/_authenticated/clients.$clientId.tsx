@@ -5310,6 +5310,11 @@ function ClientView() {
                         profitabilitySignoff,
                         pageSignoffStale(profitabilitySignoff, client?.financials_updated_at ?? null),
                       )}
+                      reviewSignoffSource={profitabilitySignoff}
+                      reviewSignoffStale={pageSignoffStale(
+                        profitabilitySignoff,
+                        client?.financials_updated_at ?? null,
+                      )}
                       hideLead
                       hideCardExport
                       onExportReady={setProfitExport}

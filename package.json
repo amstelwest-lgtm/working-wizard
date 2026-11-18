@@ -360,6 +360,7 @@
     "test:advisory-signoff": "vite-node --config scripts/vite-test.config.ts scripts/advisory-signoff-test.mts",
     "test:advisory-signoff-grounding": "vite-node --config scripts/vite-test.config.ts scripts/advisory-signoff-grounding-test.mts",
     "test:signoff-parity": "vite-node --config scripts/vite-test.config.ts scripts/signoff-parity-test.mts",
+    "test:waterfall-pdf-signoff": "vite-node --config scripts/vite-test.config.ts scripts/waterfall-pdf-signoff-test.mts",
     "test:signin-focus": "vite-node --config scripts/vite-test.config.ts scripts/signin-focus-test.mts",
     "test:show-password": "vite-node --config scripts/vite-test.config.ts scripts/show-password-test.mts",
     "test:owner-layout": "vite-node --config scripts/vite-test.config.ts scripts/owner-layout-test.mts",

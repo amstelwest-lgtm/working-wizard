@@ -193,7 +193,8 @@ assert(portfolio.includes("resolveAdvisorySignoffState"), "the firm queue uses t
 const reports = read("src/routes/_authenticated/reports-studio.tsx");
 assert(!reports.includes('cycle: "cash_forecast"'), "cash flow cycle has no sign-off");
 assert(reports.includes("reviewSignoff: null"), "the cycle PDF is not stamped from another scope");
-assert(read("src/reports/profitability-waterfall.tsx").includes("draft={!isDemo && !sample && !reviewSignoff}"));
+assert(read("src/reports/profitability-waterfall.tsx").includes("draft={showDraft}"));
+assert(read("src/routes/_authenticated/reports-studio.tsx").includes("reviewDeliverableUnsigned"));
 assert(read("src/reports/cash-forecast.tsx").includes("draft={!isDemo && !sample && !reviewSignoff}"));
 
 const ratios = read("src/routes/_authenticated/clients.$clientId.tsx");

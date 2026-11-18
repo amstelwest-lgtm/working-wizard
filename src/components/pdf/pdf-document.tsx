@@ -109,7 +109,7 @@ export function PDFDocument({
                     <SampleWatermark />
                   ) : isDemo ? (
                     <DemoWatermark />
-                  ) : draft ? (
+                  ) : draftOn ? (
                     <DraftWatermark text={draftMark} />
                   ) : null}
 
