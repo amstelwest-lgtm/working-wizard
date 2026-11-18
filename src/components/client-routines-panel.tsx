@@ -16,10 +16,13 @@ export function ClientRoutinesPanel({
   clientId,
   firmId,
   ownerSeat,
+  routinePeriodKey,
 }: {
   clientId: string;
   firmId: string | null;
   ownerSeat: boolean;
+  /** Same JHB month key the schedule engine uses (owner parity with accountant tab). */
+  routinePeriodKey?: string;
 }) {
   const [artifacts, setArtifacts] = useState<Record<string, unknown>[]>([]);
   const [actions, setActions] = useState<RoutineActionRow[]>([]);
@@ -68,7 +71,12 @@ export function ClientRoutinesPanel({
 
   if (ownerSeat) {
     return (
-      <section className="im-card" data-owner-routines="" style={{ borderColor: "#DBEAFE", background: "#fff" }}>
+      <section
+        className="im-card"
+        data-owner-routines=""
+        data-im-routine-period={routinePeriodKey ?? undefined}
+        style={{ borderColor: "#DBEAFE", background: "#fff" }}
+      >
         <h2 style={{ color: "#102A43" }}>This month</h2>
         {ownerLines.length === 0 ? (
           <p style={{ color: "#102A43" }}>Milōn has no pilot routines queued for you this month yet.</p>
