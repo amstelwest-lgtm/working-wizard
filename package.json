@@ -244,6 +244,7 @@
     "test:im-takeover-proposal": "vite-node --config scripts/vite-test.config.ts scripts/im-takeover-proposal-test.mts",
     "test:im-proposal-decision": "vite-node --config scripts/vite-test.config.ts scripts/im-proposal-decision-test.mts",
     "test:im-routine-proposal": "vite-node --config scripts/vite-test.config.ts scripts/im-routine-proposal-test.mts",
+    "test:im-planner": "vite-node --config scripts/vite-test.config.ts scripts/im-planner-test.mts",
     "test:agent-draft-decision": "vite-node --config scripts/vite-test.config.ts scripts/agent-draft-decision-test.mts",
     "test:agent-draft-decision-client": "vite-node --config scripts/vite-test.config.ts scripts/agent-draft-decision-client-test.mts",
     "test:claude-model": "vite-node --config scripts/vite-test.config.ts scripts/claude-model-default-test.mts",

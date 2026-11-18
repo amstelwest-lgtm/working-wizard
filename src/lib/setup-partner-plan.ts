@@ -7,12 +7,18 @@
  * bespoke → logged row only, never a queue.
  * covered → plan only.
  */
+import {
+  buildCapabilityManifest,
+  matchManifestClassifier,
+  type ImCapabilityManifest,
+} from "./im-capability-manifest.ts";
 import { clipMilonBrainRuleText, type MilonBrainRuleRow } from "./milon-brain-rules.ts";
 import {
   SETUP_PARTNER_SOURCE_EVENT,
   SETUP_PARTNER_TASK_FEATURE,
   SETUP_PARTNER_TASK_WORKFLOW,
   isInterviewerNote,
+  type SetupPartnerCountry,
   type SetupPartnerWorkflowMap,
 } from "./setup-partner.ts";
 
@@ -40,8 +46,6 @@ export type PracticeImplementationPlan = {
 
 const REF_CAP = 4;
 
-const BESPOKE_RE =
-  /\b(desktop|remote desktop|anydesk|teamviewer|screen ?share|whatsapp|bespoke|one-off|one off|custom website|marketing campaign|legal case)\b/i;
 const SETTING_RE = /^(who|when|which|where)\b/i;
 const TOOLS_RE = /\b(xero|quickbooks|qbo|sage|spreadsheet|tools used|ledger connection)\b/i;
 /** Naming the reviewer or sign-off, or a habit the firm still keeps itself. Not bespoke. */
@@ -49,100 +53,6 @@ const FIRM_HABIT_RE =
   /\b(reviewer|who reviews|names? the reviewer|sign-?off|sign off|signs off|kept in a spreadsheet|bank rec|bank reconciliation|e-?mails?|whatsapp|dext|receipts?|source documents?|industries|on the book)\b/i;
 const FINANCE_RE =
   /\b(invoice|bill|vat|tax|cash|reconcil\w*|journal|ledger|report|budget|forecast|payable|receivable|bank)\b/i;
-
-const PRODUCT_GAPS: readonly {
-  re: RegExp;
-  capability: string;
-  stepType: string;
-  effort: PracticeGapEffort;
-  covers: string;
-}[] = [
-  {
-    re: /\bpayroll\b/i,
-    capability: "payroll",
-    stepType: "payroll",
-    effort: "M",
-    covers: "Payroll journals",
-  },
-  {
-    re: /\b(inventory|stock count)\b/i,
-    capability: "inventory",
-    stepType: "inventory",
-    effort: "L",
-    covers: "Inventory",
-  },
-  {
-    re: /\b(consolidat|multi-entity|intercompany)\b/i,
-    capability: "consolidation",
-    stepType: "consolidation",
-    effort: "L",
-    covers: "Multi-entity consolidation",
-  },
-  {
-    re: /\b(time tracking|engagement letter|\bwip\b)\b/i,
-    capability: "practice-ops",
-    stepType: "practice_ops",
-    effort: "M",
-    covers: "Practice operations",
-  },
-  {
-    re: /\bdirect debit\b/i,
-    capability: "collections",
-    stepType: "direct_debit",
-    effort: "M",
-    covers: "Direct debit collection",
-  },
-];
-
-const COVERED: readonly {
-  re: RegExp;
-  capability: string;
-  stepType: string;
-  covers: string;
-}[] = [
-  {
-    re: /\b(?:cash(?:\s*flow)?|cashflow)\s+forecast(?:s|ing)?\b|\bforecasting\s+cash(?:\s*flow)?\b/i,
-    capability: "financial-manager",
-    stepType: "cash_forecast",
-    covers: "Financial Manager — 13-week cash forecast",
-  },
-  {
-    re: /\b(month-?end|close pack|books close)\b/i,
-    capability: "financial-manager",
-    stepType: "month_end_close",
-    covers: "Financial Manager — month-end close pack",
-  },
-  {
-    re: /\breview\b/i,
-    capability: "financial-manager",
-    stepType: "review",
-    covers: "Financial Manager — draft review",
-  },
-  {
-    re: /\bsign-?off\b|\bsignoff\b/i,
-    capability: "sign-off",
-    stepType: "sign_off",
-    covers: "Accountant sign-off",
-  },
-  {
-    re: /\b(deadlines?|due dates?)\b/i,
-    capability: "advisor",
-    stepType: "deadlines",
-    covers: "Advisor — deadline reminders",
-  },
-  {
-    re: /\b(client reports?|board reports?|management packs?|management reports?|bookkeeping|cash reporting|profit reporting|cash and profit)\b/i,
-    capability: "analyst",
-    stepType: "client_reporting",
-    covers: "Analyst — client reporting",
-  },
-  {
-    re: /\breconcil/i,
-    capability: "financial-manager",
-    stepType: "reconciliation",
-    covers: "Financial Manager — bank reconciliation",
-  },
-];
 
 const FIT_SETUP = "Firm setting for the practice. Saved as a private rule.";
 const FIT_GAP = "Fits the universal finance function. Not in Milōn yet.";
@@ -205,8 +115,33 @@ export function accountantFacingStep(step: string): string {
   return cleanFlowLine(step);
 }
 
+function planStepFromClassifier(
+  text: string,
+  row: {
+    stepType: string;
+    capability: string;
+    covers: string;
+    bucket: PracticeGapBucket;
+    fitNote: string;
+    effort: PracticeGapEffort;
+  },
+): PracticePlanStep {
+  return stepOf(text, {
+    stepType: row.stepType,
+    capability: row.capability,
+    covers: row.covers,
+    bucket: row.bucket,
+    fitNote: row.fitNote,
+    effort: row.effort,
+  });
+}
+
 /** Deterministic bucket for one practice workflow step. */
-export function classifyPracticeStep(step: string): PracticePlanStep {
+export function classifyPracticeStep(
+  step: string,
+  opts?: { manifest?: ImCapabilityManifest; country?: SetupPartnerCountry | null },
+): PracticePlanStep {
+  const manifest = opts?.manifest ?? buildCapabilityManifest(opts?.country);
   const text = accountantFacingStep(step.replace(/\s+/g, " ").trim());
   if (!text) {
     return stepOf(step, {
@@ -218,7 +153,13 @@ export function classifyPracticeStep(step: string): PracticePlanStep {
       effort: "L",
     });
   }
-  if (BESPOKE_RE.test(text)) {
+  if (manifest.financeDeadlineSignals.test(text)) {
+    const deadline = manifest.classifiers.find((row) => row.stepType === "deadlines");
+    if (deadline) {
+      return planStepFromClassifier(text, deadline);
+    }
+  }
+  if (manifest.bespokeSignals.test(text) && !manifest.financeDeadlineSignals.test(text)) {
     return stepOf(text, {
       stepType: "bespoke",
       capability: "bespoke",
@@ -239,16 +180,9 @@ export function classifyPracticeStep(step: string): PracticePlanStep {
     });
   }
   if (COVERED_WORK_RE.test(text)) {
-    for (const row of COVERED) {
-      if (!row.re.test(text)) continue;
-      return stepOf(text, {
-        stepType: row.stepType,
-        capability: row.capability,
-        covers: row.covers,
-        bucket: "covered",
-        fitNote: `Already in Milōn: ${row.covers.replace(/\s+—\s+/g, ": ")}.`,
-        effort: "S",
-      });
+    const covered = matchManifestClassifier(text, manifest);
+    if (covered?.bucket === "covered") {
+      return planStepFromClassifier(text, covered);
     }
     return stepOf(text, {
       stepType: "reporting",
@@ -272,27 +206,13 @@ export function classifyPracticeStep(step: string): PracticePlanStep {
       effort: "S",
     });
   }
-  for (const row of PRODUCT_GAPS) {
-    if (!row.re.test(text)) continue;
-    return stepOf(text, {
-      stepType: row.stepType,
-      capability: row.capability,
-      covers: row.covers,
-      bucket: "product_gap",
-      fitNote: FIT_GAP,
-      effort: row.effort,
-    });
+  const gap = manifest.classifiers.find((row) => row.bucket === "product_gap" && row.re.test(text));
+  if (gap) {
+    return planStepFromClassifier(text, gap);
   }
-  for (const row of COVERED) {
-    if (!row.re.test(text)) continue;
-    return stepOf(text, {
-      stepType: row.stepType,
-      capability: row.capability,
-      covers: row.covers,
-      bucket: "covered",
-      fitNote: `Already in Milōn: ${row.covers.replace(/\s+—\s+/g, ": ")}.`,
-      effort: "S",
-    });
+  const covered = matchManifestClassifier(text, manifest);
+  if (covered?.bucket === "covered") {
+    return planStepFromClassifier(text, covered);
   }
   const finance = text.toLowerCase().match(FINANCE_RE);
   if (finance?.[1]) {

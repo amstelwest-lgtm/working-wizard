@@ -1,0 +1,36 @@
+{
+  "label": "Multi-ledger firm (Xero + QBO + Sage)",
+  "country": "ZA",
+  "hours_saved_estimate": 6,
+  "pilots": [
+    { "id": "ml-xero", "name": "Xero portfolio client", "hasLedger": true, "hasUpload": false },
+    { "id": "ml-qbo", "name": "QuickBooks client", "hasLedger": true, "hasUpload": false },
+    { "id": "ml-sage", "name": "Sage client", "hasLedger": true, "hasUpload": false }
+  ],
+  "rules": [
+    {
+      "rule_text": "Practice: Keep client books across Xero, QuickBooks, and Sage Pastel — Owner/accountant; Xero, QuickBooks, Sage; Monthly — Firm setting for the practice. Saved as a private rule.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    },
+    {
+      "rule_text": "Practice: Month-end close pack for each ledger — Owner/accountant; Monthly — Already in Milōn: Financial Manager: month-end close pack.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    },
+    {
+      "rule_text": "Practice: Review management reports before they go to clients — Owner/accountant; Monthly — Already in Milōn: Financial Manager: draft review.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    },
+    {
+      "rule_text": "Practice: Cashflow forecasting for owner check-ins — Owner/accountant; Weekly — Already in Milōn: Financial Manager: 13-week cash forecast.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    }
+  ]
+}

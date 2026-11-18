@@ -1,0 +1,35 @@
+{
+  "label": "US CPA (QBO, US copy, no Sage, no SARS)",
+  "country": "US",
+  "hours_saved_estimate": null,
+  "pilots": [
+    { "id": "us-qbo-1", "name": "QBO client A", "hasLedger": true, "hasUpload": false },
+    { "id": "us-qbo-2", "name": "QBO client B", "hasLedger": true, "hasUpload": false }
+  ],
+  "rules": [
+    {
+      "rule_text": "Practice: Bookkeeping for US small businesses on QuickBooks Online — Owner/accountant; QuickBooks; Monthly — Firm setting for the practice. Saved as a private rule.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    },
+    {
+      "rule_text": "Practice: Send monthly management reports to US owners — Owner/accountant; End of month — Already in Milōn: Analyst: client reporting.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    },
+    {
+      "rule_text": "Practice: Prepare sales-tax filings for accountant review — Practice; Monthly — Fits the universal finance function. Not in Milōn yet.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    },
+    {
+      "rule_text": "Practice: Chase missing receipts before the monthly close — Owner/accountant; Email; Monthly — Firm setting for the practice. Saved as a private rule.",
+      "status": "active",
+      "source_event": "setup_partner_confirm",
+      "client_id": null
+    }
+  ]
+}
