@@ -27,7 +27,10 @@ import {
   type DraftDecision,
   type RepeatDecision,
 } from "../../../src/lib/agent-draft-decision.ts";
-import { milonBrainRuleInsert } from "../../../src/lib/milon-brain-rules.ts";
+import {
+  milonBrainRuleRemember,
+  rememberRuleTextFromEdits,
+} from "../../../src/lib/milon-brain-rules.ts";
 
 const DECISION_KINDS = new Set<string>(DRAFT_DECISION_KINDS);
 
@@ -88,7 +91,7 @@ Deno.serve(async (req) => {
   } = await userClient.auth.getUser();
   if (authErr || !user) return json({ ok: false, error: "unauthorised" }, 401);
 
-  let body: { finding_id?: unknown; decision?: unknown; edits?: unknown };
+  let body: { finding_id?: unknown; decision?: unknown; edits?: unknown; remember_this?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -100,6 +103,7 @@ Deno.serve(async (req) => {
   if (!decision) return json({ ok: false, error: "decision_invalid" }, 400);
   const edits = editFields(body.edits);
   if (edits === "invalid") return json({ ok: false, error: "edits_invalid" }, 400);
+  const rememberThis = body.remember_this === true;
 
   const { data: finding, error: findingError } = await admin
     .from("agent_findings")
@@ -171,17 +175,6 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (dismissError) return json({ ok: false, error: "decision_not_saved" }, 500);
     if (!dismissed) return await reread(admin, row.id, decision);
-    await captureMilonBrainRule(admin, {
-      firmId,
-      clientId: row.client_id,
-      taskType: row.kind,
-      findingId: row.id,
-      decision: "dismissed",
-      title: row.title,
-      detail: row.detail,
-      dismissedReason: DISMISSED_BY_USER,
-      approverId: user.id,
-    });
     return json({
       ok: true,
       finding_id: row.id,
@@ -257,16 +250,16 @@ Deno.serve(async (req) => {
     return await reread(admin, row.id, decision);
   }
 
-  await captureMilonBrainRule(admin, {
-    firmId,
-    clientId: row.client_id,
-    taskType: row.kind,
-    findingId: row.id,
-    decision: "approved",
-    title: text.title,
-    detail: text.detail,
-    approverId: user.id,
-  });
+  if (rememberThis) {
+    await captureRememberedBrainRule(admin, {
+      firmId,
+      clientId: row.client_id,
+      taskType: row.kind,
+      findingId: row.id,
+      ruleText: rememberRuleTextFromEdits(text.title, text.detail),
+      approverId: user.id,
+    });
+  }
 
   return json({
     ok: true,
@@ -384,31 +377,25 @@ function decidedJson(
   });
 }
 
-async function captureMilonBrainRule(
+async function captureRememberedBrainRule(
   admin: Admin,
   input: {
     firmId: string | null;
     clientId: string;
     taskType: string;
     findingId: string;
-    decision: "approved" | "dismissed";
-    title: string;
-    detail?: string | null;
-    dismissedReason?: string | null;
+    ruleText: string;
     approverId: string;
   },
 ): Promise<void> {
-  if (!input.firmId) return;
+  if (!input.firmId || !input.ruleText.trim()) return;
   try {
-    const row = milonBrainRuleInsert({
+    const row = milonBrainRuleRemember({
       firmId: input.firmId,
       clientId: input.clientId,
       taskType: input.taskType,
       findingId: input.findingId,
-      decision: input.decision,
-      title: input.title,
-      detail: input.detail,
-      dismissedReason: input.dismissedReason,
+      ruleText: input.ruleText,
       approverId: input.approverId,
     });
     const { error } = await admin.from("milon_brain_rules").insert(row);

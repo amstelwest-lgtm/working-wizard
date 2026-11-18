@@ -18,6 +18,8 @@ import {
   activationRunInputs,
   routineMapArtifactMeta,
   IM_ACTIVATION_SOURCE,
+  countNewlyEnqueuedRun,
+  type DraftRunEnqueue,
 } from "@/lib/im-activation-persist";
 import { planActivationAccept } from "@/lib/im-activation-accept";
 import { SETUP_PARTNER_SOURCE_EVENT, SETUP_PARTNER_TASK_WORKFLOW } from "@/lib/setup-partner";
@@ -194,7 +196,7 @@ async function enqueueDraftRun(input: {
   clientId: string;
   firmId: string;
   actionItemId: string;
-}): Promise<string | null> {
+}): Promise<DraftRunEnqueue | null> {
   const decision = handoffDecision(input.agent);
   if (!decision.ok) return null;
   const db = admin();
@@ -241,7 +243,8 @@ async function enqueueDraftRun(input: {
         .eq("agent", input.agent)
         .eq("idempotency_key", idempotencyKey)
         .maybeSingle();
-      return typeof found.data?.id === "string" ? found.data.id : null;
+      const runId = typeof found.data?.id === "string" ? found.data.id : null;
+      return runId ? { runId, created: false } : null;
     }
     throw new Error(inserted.error.message);
   }
@@ -258,7 +261,7 @@ async function enqueueDraftRun(input: {
     },
   });
   if (invoke.error) console.warn("im_activation agent_invoke", invoke.error.message);
-  return runId;
+  return { runId, created: true };
 }
 
 export const loadImActivationContext = createServerFn({ method: "POST" })
@@ -425,13 +428,13 @@ export const acceptImActivation = createServerFn({ method: "POST" })
               .maybeSingle()
               .then((res) => (typeof res.data?.id === "string" ? res.data.id : null)));
           if (!actionItemId) continue;
-          const runId = await enqueueDraftRun({
+          const run = await enqueueDraftRun({
             agent: row.agent,
             clientId: pilot.id,
             firmId: data.firmId,
             actionItemId,
           });
-          if (runId) enqueued += 1;
+          enqueued += countNewlyEnqueuedRun(run);
         }
       }
     }

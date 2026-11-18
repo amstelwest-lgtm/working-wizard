@@ -1298,7 +1298,7 @@ assert(!shell.includes('label: "Action plan"'), "action plan is not a separate r
 assert(!shell.includes('label: "Actions"'), "actions is not a separate rail item");
 const railIds = [...shell.matchAll(/id: "([^"]+)", label:/g)].map((match) => match[1]);
 assert(
-  railIds.join(" | ") === "home | health | cash | profit | budget | moves | accountant",
+  railIds.join(" | ") === "home | health | cash | profit | budget | moves | routines | accountant",
   `rail order is ${railIds.join(" | ")}`,
 );
 assert(!shell.includes('label: "Deliverables"'), "Deliverables is not an owner rail item");
@@ -1640,8 +1640,8 @@ assert(
   "an owner draft can be approved or dismissed",
 );
 assert(
-  card.includes("(ownerOk || handoffDecision) && !blocked && !approved"),
-  "owner buttons stay off unless the firm is deciding a hand-off; an approved row stays quiet",
+  card.includes("(ownerOk || handoffDecision || firmDraftDecision) && !blocked && !approved"),
+  "owner buttons stay off unless the firm is deciding a hand-off or firm draft; an approved row stays quiet",
 );
 assert(card.includes('decisionSeat === "firm"'), "a hand-off yes or no is the firm seat");
 assert(card.includes("setOptimistic(null)"), "a failed decision rolls the card back");

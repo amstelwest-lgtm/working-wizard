@@ -126,6 +126,7 @@ export async function submitAgentDraftDecision(input: {
   findingId: string;
   decision: "approve" | "dismiss";
   edits?: { title?: string; detail?: string };
+  rememberThis?: boolean;
 }): Promise<DraftDecisionOutcome> {
   const { supabase } = await import("@/integrations/supabase/client");
   const { data: sess } = await supabase.auth.getSession();
@@ -144,6 +145,7 @@ export async function submitAgentDraftDecision(input: {
         finding_id: input.findingId,
         decision: input.decision,
         ...(input.decision === "approve" && input.edits ? { edits: input.edits } : {}),
+        ...(input.decision === "approve" && input.rememberThis === true ? { remember_this: true } : {}),
       }),
     });
   } catch {

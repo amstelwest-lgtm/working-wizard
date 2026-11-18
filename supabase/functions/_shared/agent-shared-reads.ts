@@ -490,7 +490,7 @@ function parseMilonBrainRuleRow(row: Row): MilonBrainRuleRow | null {
 }
 
 /** Active private rules for one firm/client/task set. Missing table → empty (no failed turn). */
-export async function loadMilonBrainRulesPromptBlock(
+export async function loadMilonBrainRulesForPrompt(
   db: SupabaseClient,
   input: {
     firmId: string | null;
@@ -498,8 +498,8 @@ export async function loadMilonBrainRulesPromptBlock(
     taskTypes: readonly string[];
     subject?: IdentifierSubject;
   },
-): Promise<string> {
-  if (!input.firmId || input.taskTypes.length === 0) return "";
+): Promise<{ block: string; ruleIds: string[]; ruleSummaries: string[] }> {
+  if (!input.firmId || input.taskTypes.length === 0) return { block: "", ruleIds: [], ruleSummaries: [] };
   const read = dbOf(db);
   const taskList = [...input.taskTypes];
   const { data, error } = (await read
@@ -513,22 +513,37 @@ export async function loadMilonBrainRulesPromptBlock(
     .in("task_type", taskList)
     .order("created_at", { ascending: false })
     .limit(MILON_BRAIN_RULES_PROMPT_LIMIT * 2)) as { data: unknown; error: QueryError };
-  if (missingRelation(error)) return "";
+  if (missingRelation(error)) return { block: "", ruleIds: [], ruleSummaries: [] };
   if (error) {
     console.error("milon_brain_rules_load_failed", error.message ?? error);
-    return "";
+    return { block: "", ruleIds: [], ruleSummaries: [] };
   }
   const parsed = asRows(data)
     .map(parseMilonBrainRuleRow)
     .filter((row): row is MilonBrainRuleRow => Boolean(row))
-    .filter(
-      (row) => row.client_id == null || row.client_id === input.clientId,
-    );
+    .filter((row) => row.client_id == null || row.client_id === input.clientId);
   const ordered = orderMilonBrainRulesNewestFirst(parsed);
   const deduped = dedupeMilonBrainRules(ordered).slice(0, MILON_BRAIN_RULES_PROMPT_LIMIT);
-  if (deduped.length === 0) return "";
+  if (deduped.length === 0) return { block: "", ruleIds: [], ruleSummaries: [] };
   const lines = milonBrainRulesPromptLines(deduped);
   const block = formatMilonBrainRulesPromptBlock(lines);
   const session = createRedactionSession(input.subject);
-  return applyRedaction(block, session);
+  const ruleIds = deduped
+    .map((row) => row.id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  const ruleSummaries = deduped.map((row) => row.rule_text).filter((text) => text.trim().length > 0);
+  return { block: applyRedaction(block, session), ruleIds, ruleSummaries };
+}
+
+export async function loadMilonBrainRulesPromptBlock(
+  db: SupabaseClient,
+  input: {
+    firmId: string | null;
+    clientId: string;
+    taskTypes: readonly string[];
+    subject?: IdentifierSubject;
+  },
+): Promise<string> {
+  const loaded = await loadMilonBrainRulesForPrompt(db, input);
+  return loaded.block;
 }

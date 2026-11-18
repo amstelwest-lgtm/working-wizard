@@ -23,6 +23,7 @@ import {
   sendAgentMessage,
 } from "./agent-messages.ts";
 import { findingDuplicates, numericFigures, refreshedFindingUpdate } from "../../../src/lib/agent-analyst.ts";
+import { withAppliedBrainRules } from "../../../src/lib/milon-brain-rules.ts";
 import { supersedeOlderFindings } from "./agent-findings-supersede.ts";
 
 export { readInbox, readTeamFindings, sendAgentMessage };
@@ -227,6 +228,7 @@ export async function recordAgentDraft(
   if (liveSnapshot) {
     prepared.evidence = { ...prepared.evidence, ...snapshotEvidenceFields(liveSnapshot) };
   }
+  prepared.evidence = withAppliedBrainRules(prepared.evidence, ctx.appliedBrainRuleSummaries ?? []);
   const reconciledCopy = persistReconciledFindingCopy({
     title: prepared.title,
     detail: prepared.detail,

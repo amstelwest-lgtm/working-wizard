@@ -14,6 +14,7 @@ import { activationAcceptWritesNothing, planActivationAccept } from "../src/lib/
 import { imActivationTriggerMet } from "../src/lib/im-activation-triggers.ts";
 import {
   activationActionMoveKey,
+  countNewlyEnqueuedRun,
   hoursSavedDisplay,
   routineMapArtifactMeta,
 } from "../src/lib/im-activation-persist.ts";
@@ -131,9 +132,20 @@ const meta = routineMapArtifactMeta({
 const parsed = parseRoutineMapMeta(meta);
 assert(parsed?.routine === "monthly_pack", "routine_map meta parses");
 const ownerLines = ownerRoutineMonthLines(
-  [{ id: "1", title: "Draft monthly pack", status: "not_started", source_move_key: "x", sent_at: null }],
+  [
+    {
+      id: "1",
+      title: "Draft monthly pack",
+      status: "not_started",
+      source_move_key: "x",
+      sent_at: null,
+      driver_key: "setup_partner_activation",
+    },
+  ],
   [],
 );
+assert(countNewlyEnqueuedRun({ runId: "run-a", created: false }) === 0, "re-accept does not count existing run");
+assert(countNewlyEnqueuedRun({ runId: "run-b", created: true }) === 1, "first enqueue counts");
 assert(ownerLines.every((line) => !/Analyst|claude|rule/i.test(line.text)), "owner view leaks no internals");
 
 const accountant = accountantRoutineSteps({
@@ -148,8 +160,28 @@ assert(accountant[0]?.status === "waiting", "accountant status defaults waiting"
 const activationSource = readFileSync("src/lib/im-activation.functions.ts", "utf8");
 assert(!activationSource.includes("sent_at:") || activationSource.includes("draft only"), "activation copy stays draft-only");
 assert(!activationSource.includes("xero") || activationSource.includes("xero_connections"), "no ledger posts");
+assert(activationSource.includes('countNewlyEnqueuedRun(run)'), "enqueue tally skips duplicate agent_runs");
+assert(activationSource.includes('created: false'), "23505 path marks existing run");
+assert(activationSource.includes('rpc("agent_invoke"'), "activation starts runners via agent_invoke");
+assert(!activationSource.includes("resend"), "activation does not send mail");
+assert(!activationSource.includes("accountant_request_respond"), "activation does not post requests");
+assert(activationSource.includes('audience: "accountant"'), "first runs target accountant draft review");
+
+const ownerDoor = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
+assert(ownerDoor.includes("OwnerRoutinesMonth"), "owner door mounts routines");
+const ownerShell = readFileSync("src/components/owner-door/owner-shell.tsx", "utf8");
+assert(ownerShell.includes('"routines"'), "owner shell vertical nav lists routines");
 
 const setup = readFileSync("src/routes/_authenticated/practice_.setup.tsx", "utf8");
 assert(setup.includes("ImActivationStep"), "practice setup mounts activation");
+assert(setup.includes("implementation_manager"), "practice setup mounts IM rules");
+
+const enqueueBlock = activationSource.slice(
+  activationSource.indexOf("async function enqueueDraftRun"),
+  activationSource.indexOf("export const loadImActivationContext"),
+);
+assert(enqueueBlock.includes('audience: "accountant"'), "first agent_invoke runs stay accountant drafts");
+assert(enqueueBlock.includes("draft only"), "activation summary says draft only");
+assert(!enqueueBlock.includes("resend") && !enqueueBlock.includes("accountant_request_respond"), "enqueue does not send or post");
 
 console.log("im-activation-test: ok");

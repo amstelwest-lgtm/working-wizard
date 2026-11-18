@@ -40,6 +40,7 @@ import {
   persistReconciledFindingCopy,
   snapshotEvidenceFields,
 } from "../../../src/lib/health-snapshot.ts";
+import { withAppliedBrainRules } from "../../../src/lib/milon-brain-rules.ts";
 import { earlierStatementNote } from "../../../src/lib/statement-import-plan.ts";
 import { marketForClient } from "../../../src/lib/market/scope.ts";
 import { cachedFindingRejected, guardQuotedRatios, periodMonthsOf } from "../../../src/lib/ratios.ts";
@@ -54,6 +55,7 @@ export type AnalystExecCtx = {
   db: SupabaseClient;
   pool: StoredFigures[];
   recordedKeys: Set<string>;
+  appliedBrainRuleSummaries?: readonly string[];
   /** clients.market. Missing means South Africa. */
   market?: unknown;
   /** Reads an upload that is not in meta yet. Absent in tests. */
@@ -361,12 +363,15 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
   const metrics = evidenceMetrics(cited.evidence.figures, cited.evidence.period_label, market);
   const storedSeverity = severityWithFloor(severity, metrics);
   const liveSnapshot = await loadHealthScoreSnapshot(ctx.db, ctx.clientId, ctx.market);
-  const evidence = {
-    ...cited.evidence,
-    metrics,
-    status: agentCopyStatus(storedSeverity),
-    ...(liveSnapshot ? snapshotEvidenceFields(liveSnapshot) : {}),
-  };
+  const evidence = withAppliedBrainRules(
+    {
+      ...cited.evidence,
+      metrics,
+      status: agentCopyStatus(storedSeverity),
+      ...(liveSnapshot ? snapshotEvidenceFields(liveSnapshot) : {}),
+    },
+    ctx.appliedBrainRuleSummaries ?? [],
+  );
   const reconciledCopy = persistReconciledFindingCopy({
     title: guardedTitle,
     detail: guardedDetail,

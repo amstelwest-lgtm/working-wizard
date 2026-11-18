@@ -12,6 +12,7 @@ export const OWNER_DOOR_TABS = [
   "profit",
   "budget",
   "moves",
+  "routines",
   "accountant",
 ] as const;
 
@@ -53,6 +54,7 @@ export function ownerDoorScreen(search: {
   | "pnl"
   | "budget"
   | "moves"
+  | "routines"
   | "accountant"
   | "plan"
   | "settings" {
@@ -67,7 +69,8 @@ export function ownerDoorScreen(search: {
     tab === "cash" ||
     tab === "profit" ||
     tab === "budget" ||
-    tab === "moves"
+    tab === "moves" ||
+    tab === "routines"
   ) {
     return tab;
   }

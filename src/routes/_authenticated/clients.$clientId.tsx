@@ -4671,6 +4671,7 @@ function ClientView() {
                     <MilonTeamPane
                       key={homeAgent ?? "team"}
                       clientId={clientId}
+                      firmId={firmId ?? client.firm_id ?? null}
                       agent={homeAgent}
                       marketCountry={clientGateCountry}
                       audience="accountant"

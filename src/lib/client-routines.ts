@@ -27,6 +27,7 @@ export type RoutineActionRow = {
   status: string;
   source_move_key: string | null;
   sent_at: string | null;
+  driver_key: string | null;
 };
 
 export type AccountantRoutineStep = {
