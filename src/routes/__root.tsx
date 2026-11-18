@@ -20,6 +20,7 @@ import { isBarePublicPath, isPublicMarketingPath, PUBLIC_MARKETING_PATHS } from 
 import { AppChromeReadyContext } from "@/contexts/app-chrome-ready";
 
 import appCss from "../styles.css?url";
+import { SHELL_CRITICAL_CSS } from "@/lib/shell-critical-css";
 import { notFoundHead, organizationGraphJson } from "@/lib/seo";
 import { applyPortalTheme, resolvePortalTheme, THEME_BOOT_SCRIPT } from "@/lib/portal-theme";
 
@@ -165,11 +166,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
                 href: "https://fonts.gstatic.com",
                 crossOrigin: "anonymous" as const,
               },
-              { rel: "stylesheet" as const, href: "/ask-ai.css" },
             ]),
-        // Public pages inline their own CSS. The app sheet is render-blocking
-        // (~300ms on mobile); RootShell starts it with media=print instead.
-        ...(onLanding ? [] : [{ rel: "stylesheet" as const, href: appCss }]),
+        // App and ask-ai sheets are started from the head script with
+        // media=print so they do not block the shell. Critical shell CSS is
+        // inlined below.
         { rel: "manifest", href: "/manifest.json" },
         { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
         { rel: "icon", href: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
@@ -286,7 +286,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=location.pathname||"/";if(p.length>1&&p.charAt(p.length-1)==="/")p=p.slice(0,-1);var ok=${JSON.stringify(PUBLIC_MARKETING_PATHS)};var fonts="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,500;1,600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700;800&display=swap";if(ok.indexOf(p)<0&&!document.querySelector('link[href="'+fonts+'"]')){var f=document.createElement("link");f.rel="stylesheet";f.href=fonts;f.media="print";var shown=false;function showFonts(){if(shown)return;shown=true;f.media="all";}f.onload=function(){showFonts();f.onload=null;};f.onerror=function(){showFonts();};setTimeout(showFonts,3000);document.head.appendChild(f);}if(ok.indexOf(p)<0)return;var h=${JSON.stringify(appCss)};if(document.querySelector('link[rel="stylesheet"][href="'+h+'"]'))return;var l=document.createElement("link");l.rel="stylesheet";l.href=h;l.media="print";l.onload=function(){this.media="all";this.onload=null;};document.head.appendChild(l);}catch(e){}})();`,
+            __html: `(function(){try{var p=location.pathname||"/";if(p.length>1&&p.charAt(p.length-1)==="/")p=p.slice(0,-1);var ok=${JSON.stringify(PUBLIC_MARKETING_PATHS)};var fonts="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,500;1,600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700;800&display=swap";function arm(href,fallback){if(document.querySelector('link[rel="stylesheet"][href="'+href+'"]'))return;var link=document.createElement("link");link.rel="stylesheet";link.href=href;link.media="print";var shown=false;function show(){if(shown)return;shown=true;link.media="all";link.onload=null;}link.onload=show;if(fallback){link.onerror=show;setTimeout(show,3000);}document.head.appendChild(link);}var marketing=ok.indexOf(p)>=0;if(!marketing){arm(fonts,true);arm("/ask-ai.css",false);arm(${JSON.stringify(appCss)},false);return;}arm(${JSON.stringify(appCss)},false);}catch(e){}})();`,
           }}
         />
         <style
@@ -304,6 +304,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
               'html.dark:not([data-theme="light"]),html.dark:not([data-theme="light"]) body{',
               "background:#0b1b2b!important;background-color:#0b1b2b!important;",
               "}",
+              SHELL_CRITICAL_CSS,
             ].join(""),
           }}
         />

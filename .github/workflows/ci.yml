@@ -36,6 +36,8 @@ jobs:
           fi
       - name: Production /clients/:id chunk has no initialization crash
         run: node scripts/client-route-build-render.mjs
+      - name: Shell critical CSS is inlined and the app sheet is non-blocking
+        run: node scripts/shell-critical-css.mjs --dist
 
   side-parity:
     name: owner/accountant parity
