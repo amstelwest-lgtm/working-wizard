@@ -80,7 +80,7 @@ import {
 import { reportNumber } from "@/lib/report-catalog";
 import { liveHealthFromBooks, scoreRatio, type OverallHealth } from "@/lib/health-score";
 import { buildWorkingCapitalSlice } from "@/lib/working-capital-data";
-import { stampFromSignoff } from "@/lib/review-signoff-stamp";
+import { reviewDeliverableUnsigned, stampFromSignoff } from "@/lib/review-signoff-stamp";
 import {
   budgetSignoffIsStale,
   cashSignoffIsStale,
@@ -2657,6 +2657,17 @@ function buildGEN(
         cd?.profitability,
         "Profitability waterfall needs revenue, COGS, EBIT, and net income — never invents gross profit.",
       );
+      const profitabilitySignoff = cd?.reviewSignoffs.profitability ?? null;
+      const profitabilityStale = isSignoffStale(
+        profitabilitySignoff,
+        signoffFreshAt("profitability", clientData),
+        clientData,
+        "profitability",
+      );
+      const unsigned = reviewDeliverableUnsigned({
+        signoff: profitabilitySignoff,
+        isStale: profitabilityStale,
+      });
       return renderToBlob(ProfitabilityWaterfallPDF, {
         smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         profitabilityData: (() => {
@@ -2666,6 +2677,7 @@ function buildGEN(
         accountantProfile: p,
         isDemo,
         sample,
+        draft: !isDemo && unsigned,
         reviewSignoff: profitabilityStamp,
         operatingProfile,
         market,

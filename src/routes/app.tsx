@@ -5075,6 +5075,11 @@ function Index() {
                                 clientMeta?.financials_updated_at ?? null,
                               ),
                             )}
+                            reviewSignoffSource={profitabilitySignoff}
+                            reviewSignoffStale={computeIsStale(
+                              profitabilitySignoff,
+                              clientMeta?.financials_updated_at ?? null,
+                            )}
                             fallback={ownerWaterfallFallback}
                             periodLabel={ownerProfitPeriodLabel}
                             preferPeriod={preferStatementPeriod(v)}
@@ -6681,6 +6686,11 @@ function Index() {
                             profitabilitySignoff,
                             clientMeta?.financials_updated_at ?? null,
                           ),
+                        )}
+                        reviewSignoffSource={profitabilitySignoff}
+                        reviewSignoffStale={computeIsStale(
+                          profitabilitySignoff,
+                          clientMeta?.financials_updated_at ?? null,
                         )}
                         fallback={ownerWaterfallFallback}
                         periodLabel={ownerProfitPeriodLabel}

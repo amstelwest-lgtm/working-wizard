@@ -8,7 +8,7 @@
 import { formatReviewDateTime } from "./market/format.ts";
 import { marketForClient } from "./market/scope.ts";
 import type { ResolvedMarket } from "./market/types.ts";
-import { signoffStatusLine, staleSignoffLine } from "./signoff-status.ts";
+import { signoffStatusKind, signoffStatusLine, staleSignoffLine } from "./signoff-status.ts";
 
 function stampMarket(market: Pick<ResolvedMarket, "locale" | "timezone"> | undefined) {
   return market ?? marketForClient(null);
@@ -208,6 +208,29 @@ export function signoffFooterSegments(
   const firm = stamp.firmName?.trim();
   if (firm) lines.push(firm);
   return lines;
+}
+
+/** Same unsigned rule as the tab status chip — not whether a footer stamp was kept. */
+export function reviewDeliverableUnsigned(input: {
+  signoff: StampSignoff | null | undefined;
+  isStale: boolean;
+  readyForReview?: boolean;
+}): boolean {
+  const row = input.signoff;
+  const shown =
+    row &&
+    !isSamplePracticeSignoff({
+      name: row.signed_off_by_name,
+      firmName: row.firm_name,
+    })
+      ? row
+      : null;
+  const kind = signoffStatusKind({
+    hasSignoff: Boolean(shown),
+    isStale: input.isStale,
+    readyForReview: Boolean(input.readyForReview),
+  });
+  return kind === "draft" || kind === "ready";
 }
 
 export function stampFromSignoff(

@@ -71,6 +71,11 @@ export type ProfitabilityWaterfallPDFProps = {
   /** Fictional client (`clients.is_demo`). Live figures, SAMPLE stamp. */
   sample?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
+  /**
+   * When set, the page watermark follows the tab sign-off, not whether a footer
+   * stamp is on the file. Defaults to hiding the mark only when reviewSignoff is present.
+   */
+  draft?: boolean;
   market?: ResolvedMarket;
 };
 
@@ -83,6 +88,7 @@ export function ProfitabilityWaterfallPDF({
   isDemo,
   sample,
   reviewSignoff,
+  draft,
   operatingProfile,
   market,
 }: ProfitabilityWaterfallPDFProps) {
@@ -203,6 +209,9 @@ export function ProfitabilityWaterfallPDF({
     },
   ];
 
+  const showDraft =
+    draft ?? (!isDemo && !sample && !reviewSignoff);
+
   const narrative = profitabilityNarrative(
     {
       revenue: d.revenue,
@@ -223,7 +232,7 @@ export function ProfitabilityWaterfallPDF({
       accountantProfile={accountantProfile}
       isDemo={isDemo}
       sample={sample}
-      draft={!isDemo && !sample && !reviewSignoff}
+      draft={showDraft}
       reviewSignoff={reviewSignoff}
       market={m}
     >
