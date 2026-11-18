@@ -354,6 +354,7 @@ import { FinancialManagerBrief, type HomeBriefHandoff } from "@/components/finan
 import { retryHomeHandoff } from "@/components/client-home/retry-handoff";
 import { ClientHomePaged } from "@/components/client-home/client-home-paged";
 import { HomeBooks } from "@/components/client-home/home-books";
+import { ClientRoutinesPanel } from "@/components/client-routines-panel";
 import { HomeProgress } from "@/components/client-home/home-progress";
 import { homeAttentionItems } from "@/lib/home-attention";
 import { homePagedSearch, homePagedViewFromSearch, type HomePagedView } from "@/lib/home-paged-view";
@@ -4462,6 +4463,7 @@ function ClientView() {
                   {activeTab === "summary" &&
                   search.section !== "documents" &&
                   search.section !== "connections" &&
+                  search.section !== "routines" &&
                   (search.section !== "send-agent" || !sendAgentFirmAllowed(client.firm_id)) ? (
                     <ClientSectionOverview
                       clientId={clientId}
@@ -4484,6 +4486,12 @@ function ClientView() {
                           label: "Connections",
                           detail: "Xero, QuickBooks, Sage, and file upload into Client library.",
                           search: (prev) => accountantClientTabSearch(prev, "portal", { section: "connections" }),
+                        },
+                        {
+                          id: "routines",
+                          label: "Routines",
+                          detail: "Cross-bot routine map, draft status, and run timing.",
+                          search: (prev) => accountantClientTabSearch(prev, "portal", { section: "routines" }),
                         },
                         ...(sendAgentFirmAllowed(client.firm_id)
                           ? [
@@ -4594,6 +4602,20 @@ function ClientView() {
                         clientId={clientId}
                         deliverableId="summary"
                         context={deliverableInputContext}
+                      />
+                    </ClientSubpageFrame>
+                  ) : null}
+                  {activeTab === "summary" && search.section === "routines" ? (
+                    <ClientSubpageFrame
+                      id="routines"
+                      eyebrow="Books"
+                      title="Routines"
+                      subtitle="Routine map from Implementation Manager activation. Drafts only until you approve."
+                    >
+                      <ClientRoutinesPanel
+                        clientId={client.id}
+                        firmId={client.firm_id ?? firmId}
+                        ownerSeat={!firmId}
                       />
                     </ClientSubpageFrame>
                   ) : null}

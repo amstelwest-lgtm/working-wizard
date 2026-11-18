@@ -6,9 +6,11 @@ import { interviewDraftFromRuleText, type FirmInterviewDraft } from "./firm-inte
 import { buildCapabilityManifest } from "./im-capability-manifest.ts";
 import {
   buildPracticeImplementationPlan,
+  classifyPracticeStep,
   practicePlanFromConfirmRules,
   type PracticeImplementationPlan,
 } from "./setup-partner-plan.ts";
+import type { ImCapabilityManifest } from "./im-capability-manifest.ts";
 import {
   SETUP_PARTNER_SOURCE_EVENT,
   SETUP_PARTNER_TASK_WORKFLOW,
@@ -45,6 +47,7 @@ export type ImReplayReady = {
   plan: PracticeImplementationPlan;
   workflowMap: SetupPartnerWorkflowMap;
   meta: ImReplayFixtureMeta;
+  manifest: ImCapabilityManifest;
 };
 
 export type ImReplayNeedsQuestions = {
@@ -112,7 +115,6 @@ export function replayImplementationPlan(input: ImReplayInput): ImReplayResult {
   const fromRules = practicePlanFromConfirmRules(rules);
   const meta = parseReplayMetadata(input);
   const manifest = buildCapabilityManifest(meta.country);
-  void manifest;
 
   let plan = fromRules;
   if (plan.steps.length === 0 && input.interviewJson) {
@@ -128,7 +130,12 @@ export function replayImplementationPlan(input: ImReplayInput): ImReplayResult {
         gaps: [],
         checklist: [],
       });
-      plan = map;
+      plan = {
+        steps: map.steps.map((row) => ({
+          ...classifyPracticeStep(row.step, { manifest }),
+          step: row.step,
+        })),
+      };
     }
   }
 
@@ -145,5 +152,6 @@ export function replayImplementationPlan(input: ImReplayInput): ImReplayResult {
     plan,
     workflowMap: workflowMapFromPlan(plan, country),
     meta: { ...meta, country },
+    manifest,
   };
 }

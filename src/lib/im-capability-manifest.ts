@@ -14,6 +14,7 @@ import {
 import {
   FM_TOOL_LABELS,
   FM_TOOLS,
+  type FmToolName,
 } from "./agent-financial-manager.ts";
 import { SHARED_DELIVERABLE_TOOL_LABELS } from "./agent-shared-reads.ts";
 /** Kept inline so Deno edge checks do not pull `connections-library-upload.ts`. */
@@ -107,6 +108,38 @@ const BASE_PRODUCT_GAPS: readonly Omit<ImStepClassifier, "fitNote" | "priority">
     effort: "M",
   },
 ];
+
+/** Step patterns tied to Financial Manager tools in FM_TOOLS — no test override hook. */
+const FM_TOOL_CLASSIFIERS: Partial<
+  Record<FmToolName, Omit<ImStepClassifier, "fitNote" | "priority">>
+> = {
+  get_cash_13_week: {
+    re: /\b13-?week cash(?:\s+forecast)?\b|\b(?:cash(?:\s*flow)?|cashflow)\s+forecast(?:s|ing)?\b|\bforecasting\s+cash(?:\s*flow)?\b/i,
+    capability: "financial-manager",
+    stepType: "cash_forecast",
+    bucket: "covered",
+    covers: "Financial Manager — 13-week cash forecast",
+    effort: "S",
+  },
+  prepare_client_report: {
+    re: /\bprepare client reports?\b/i,
+    capability: "financial-manager",
+    stepType: "client_report_prepare",
+    bucket: "covered",
+    covers: "Financial Manager — client report",
+    effort: "S",
+  },
+};
+
+function classifiersFromFmTools(): ImStepClassifier[] {
+  const out: ImStepClassifier[] = [];
+  for (const tool of FM_TOOLS) {
+    const row = FM_TOOL_CLASSIFIERS[tool];
+    if (!row) continue;
+    out.push({ ...row, fitNote: FIT_COVERED(row.covers), priority: 78 });
+  }
+  return out;
+}
 
 const BASE_COVERED: readonly Omit<ImStepClassifier, "fitNote" | "priority">[] = [
   {
@@ -242,6 +275,7 @@ export function buildCapabilityManifest(
 
   const classifiers = [
     ...classifiersFromBase(BASE_COVERED, (row) => FIT_COVERED(row.covers), 80),
+    ...classifiersFromFmTools(),
     ...classifiersFromBase(BASE_PRODUCT_GAPS, () => FIT_GAP, 40),
     ...(override?.extraClassifiers ?? []),
   ].sort((a, b) => b.priority - a.priority);
