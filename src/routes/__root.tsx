@@ -286,7 +286,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=location.pathname||"/";if(p.length>1&&p.charAt(p.length-1)==="/")p=p.slice(0,-1);var ok=${JSON.stringify(PUBLIC_MARKETING_PATHS)};var fonts="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,500;1,600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700;800&display=swap";function arm(href,fallback){if(document.querySelector('link[rel="stylesheet"][href="'+href+'"]'))return;var link=document.createElement("link");link.rel="stylesheet";link.href=href;link.media="print";var shown=false;function show(){if(shown)return;shown=true;link.media="all";link.onload=null;}link.onload=show;if(fallback){link.onerror=show;setTimeout(show,3000);}document.head.appendChild(link);}var marketing=ok.indexOf(p)>=0;if(!marketing){arm(fonts,true);arm("/ask-ai.css",false);arm(${JSON.stringify(appCss)},false);return;}arm(${JSON.stringify(appCss)},false);}catch(e){}})();`,
+            __html: `(function(){try{var p=location.pathname||"/";if(p.length>1&&p.charAt(p.length-1)==="/")p=p.slice(0,-1);var ok=${JSON.stringify(PUBLIC_MARKETING_PATHS)};var fonts="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,500;1,600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700;800&display=swap";function arm(href){if(document.querySelector('link[rel="stylesheet"][href="'+href+'"]'))return;var link=document.createElement("link");link.rel="stylesheet";link.href=href;link.media="print";var shown=false;function show(){if(shown)return;shown=true;link.media="all";link.onload=null;link.onerror=null;}link.onload=show;link.onerror=show;setTimeout(show,3000);document.head.appendChild(link);}var marketing=ok.indexOf(p)>=0;if(!marketing){arm(fonts);arm("/ask-ai.css");arm(${JSON.stringify(appCss)});return;}arm(${JSON.stringify(appCss)});}catch(e){}})();`,
           }}
         />
         <style
@@ -306,6 +306,11 @@ function RootShell({ children }: { children: React.ReactNode }) {
               "}",
               SHELL_CRITICAL_CSS,
             ].join(""),
+          }}
+        />
+        <noscript
+          dangerouslySetInnerHTML={{
+            __html: `<link rel="stylesheet" href="/ask-ai.css" /><link rel="stylesheet" href="${appCss}" />`,
           }}
         />
         <HeadContent />
