@@ -67,9 +67,13 @@ import { Route as AuthenticatedReportsIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedReportsDemoRouteImport } from './routes/_authenticated/reports.demo'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
 import { Route as AuthenticatedSettingsBrandRouteImport } from './routes/_authenticated/settings.brand'
+import { Route as AuthenticatedSettingsDesktopSyncRouteImport } from './routes/_authenticated/settings.desktop-sync'
 import { Route as AuthenticatedSettingsTeamRouteImport } from './routes/_authenticated/settings.team'
 import { Route as ApiGoogleDriveCallbackRouteImport } from './routes/api/google-drive/callback'
 import { Route as ApiMicrosoftDriveCallbackRouteImport } from './routes/api/microsoft-drive/callback'
+import { Route as ApiDesktopSyncPairRouteImport } from './routes/api/desktop-sync/pair'
+import { Route as ApiDesktopSyncRefreshRouteImport } from './routes/api/desktop-sync/refresh'
+import { Route as ApiDesktopSyncUploadRouteImport } from './routes/api/desktop-sync/upload'
 import { Route as ApiQboCallbackRouteImport } from './routes/api/qbo/callback'
 import { Route as ApiResendClientSourceInboundRouteImport } from './routes/api/resend/client-source-inbound'
 import { Route as ApiResendWebhookRouteImport } from './routes/api/resend/webhook'
@@ -385,6 +389,12 @@ const AuthenticatedSettingsBrandRoute =
     path: '/settings/brand',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedSettingsDesktopSyncRoute =
+  AuthenticatedSettingsDesktopSyncRouteImport.update({
+    id: '/settings/desktop-sync',
+    path: '/settings/desktop-sync',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedSettingsTeamRoute =
   AuthenticatedSettingsTeamRouteImport.update({
     id: '/settings/team',
@@ -402,6 +412,21 @@ const ApiMicrosoftDriveCallbackRoute =
     path: '/api/microsoft-drive/callback',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiDesktopSyncPairRoute = ApiDesktopSyncPairRouteImport.update({
+  id: '/api/desktop-sync/pair',
+  path: '/api/desktop-sync/pair',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDesktopSyncRefreshRoute = ApiDesktopSyncRefreshRouteImport.update({
+  id: '/api/desktop-sync/refresh',
+  path: '/api/desktop-sync/refresh',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDesktopSyncUploadRoute = ApiDesktopSyncUploadRouteImport.update({
+  id: '/api/desktop-sync/upload',
+  path: '/api/desktop-sync/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiQboCallbackRoute = ApiQboCallbackRouteImport.update({
   id: '/api/qbo/callback',
   path: '/api/qbo/callback',
@@ -512,9 +537,13 @@ export interface FileRoutesByFullPath {
   '/practice/tax': typeof AuthenticatedPracticeTaxRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
+  '/settings/desktop-sync': typeof AuthenticatedSettingsDesktopSyncRoute
   '/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/api/google-drive/callback': typeof ApiGoogleDriveCallbackRoute
   '/api/microsoft-drive/callback': typeof ApiMicrosoftDriveCallbackRoute
+  '/api/desktop-sync/pair': typeof ApiDesktopSyncPairRoute
+  '/api/desktop-sync/refresh': typeof ApiDesktopSyncRefreshRoute
+  '/api/desktop-sync/upload': typeof ApiDesktopSyncUploadRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
   '/api/resend/client-source-inbound': typeof ApiResendClientSourceInboundRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
@@ -584,9 +613,13 @@ export interface FileRoutesByTo {
   '/practice/tax': typeof AuthenticatedPracticeTaxRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
+  '/settings/desktop-sync': typeof AuthenticatedSettingsDesktopSyncRoute
   '/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/api/google-drive/callback': typeof ApiGoogleDriveCallbackRoute
   '/api/microsoft-drive/callback': typeof ApiMicrosoftDriveCallbackRoute
+  '/api/desktop-sync/pair': typeof ApiDesktopSyncPairRoute
+  '/api/desktop-sync/refresh': typeof ApiDesktopSyncRefreshRoute
+  '/api/desktop-sync/upload': typeof ApiDesktopSyncUploadRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
   '/api/resend/client-source-inbound': typeof ApiResendClientSourceInboundRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
@@ -658,9 +691,13 @@ export interface FileRoutesById {
   '/_authenticated/practice_/tax': typeof AuthenticatedPracticeTaxRoute
   '/_authenticated/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/_authenticated/settings/brand': typeof AuthenticatedSettingsBrandRoute
+  '/_authenticated/settings/desktop-sync': typeof AuthenticatedSettingsDesktopSyncRoute
   '/_authenticated/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/api/google-drive/callback': typeof ApiGoogleDriveCallbackRoute
   '/api/microsoft-drive/callback': typeof ApiMicrosoftDriveCallbackRoute
+  '/api/desktop-sync/pair': typeof ApiDesktopSyncPairRoute
+  '/api/desktop-sync/refresh': typeof ApiDesktopSyncRefreshRoute
+  '/api/desktop-sync/upload': typeof ApiDesktopSyncUploadRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
   '/api/resend/client-source-inbound': typeof ApiResendClientSourceInboundRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
@@ -732,9 +769,13 @@ export interface FileRouteTypes {
     | '/practice/tax'
     | '/reports/demo'
     | '/settings/brand'
+    | '/settings/desktop-sync'
     | '/settings/team'
     | '/api/google-drive/callback'
     | '/api/microsoft-drive/callback'
+    | '/api/desktop-sync/pair'
+    | '/api/desktop-sync/refresh'
+    | '/api/desktop-sync/upload'
     | '/api/qbo/callback'
     | '/api/resend/client-source-inbound'
     | '/api/resend/webhook'
@@ -804,9 +845,13 @@ export interface FileRouteTypes {
     | '/practice/tax'
     | '/reports/demo'
     | '/settings/brand'
+    | '/settings/desktop-sync'
     | '/settings/team'
     | '/api/google-drive/callback'
     | '/api/microsoft-drive/callback'
+    | '/api/desktop-sync/pair'
+    | '/api/desktop-sync/refresh'
+    | '/api/desktop-sync/upload'
     | '/api/qbo/callback'
     | '/api/resend/client-source-inbound'
     | '/api/resend/webhook'
@@ -877,9 +922,13 @@ export interface FileRouteTypes {
     | '/_authenticated/practice_/tax'
     | '/_authenticated/reports/demo'
     | '/_authenticated/settings/brand'
+    | '/_authenticated/settings/desktop-sync'
     | '/_authenticated/settings/team'
     | '/api/google-drive/callback'
     | '/api/microsoft-drive/callback'
+    | '/api/desktop-sync/pair'
+    | '/api/desktop-sync/refresh'
+    | '/api/desktop-sync/upload'
     | '/api/qbo/callback'
     | '/api/resend/client-source-inbound'
     | '/api/resend/webhook'
@@ -937,6 +986,9 @@ export interface RootRouteChildren {
   TalkIndexRoute: typeof TalkIndexRoute
   ApiGoogleDriveCallbackRoute: typeof ApiGoogleDriveCallbackRoute
   ApiMicrosoftDriveCallbackRoute: typeof ApiMicrosoftDriveCallbackRoute
+  ApiDesktopSyncPairRoute: typeof ApiDesktopSyncPairRoute
+  ApiDesktopSyncRefreshRoute: typeof ApiDesktopSyncRefreshRoute
+  ApiDesktopSyncUploadRoute: typeof ApiDesktopSyncUploadRoute
   ApiQboCallbackRoute: typeof ApiQboCallbackRoute
   ApiResendClientSourceInboundRoute: typeof ApiResendClientSourceInboundRoute
   ApiResendWebhookRoute: typeof ApiResendWebhookRoute
@@ -1357,6 +1409,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsBrandRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/settings/desktop-sync': {
+      id: '/_authenticated/settings/desktop-sync'
+      path: '/settings/desktop-sync'
+      fullPath: '/settings/desktop-sync'
+      preLoaderRoute: typeof AuthenticatedSettingsDesktopSyncRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/settings/team': {
       id: '/_authenticated/settings/team'
       path: '/settings/team'
@@ -1376,6 +1435,25 @@ declare module '@tanstack/react-router' {
       path: '/api/microsoft-drive/callback'
       fullPath: '/api/microsoft-drive/callback'
       preLoaderRoute: typeof ApiMicrosoftDriveCallbackRouteImport
+    '/api/desktop-sync/pair': {
+      id: '/api/desktop-sync/pair'
+      path: '/api/desktop-sync/pair'
+      fullPath: '/api/desktop-sync/pair'
+      preLoaderRoute: typeof ApiDesktopSyncPairRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/desktop-sync/refresh': {
+      id: '/api/desktop-sync/refresh'
+      path: '/api/desktop-sync/refresh'
+      fullPath: '/api/desktop-sync/refresh'
+      preLoaderRoute: typeof ApiDesktopSyncRefreshRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/desktop-sync/upload': {
+      id: '/api/desktop-sync/upload'
+      path: '/api/desktop-sync/upload'
+      fullPath: '/api/desktop-sync/upload'
+      preLoaderRoute: typeof ApiDesktopSyncUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/qbo/callback': {
@@ -1468,6 +1546,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedPracticeTaxRoute: typeof AuthenticatedPracticeTaxRoute
   AuthenticatedReportsDemoRoute: typeof AuthenticatedReportsDemoRoute
   AuthenticatedSettingsBrandRoute: typeof AuthenticatedSettingsBrandRoute
+  AuthenticatedSettingsDesktopSyncRoute: typeof AuthenticatedSettingsDesktopSyncRoute
   AuthenticatedSettingsTeamRoute: typeof AuthenticatedSettingsTeamRoute
   AuthenticatedClientsIndexRoute: typeof AuthenticatedClientsIndexRoute
   AuthenticatedReportsIndexRoute: typeof AuthenticatedReportsIndexRoute
@@ -1492,6 +1571,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedPracticeTaxRoute: AuthenticatedPracticeTaxRoute,
   AuthenticatedReportsDemoRoute: AuthenticatedReportsDemoRoute,
   AuthenticatedSettingsBrandRoute: AuthenticatedSettingsBrandRoute,
+  AuthenticatedSettingsDesktopSyncRoute: AuthenticatedSettingsDesktopSyncRoute,
   AuthenticatedSettingsTeamRoute: AuthenticatedSettingsTeamRoute,
   AuthenticatedClientsIndexRoute: AuthenticatedClientsIndexRoute,
   AuthenticatedReportsIndexRoute: AuthenticatedReportsIndexRoute,
@@ -1544,6 +1624,9 @@ const rootRouteChildren: RootRouteChildren = {
   TalkIndexRoute: TalkIndexRoute,
   ApiGoogleDriveCallbackRoute: ApiGoogleDriveCallbackRoute,
   ApiMicrosoftDriveCallbackRoute: ApiMicrosoftDriveCallbackRoute,
+  ApiDesktopSyncPairRoute: ApiDesktopSyncPairRoute,
+  ApiDesktopSyncRefreshRoute: ApiDesktopSyncRefreshRoute,
+  ApiDesktopSyncUploadRoute: ApiDesktopSyncUploadRoute,
   ApiQboCallbackRoute: ApiQboCallbackRoute,
   ApiResendClientSourceInboundRoute: ApiResendClientSourceInboundRoute,
   ApiResendWebhookRoute: ApiResendWebhookRoute,
