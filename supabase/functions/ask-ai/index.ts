@@ -332,7 +332,7 @@ async function handleAskAi(req: Request): Promise<Response> {
     .eq("tier", tier)
     .order("created_at", { ascending: false })
     .limit(1)
-    .then(({ error: e }) => {
+    .then(({ error: e }: { error: { message: string } | null }) => {
       if (e) console.warn("Token count update failed:", e.message);
     });
 
@@ -346,7 +346,7 @@ async function handleAskAi(req: Request): Promise<Response> {
       answer: sealedCacheAnswer(claudeResult.text, sealed.session),
       hit_count: 0,
       created_at: new Date().toISOString(),
-    }).then(({ error: e }) => {
+    }).then(({ error: e }: { error: { message: string } | null }) => {
       if (e) console.warn("Cache write failed:", e.message);
     });
   }

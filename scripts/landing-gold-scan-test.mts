@@ -147,12 +147,37 @@ async function launch(): Promise<Browser> {
 
 type Hit = { path: string; prop: string; sample: string };
 
+/** Vite's dev server can full-reload once after the first paint. */
+async function withLivePage<T>(page: Page, fn: () => Promise<T>): Promise<T> {
+  let last: unknown;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      last = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt === 3 || !msg.includes("Execution context was destroyed")) throw err;
+    }
+  }
+  throw last;
+}
+
+async function paintLandingTheme(page: Page, theme: "light" | "dark") {
+  await withLivePage(page, async () => {
+    await page.locator(".logo-word").first().waitFor({ timeout: 20000 });
+    await page.evaluate((next) => {
+      document.documentElement.dataset.theme = next;
+      document.documentElement.classList.toggle("dark", next === "dark");
+    }, theme);
+  });
+}
+
 async function scan(
   page: Page,
   label: string,
   opts?: { practice?: boolean; accountant?: boolean; owner?: boolean },
 ): Promise<{ hits: Hit[]; wordmark: boolean; heroCta: boolean; amber74: boolean }> {
-  return page.evaluate(({ labelIn, practice, accountant, owner }) => {
+  return withLivePage(page, () => page.evaluate(({ labelIn, practice, accountant, owner }) => {
     const GOLD: Array<[number, number, number]> = [
       [212, 175, 55],
       [125, 95, 15],
@@ -301,7 +326,7 @@ async function scan(
       ? colorsIn(getComputedStyle(amber).color).some((c) => Math.min(...AMBER.map((a) => dist(c.rgb, a))) < 12)
       : false;
     return { hits, wordmark, heroCta, amber74 };
-  }, { labelIn: label, practice: Boolean(opts?.practice), accountant: Boolean(opts?.accountant), owner: Boolean(opts?.owner) });
+  }, { labelIn: label, practice: Boolean(opts?.practice), accountant: Boolean(opts?.accountant), owner: Boolean(opts?.owner) }));
 }
 
 async function focusButton(page: Page, selector: string) {
@@ -341,11 +366,8 @@ async function main() {
     for (const width of [1280, 390]) {
       for (const theme of ["light", "dark"] as const) {
         const page = await browser.newPage({ viewport: { width, height: 900 } });
-        await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
-        await page.evaluate((next) => {
-          document.documentElement.dataset.theme = next;
-          document.documentElement.classList.toggle("dark", next === "dark");
-        }, theme);
+        await page.goto(`${BASE}/`, { waitUntil: "load" });
+        await paintLandingTheme(page, theme);
         await page.waitForTimeout(150);
         const resting = await scan(page, `${width} ${theme}`);
         if (!resting.wordmark) failures.push(`${width} ${theme}: wordmark is not gold`);
@@ -389,11 +411,8 @@ async function main() {
       for (const width of [1280, 390]) {
         for (const theme of ["light", "dark"] as const) {
           const page = await browser.newPage({ viewport: { width, height: 900 } });
-          await page.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
-          await page.evaluate((next) => {
-            document.documentElement.dataset.theme = next;
-            document.documentElement.classList.toggle("dark", next === "dark");
-          }, theme);
+          await page.goto(`${BASE}${path}`, { waitUntil: "load" });
+          await paintLandingTheme(page, theme);
           const copy = await page.locator(".mk-lead").innerText();
           if (copy.includes("Inc..")) failures.push(`${path} ${width} ${theme}: hero subline has a double period`);
           const painted = await scan(page, `${path} ${width} ${theme}`);
@@ -412,11 +431,8 @@ async function main() {
     for (const width of [1280, 390]) {
       for (const theme of ["light", "dark"] as const) {
         const page = await browser.newPage({ viewport: { width, height: 900 } });
-        await page.goto(`${BASE}/join/sampletok`, { waitUntil: "networkidle" });
-        await page.evaluate((next) => {
-          document.documentElement.dataset.theme = next;
-          document.documentElement.classList.toggle("dark", next === "dark");
-        }, theme);
+        await page.goto(`${BASE}/join/sampletok`, { waitUntil: "load" });
+        await paintLandingTheme(page, theme);
         await page.waitForTimeout(200);
         const painted = await scan(page, `/join/sampletok ${width} ${theme}`);
         if (!painted.wordmark) failures.push(`/join/sampletok ${width} ${theme}: wordmark is not gold`);

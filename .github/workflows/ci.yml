@@ -26,7 +26,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Default heap is ~2GB. build:vercel mark-compacts there and exits 134.
       - run: pnpm run build:vercel
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
       - name: US-reachable assets must not contain SA pricing copy
         run: node scripts/za-bundle-leak.mjs
       - name: Client bundle must not contain the Node Sentry SDK
@@ -126,7 +129,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # trial-card-copy shells out to the same production build.
       - run: pnpm test:ci
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
 
   # Blocking: clients RLS initplan check, then the source-document migration on a
   # fresh database. Postgres
