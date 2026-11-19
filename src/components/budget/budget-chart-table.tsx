@@ -302,6 +302,8 @@ export function BudgetChartTable({
           doc={doc}
           views={scopedViews}
           totals={totals}
+          period={statementActuals?.period ?? null}
+          storedMonths={loaded.length > 0}
           money={money}
           market={market}
           displayTemplateId={displayTemplateId}
@@ -328,6 +330,8 @@ export function BudgetChartTable({
               doc={doc}
               views={scopedViews}
               totals={totals}
+              period={statementActuals?.period ?? null}
+              storedMonths={loaded.length > 0}
               money={money}
               market={market}
               displayTemplateId={displayTemplateId}
@@ -634,6 +638,8 @@ function BudgetMonthTable({
   doc,
   views,
   totals,
+  period = null,
+  storedMonths = false,
   money,
   market,
   displayTemplateId = null,
@@ -642,13 +648,20 @@ function BudgetMonthTable({
   doc: BudgetDocument;
   views: BudgetMonthView[];
   totals: { revenue: number | null; expenses: number | null; operatingProfit: number | null };
+  period?: { cogs: number | null; grossProfit: number | null } | null;
+  storedMonths?: boolean;
   money: (n: number) => string;
   market: Parameters<typeof formatBudgetMonthYear>[1];
   displayTemplateId?: BudgetTemplateId | null;
   /** Full-viewport sheet. The card keeps the short scroll frame. */
   sheet?: boolean;
 }) {
-  const year = { revenue: totals.revenue, operatingProfit: totals.operatingProfit };
+  const year = {
+    revenue: totals.revenue,
+    cogs: period?.cogs ?? null,
+    grossProfit: period?.grossProfit ?? null,
+    operatingProfit: totals.operatingProfit,
+  };
   const rows = budgetTableRows(
     doc,
     views,
@@ -659,6 +672,7 @@ function BudgetMonthTable({
     views,
     yearRevenue: totals.revenue,
     yearOperatingProfit: totals.operatingProfit,
+    storedMonths,
   });
   const months = views.map((row) => row.month);
   const periodTotal = [
@@ -704,13 +718,7 @@ function BudgetMonthTable({
                   <MonthCells key={`${row.id}-${months[index]}`} item={item} money={money} />
                 ))}
                 <MonthCells
-                  item={budgetPeriodTotalCell(
-                    row.cells,
-                    "ebit",
-                    row.label,
-                    row.higherIsBetter,
-                    row.id === "revenue" ? totals.revenue : row.id === "profit" ? totals.operatingProfit : null,
-                  )}
+                  item={budgetPeriodTotalCell(row.cells, "ebit", row.label, row.higherIsBetter)}
                   money={money}
                 />
               </tr>

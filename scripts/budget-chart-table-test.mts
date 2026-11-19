@@ -585,13 +585,14 @@ const zaRows = budgetTableRows(doc, bookViews, undefined, zaYear);
 const zaRevenue = zaRows.find((row) => row.id === "revenue");
 const zaProfit = zaRows.find((row) => row.id === "profit");
 assert(zaRevenue != null && zaProfit != null, "the table has revenue and operating profit");
-const zaRevenueTotal = budgetPeriodTotalCell(zaRevenue.cells, "revenue", "Revenue", true, header.revenue);
-const zaProfitTotal = budgetPeriodTotalCell(zaProfit.cells, "ebit", "Operating profit", true, header.operatingProfit);
+const zaRevenueTotal = budgetPeriodTotalCell(zaRevenue.cells, "revenue", "Revenue", true);
+const zaProfitTotal = budgetPeriodTotalCell(zaProfit.cells, "ebit", "Operating profit", true);
 const zaChart = chartRevenueActuals({ views: bookViews, yearRevenue: header.revenue, storedMonths: true });
 const zaNote = budgetActualsNote({
   views: bookViews,
   yearRevenue: header.revenue,
   yearOperatingProfit: header.operatingProfit,
+  storedMonths: true,
 });
 assert(Math.abs(seriesSum(zaRevenue.cells.map((item) => item.actual)) - (header.revenue ?? 0)) < 0.02, "ZA table months sum to the year revenue");
 assert(Math.abs((zaRevenueTotal.actual ?? 0) - (header.revenue ?? 0)) < 0.02, "ZA table total equals the year revenue");
@@ -625,8 +626,17 @@ const usRows = budgetTableRows(usYearDoc, usViews, undefined, usYear);
 const usRevenue = usRows.find((row) => row.id === "revenue");
 const usProfit = usRows.find((row) => row.id === "profit");
 assert(usRevenue != null && usProfit != null, "the US table has revenue and operating profit");
-const usRevenueTotal = budgetPeriodTotalCell(usRevenue.cells, "revenue", "Revenue", true, usHeader.revenue);
-const usProfitTotal = budgetPeriodTotalCell(usProfit.cells, "ebit", "Operating profit", true, usHeader.operatingProfit);
+const usRevenueTotal = budgetPeriodTotalCell(usRevenue.cells, "revenue", "Revenue", true);
+const usProfitTotal = budgetPeriodTotalCell(usProfit.cells, "ebit", "Operating profit", true);
+assert(
+  budgetActualsNote({
+    views: usViews,
+    yearRevenue: usHeader.revenue,
+    yearOperatingProfit: usHeader.operatingProfit,
+    storedMonths: false,
+  }) === CHART_ACTUALS_EVEN_SPLIT,
+  "statement pace uses the chart even-split caption",
+);
 const usChart = chartRevenueActuals({ views: usViews, yearRevenue: usHeader.revenue, storedMonths: false });
 assert(usHeader.revenue === 412_000, `US year revenue ${usHeader.revenue}`);
 assert(usHeader.operatingProfit === 52_000, `US year operating profit ${usHeader.operatingProfit}`);
@@ -636,5 +646,63 @@ assert(Math.abs(seriesSum(usChart.actuals) - 412_000) < 0.02, "US chart months s
 assert(Math.abs(seriesSum(usProfit.cells.map((item) => item.actual)) - 52_000) < 0.02, "US table operating profit months sum to the year");
 assert(Math.abs((usProfitTotal.actual ?? 0) - 52_000) < 0.02, "US table operating profit total equals the year");
 assert((usProfitTotal.actual ?? 0) !== 0, "US operating profit is not zero");
+
+const pepperCos = [213_687, 220_000, 225_000, 230_000, 235_000, 240_000, 246_178, 184_335];
+assert(pepperCos.reduce((sum, value) => sum + value, 0) === 1_794_200, "the stored cost of sales is the prod total");
+const pepperMonths = ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"];
+const pepperRawRevenue = 2_880_836 / pepperMonths.length;
+const pepperViews = budgetMonthViews(
+  doc,
+  pepperMonths.map((month, index) => ({
+    month,
+    totals: {
+      revenue: pepperRawRevenue,
+      cogs: pepperCos[index] ?? 0,
+      overheadsTotal: 40_000,
+      depreciation: 0,
+      ebit: 1_000,
+    },
+  })),
+);
+const pepperYear = {
+  revenue: 1_215_000,
+  cogs: 56_000,
+  grossProfit: 1_159_000,
+  operatingProfit: 56_800,
+};
+const pepperRows = budgetTableRows(doc, pepperViews, undefined, pepperYear);
+const pepperRevenue = pepperRows.find((row) => row.id === "revenue");
+const pepperCogs = pepperRows.find((row) => row.id === "cogs");
+const pepperGross = pepperRows.find((row) => row.id === "gross");
+const pepperOverheads = pepperRows.find((row) => row.id === "overheads");
+const pepperProfit = pepperRows.find((row) => row.id === "profit");
+assert(pepperRevenue && pepperCogs && pepperGross && pepperOverheads && pepperProfit, "Chill Pepper rows are on the table");
+const close = (actual: number, expected: number, label: string) => {
+  assert(Math.abs(actual - expected) <= 2, `${label} ${actual} vs ${expected}`);
+};
+close(seriesSum(pepperRevenue.cells.map((item) => item.actual)), 1_215_000, "Chill Pepper revenue");
+close(seriesSum(pepperCogs.cells.map((item) => item.actual)), 56_000, "Chill Pepper cost of sales");
+close(seriesSum(pepperGross.cells.map((item) => item.actual)), 1_159_000, "Chill Pepper gross profit");
+close(seriesSum(pepperProfit.cells.map((item) => item.actual)), 56_800, "Chill Pepper operating profit");
+close(
+  seriesSum(pepperOverheads.cells.map((item) => item.actual)),
+  1_159_000 - 56_800,
+  "Chill Pepper overheads",
+);
+for (let index = 0; index < pepperRevenue.cells.length; index += 1) {
+  const earned = pepperRevenue.cells[index]?.actual;
+  const cost = pepperCogs.cells[index]?.actual;
+  const gross = pepperGross.cells[index]?.actual;
+  if (earned == null && cost == null) {
+    assert(gross == null, "a month without revenue and cost has no gross profit");
+    continue;
+  }
+  assert(earned != null && cost != null && gross != null, "a stored month keeps revenue, cost, and gross profit");
+  assert(Math.abs(gross - (earned - cost)) < 0.02, `month ${index} gross profit is revenue minus cost of sales`);
+}
+const pepperCogsTotal = budgetPeriodTotalCell(pepperCogs.cells, "cogs", "Cost of sales", false);
+const pepperGrossTotal = budgetPeriodTotalCell(pepperGross.cells, "gross_profit", "Gross profit", true);
+close(pepperCogsTotal.actual ?? 0, 56_000, "Chill Pepper cost of sales total");
+close(pepperGrossTotal.actual ?? 0, 1_159_000, "Chill Pepper gross profit total");
 
 console.log("budget chart table ok");
