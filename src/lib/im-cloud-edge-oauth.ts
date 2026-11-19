@@ -8,8 +8,12 @@ export type OAuthTokenPair = {
 };
 
 function env(name: string): string {
-  const deno = typeof Deno !== "undefined" ? Deno.env.get(name) : undefined;
-  const node = typeof process !== "undefined" ? process.env[name] : undefined;
+  const g = globalThis as {
+    Deno?: { env: { get: (k: string) => string | undefined } };
+    process?: { env: Record<string, string | undefined> };
+  };
+  const deno = g.Deno?.env.get(name);
+  const node = g.process?.env[name];
   return (deno ?? node ?? "").trim();
 }
 

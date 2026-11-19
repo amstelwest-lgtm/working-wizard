@@ -1,7 +1,11 @@
 /**
- * Read-only cloud listing for Deno edge (no `@/` imports).
+ * Read-only cloud listing for Deno edge (no `@/` imports or extra graph deps).
  */
-import { assertCloudReadOnlyMethod } from "./im-cloud-scopes";
+function assertCloudReadOnlyMethod(method: string): void {
+  if (method !== "list" && method !== "download") {
+    throw new Error("cloud_write_forbidden");
+  }
+}
 
 export type GoogleDriveListItem = {
   id: string;
