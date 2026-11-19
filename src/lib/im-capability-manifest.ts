@@ -255,6 +255,24 @@ const LEDGER_CONNECTORS: ImConnector[] = [
   { id: "qbo", label: "QuickBooks", kind: "ledger", detail: "Read-only sync" },
   { id: "sage", label: "Sage", kind: "ledger", detail: "Read-only sync" },
   {
+    id: "google_drive",
+    label: "Google Drive",
+    kind: "upload",
+    detail: "Read-only picked folders → review queue",
+  },
+  {
+    id: "onedrive",
+    label: "OneDrive",
+    kind: "upload",
+    detail: "Read-only picked folders → review queue",
+  },
+  {
+    id: "source_inbound",
+    label: "Forwarding inbox",
+    kind: "upload",
+    detail: "Attachments → review queue",
+  },
+  {
     id: "library_upload",
     label: "Client library upload",
     kind: "upload",

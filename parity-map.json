@@ -32,6 +32,14 @@
       ]
     },
     {
+      "id": "im-cloud-access",
+      "owner": ["src/routes/app.tsx"],
+      "accountant": [
+        "src/components/data-up-to-date.tsx",
+        "src/components/im-cloud-access-panel.tsx"
+      ]
+    },
+    {
       "id": "tax-specialist",
       "owner": [
         "src/components/owner-door/owner-door.tsx",

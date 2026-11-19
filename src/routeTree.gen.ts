@@ -36,6 +36,7 @@ import { Route as ATokenRouteImport } from './routes/a.$token'
 import { Route as AccessTokenRouteImport } from './routes/access.$token'
 import { Route as AckTokenRouteImport } from './routes/ack.$token'
 import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
+import { Route as ApiImRoutineCronRouteImport } from './routes/api/im-routine-cron'
 import { Route as ApiMetricsDigestRouteImport } from './routes/api/metrics-digest'
 import { Route as ApiTaskEngagedRouteImport } from './routes/api/task-engaged'
 import { Route as AppDeliverablesRouteImport } from './routes/app_.deliverables'
@@ -68,6 +69,7 @@ import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedSettingsBrandRouteImport } from './routes/_authenticated/settings.brand'
 import { Route as AuthenticatedSettingsTeamRouteImport } from './routes/_authenticated/settings.team'
 import { Route as ApiQboCallbackRouteImport } from './routes/api/qbo/callback'
+import { Route as ApiResendClientSourceInboundRouteImport } from './routes/api/resend/client-source-inbound'
 import { Route as ApiResendWebhookRouteImport } from './routes/api/resend/webhook'
 import { Route as ApiSageSyncRouteImport } from './routes/api/sage/sync'
 import { Route as ApiStripeWebhookRouteImport } from './routes/api/stripe/webhook'
@@ -209,6 +211,11 @@ const AckTokenRoute = AckTokenRouteImport.update({
 const ApiClientErrorRoute = ApiClientErrorRouteImport.update({
   id: '/api/client-error',
   path: '/api/client-error',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiImRoutineCronRoute = ApiImRoutineCronRouteImport.update({
+  id: '/api/im-routine-cron',
+  path: '/api/im-routine-cron',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMetricsDigestRoute = ApiMetricsDigestRouteImport.update({
@@ -387,6 +394,12 @@ const ApiQboCallbackRoute = ApiQboCallbackRouteImport.update({
   path: '/api/qbo/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiResendClientSourceInboundRoute =
+  ApiResendClientSourceInboundRouteImport.update({
+    id: '/api/resend/client-source-inbound',
+    path: '/api/resend/client-source-inbound',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiResendWebhookRoute = ApiResendWebhookRouteImport.update({
   id: '/api/resend/webhook',
   path: '/api/resend/webhook',
@@ -458,6 +471,7 @@ export interface FileRoutesByFullPath {
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
+  '/api/im-routine-cron': typeof ApiImRoutineCronRoute
   '/api/metrics-digest': typeof ApiMetricsDigestRoute
   '/api/task-engaged': typeof ApiTaskEngagedRoute
   '/app/deliverables': typeof AppDeliverablesRoute
@@ -487,6 +501,7 @@ export interface FileRoutesByFullPath {
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
+  '/api/resend/client-source-inbound': typeof ApiResendClientSourceInboundRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
   '/api/sage/sync': typeof ApiSageSyncRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
@@ -526,6 +541,7 @@ export interface FileRoutesByTo {
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
+  '/api/im-routine-cron': typeof ApiImRoutineCronRoute
   '/api/metrics-digest': typeof ApiMetricsDigestRoute
   '/api/task-engaged': typeof ApiTaskEngagedRoute
   '/app/deliverables': typeof AppDeliverablesRoute
@@ -555,6 +571,7 @@ export interface FileRoutesByTo {
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
+  '/api/resend/client-source-inbound': typeof ApiResendClientSourceInboundRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
   '/api/sage/sync': typeof ApiSageSyncRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
@@ -596,6 +613,7 @@ export interface FileRoutesById {
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
+  '/api/im-routine-cron': typeof ApiImRoutineCronRoute
   '/api/metrics-digest': typeof ApiMetricsDigestRoute
   '/api/task-engaged': typeof ApiTaskEngagedRoute
   '/app_/deliverables': typeof AppDeliverablesRoute
@@ -625,6 +643,7 @@ export interface FileRoutesById {
   '/_authenticated/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/_authenticated/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
+  '/api/resend/client-source-inbound': typeof ApiResendClientSourceInboundRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
   '/api/sage/sync': typeof ApiSageSyncRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
@@ -666,6 +685,7 @@ export interface FileRouteTypes {
     | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
+    | '/api/im-routine-cron'
     | '/api/metrics-digest'
     | '/api/task-engaged'
     | '/app/deliverables'
@@ -695,6 +715,7 @@ export interface FileRouteTypes {
     | '/settings/brand'
     | '/settings/team'
     | '/api/qbo/callback'
+    | '/api/resend/client-source-inbound'
     | '/api/resend/webhook'
     | '/api/sage/sync'
     | '/api/stripe/webhook'
@@ -734,6 +755,7 @@ export interface FileRouteTypes {
     | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
+    | '/api/im-routine-cron'
     | '/api/metrics-digest'
     | '/api/task-engaged'
     | '/app/deliverables'
@@ -763,6 +785,7 @@ export interface FileRouteTypes {
     | '/settings/brand'
     | '/settings/team'
     | '/api/qbo/callback'
+    | '/api/resend/client-source-inbound'
     | '/api/resend/webhook'
     | '/api/sage/sync'
     | '/api/stripe/webhook'
@@ -803,6 +826,7 @@ export interface FileRouteTypes {
     | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
+    | '/api/im-routine-cron'
     | '/api/metrics-digest'
     | '/api/task-engaged'
     | '/app_/deliverables'
@@ -832,6 +856,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/brand'
     | '/_authenticated/settings/team'
     | '/api/qbo/callback'
+    | '/api/resend/client-source-inbound'
     | '/api/resend/webhook'
     | '/api/sage/sync'
     | '/api/stripe/webhook'
@@ -869,6 +894,7 @@ export interface RootRouteChildren {
   AccessTokenRoute: typeof AccessTokenRoute
   AckTokenRoute: typeof AckTokenRoute
   ApiClientErrorRoute: typeof ApiClientErrorRoute
+  ApiImRoutineCronRoute: typeof ApiImRoutineCronRoute
   ApiMetricsDigestRoute: typeof ApiMetricsDigestRoute
   ApiTaskEngagedRoute: typeof ApiTaskEngagedRoute
   AppDeliverablesRoute: typeof AppDeliverablesRoute
@@ -885,6 +911,7 @@ export interface RootRouteChildren {
   TalkAgentRoute: typeof TalkAgentRoute
   TalkIndexRoute: typeof TalkIndexRoute
   ApiQboCallbackRoute: typeof ApiQboCallbackRoute
+  ApiResendClientSourceInboundRoute: typeof ApiResendClientSourceInboundRoute
   ApiResendWebhookRoute: typeof ApiResendWebhookRoute
   ApiSageSyncRoute: typeof ApiSageSyncRoute
   ApiStripeWebhookRoute: typeof ApiStripeWebhookRoute
@@ -1084,6 +1111,13 @@ declare module '@tanstack/react-router' {
       path: '/api/client-error'
       fullPath: '/api/client-error'
       preLoaderRoute: typeof ApiClientErrorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/im-routine-cron': {
+      id: '/api/im-routine-cron'
+      path: '/api/im-routine-cron'
+      fullPath: '/api/im-routine-cron'
+      preLoaderRoute: typeof ApiImRoutineCronRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/metrics-digest': {
@@ -1310,6 +1344,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiQboCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/resend/client-source-inbound': {
+      id: '/api/resend/client-source-inbound'
+      path: '/api/resend/client-source-inbound'
+      fullPath: '/api/resend/client-source-inbound'
+      preLoaderRoute: typeof ApiResendClientSourceInboundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/resend/webhook': {
       id: '/api/resend/webhook'
       path: '/api/resend/webhook'
@@ -1444,6 +1485,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccessTokenRoute: AccessTokenRoute,
   AckTokenRoute: AckTokenRoute,
   ApiClientErrorRoute: ApiClientErrorRoute,
+  ApiImRoutineCronRoute: ApiImRoutineCronRoute,
   ApiMetricsDigestRoute: ApiMetricsDigestRoute,
   ApiTaskEngagedRoute: ApiTaskEngagedRoute,
   AppDeliverablesRoute: AppDeliverablesRoute,
@@ -1460,6 +1502,7 @@ const rootRouteChildren: RootRouteChildren = {
   TalkAgentRoute: TalkAgentRoute,
   TalkIndexRoute: TalkIndexRoute,
   ApiQboCallbackRoute: ApiQboCallbackRoute,
+  ApiResendClientSourceInboundRoute: ApiResendClientSourceInboundRoute,
   ApiResendWebhookRoute: ApiResendWebhookRoute,
   ApiSageSyncRoute: ApiSageSyncRoute,
   ApiStripeWebhookRoute: ApiStripeWebhookRoute,
