@@ -22,7 +22,7 @@ import {
   type SupplierTrustRow,
 } from "@/lib/source-documents-ui";
 
-export type UploadChannel = "upload" | "camera";
+export type UploadChannel = "upload" | "camera" | "email";
 
 export type UploadOutcome =
   | { ok: true; duplicate: true; documentId: string }
