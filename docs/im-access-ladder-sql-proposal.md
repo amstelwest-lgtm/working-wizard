@@ -1,6 +1,6 @@
 # IM access ladder rungs 3–4 — minimal SQL (needs approval)
 
-OAuth tokens must not live in `clients` jsonb (RLS). Follow the Xero/QBO pattern: service-role-only tables with RLS enabled and no policies.
+OAuth tokens must not live in `clients` jsonb (RLS). Service-role-only tables with RLS enabled and no policies. CoS option **(b)**: app-level AES-GCM in `*_enc` columns (`IM_CLOUD_TOKEN_KEY`).
 
 ## Tables
 
@@ -20,20 +20,15 @@ One row per client per provider (or separate rows with `unique(client_id, provid
 - `client_id` uuid
 - `provider` text
 - `folder_ids` text[] (picked roots, mirrored from UI)
-- `access_token` text encrypted at rest
-- `refresh_token` text encrypted at rest
+- `access_token_enc` / `refresh_token_enc` text nullable — AES-GCM ciphertext (`IM_CLOUD_TOKEN_KEY`); NULL after disconnect when `revoked_at` is set
+- CHECK: `revoked_at IS NOT NULL OR (access_token_enc IS NOT NULL AND refresh_token_enc IS NOT NULL)`
 - `token_expiry` timestamptz
 - `drive_id` text nullable (Microsoft)
 - `connected_at`, `last_polled_at`, `revoked_at` timestamptz nullable
 
-### Optional: `im_source_inbound_aliases`
+### `im_source_inbound_aliases` — skipped (CoS)
 
-If scanning all `clients.deliverable_inputs` on each webhook is too heavy:
-
-- `client_id` uuid primary key
-- `firm_id` uuid nullable
-- `local_part` text unique (derived from client id)
-- `allowed_senders` text[]
+Keep the admin scan of `deliverable_inputs.imAccess` on inbound webhook; no alias table.
 
 ## RLS
 
@@ -45,9 +40,13 @@ If scanning all `clients.deliverable_inputs` on each webhook is too heavy:
 - Disconnect must delete/revoke tokens server-side and stop poll cron.
 - Forwarding resolution at webhook scale needs an indexed `local_part` lookup.
 
-## After approval
+## Migration file (prepared, not applied)
 
-1. Apply migration in Supabase.
+`supabase/migrations/20261119103000_im_cloud_oauth_connections.sql` — tables 1–2 only.
+
+## After ops applies migration
+
+1. Apply migration in Supabase (manual).
 2. Set `IM_CLOUD_OAUTH_SQL_READY=1`.
 3. Wire OAuth callbacks and `im-cloud-poll` to `im_cloud_connections`.
 4. Redeploy edge `im-cloud-poll`.
