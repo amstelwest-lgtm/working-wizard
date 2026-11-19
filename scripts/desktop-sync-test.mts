@@ -50,6 +50,11 @@ assert(!deviceTokenCanRead(), "token cannot read");
 assert(!desktopSyncDeviceScopes.canListClients, "no client list");
 assert(!desktopSyncDeviceScopes.canCallAgents, "no agents");
 assert(!desktopSyncSqlReady(), "sql ready off by default");
+process.env.DESKTOP_SYNC_SQL_READY = "true";
+assert(!desktopSyncSqlReady(), "true is not on");
+process.env.DESKTOP_SYNC_SQL_READY = "1";
+assert(desktopSyncSqlReady(), "exact 1 is on");
+delete process.env.DESKTOP_SYNC_SQL_READY;
 
 const functions = readFileSync(resolve("src/lib/desktop-sync.functions.ts"), "utf8");
 const device = readFileSync(resolve("src/lib/desktop-sync-device.functions.ts"), "utf8");
@@ -66,6 +71,8 @@ assert(device.includes('reason: "revoked"'), "revoke blocks upload");
 assert(device.includes('reason: "folder"'), "unmapped folder rejected");
 assert(device.includes("upload_skipped"), "unsupported types logged as skipped");
 assert(device.includes("desktopSyncUnsupportedType"), "type gate before caps");
+assert(device.includes('.is("used_at", null)'), "atomic pairing redeem");
+assert(device.includes('blocked: "disabled"'), "probe disabled in production");
 assert(!device.includes("writeFile"), "agent server must not write local files");
 
 const agentFilter = readFileSync(resolve("desktop-sync/src/filter.ts"), "utf8");

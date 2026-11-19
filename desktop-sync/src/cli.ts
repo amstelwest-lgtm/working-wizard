@@ -1,4 +1,4 @@
-import { clearState, saveState, type StoredState } from "./keychain.ts";
+import { assertKeychainAvailable, clearState, saveState, type StoredState } from "./keychain.ts";
 import { pairDevice } from "./api.ts";
 import { runWatcher } from "./agent.ts";
 
@@ -21,6 +21,7 @@ async function cmdPair(args: string[]) {
   if (!api || !code || folderArgs.length < 1) {
     throw new Error("pair requires --api= --code= and at least one --folders=/path=label");
   }
+  await assertKeychainAvailable();
   const body = (await pairDevice(api, code, label)) as {
     ok?: boolean;
     accessToken?: string;

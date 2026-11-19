@@ -200,17 +200,20 @@ export async function pairDesktopSyncDeviceImpl(
       if (!desktopSyncSqlReady()) return { ok: false, reason: "not_enabled" };
       if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
       const codeHash = await hashPairingCode(data.pairingCode);
-      const codeRow = await table("desktop_sync_pairing_codes")
-        .select("id, firm_id, device_label, expires_at, used_at, created_by")
+      const nowIso = new Date().toISOString();
+      const redeemed = await table("desktop_sync_pairing_codes")
+        .update({ used_at: nowIso })
         .eq("code_hash", codeHash)
+        .is("used_at", null)
+        .gt("expires_at", nowIso)
+        .select("id, firm_id, device_label, created_by")
         .maybeSingle();
-      if (codeRow.error) {
-        if (missingDesktopTable(codeRow.error)) return { ok: false, reason: "unavailable" };
-        throw new Error(codeRow.error.message);
+      if (redeemed.error) {
+        if (missingDesktopTable(redeemed.error)) return { ok: false, reason: "unavailable" };
+        throw new Error(redeemed.error.message);
       }
-      const row = codeRow.data;
-      if (!row || row.used_at) return { ok: false, reason: "code" };
-      if (new Date(String(row.expires_at)).getTime() < Date.now()) return { ok: false, reason: "expired" };
+      const row = redeemed.data;
+      if (!row) return { ok: false, reason: "code" };
       if (!(await firmSyncEnabled(String(row.firm_id)))) return { ok: false, reason: "off" };
 
       const access = newOpaqueToken();
@@ -233,10 +236,6 @@ export async function pairDesktopSyncDeviceImpl(
         linked_upload_user_id: row.created_by,
       });
       if (inserted.error) throw new Error(inserted.error.message);
-
-      await table("desktop_sync_pairing_codes")
-        .update({ used_at: new Date().toISOString() })
-        .eq("id", row.id);
 
       const maps = await table("desktop_sync_folder_maps")
         .select("folder_label, client_id")
@@ -482,6 +481,9 @@ export const desktopSyncDeviceScopes = {
 } as const;
 
 export const probeDesktopSyncDeviceRead = createServerFn({ method: "GET" }).handler(async () => {
+  if (process.env.NODE_ENV === "production") {
+    return { ok: false, blocked: "disabled" as const };
+  }
   if (!desktopSyncSqlReady()) return { ok: false, blocked: "not_enabled" as const };
   const token = bearerToken();
   if (!token) return { ok: false, blocked: "unauthorised" as const };

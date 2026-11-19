@@ -4,7 +4,7 @@ Upload-only watcher for partner-named folders. macOS and Windows. **Not** bundle
 
 ## Packaging choice
 
-**Shipped here:** small **Node 22 CLI** with `chokidar` and OS keychain via optional `keytar`. Lowest cross-platform cost for PR G; fits unsigned dev builds.
+**Shipped here:** small **Node 22 CLI** with `chokidar` and OS keychain via **required** `keytar`. Without keytar, `pair` and `watch` refuse to run (fail closed). Non-secret state may live in `~/.milon-desktop-sync/state.json`; device tokens never do.
 
 **Next step for tray UX:** wrap the same `src/agent.ts` core in **Tauri 2** (smaller binary than Electron, native Keychain / Credential Manager). Electron remains an option if you need mature tray icons on older Windows without Rust tooling.
 
@@ -32,7 +32,7 @@ Pair from **Settings → Desktop folder sync** in the web app (Ben test firm onl
 ## Commands
 
 ```bash
-# Pair once; tokens go to OS keychain (or `~/.milon-desktop-sync/token` if keytar missing)
+# Pair once; tokens go to OS keychain only (keytar required)
 pnpm run dev -- pair --api https://YOUR_DEPLOY --code XXXX-XXXX --folders "/path/to/VAT 2026=folder-label"
 
 # Watch (uses saved token + folder map)
