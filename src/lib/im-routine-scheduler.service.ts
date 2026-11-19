@@ -13,6 +13,7 @@ import { parseRoutineMapMeta, type RoutineActionRow, type RoutineRunRow } from "
 import {
   imBudgetVarianceThresholdBreached,
   imRoutinePeriodKey,
+  countImRoutineStubSkips,
   planImRoutineEnqueues,
   scheduledRunInputs,
   type ImRoutineEventContext,
@@ -23,8 +24,13 @@ import { CLAUDE_SONNET_55, isClaudeOpus55 } from "@/lib/claude-request";
 import { computeBudgetMonths, normalizeBudgetDocument } from "@/lib/budget.compute";
 import { normalizeTaxonomyTotals } from "@/lib/budget.variance";
 import type { BudgetDocument } from "@/lib/budget.types";
-import { calendarDateInTimeZone, calendarMonthBounds } from "@/lib/statement-period";
+import {
+  calendarMonthBounds,
+  timeZoneCalendarDayUtcBounds,
+  timeZoneMonthStartUtcIso,
+} from "@/lib/statement-period";
 import { imCashCollectionsRiskFromFinancials } from "@/lib/im-routine-signals";
+import { imTaxDeadlineApproaching } from "@/lib/im-routine-tax-deadlines";
 
 type Row = Record<string, unknown>;
 type DbError = { message: string; code?: string } | null;
@@ -33,8 +39,10 @@ type DbResult<T> = { data: T; error: DbError };
 type Filter = {
   eq: (column: string, value: string) => Filter;
   is: (column: string, value: null) => Filter;
+  not: (column: string, operator: string, value: string) => Filter;
   order: (column: string, options: { ascending: boolean }) => Filter;
   limit: (count: number) => Filter;
+  range: (from: number, to: number) => Filter;
   gte: (column: string, value: string) => Filter;
   maybeSingle: () => Promise<DbResult<Row | null>>;
 };
@@ -87,6 +95,7 @@ export async function assertClientBelongsToFirm(clientId: string, firmId: string
 async function pilotBooks(clientId: string, now: Date): Promise<{ hasLedger: boolean; hasUpload: boolean }> {
   const db = admin();
   const { from: periodStart } = calendarMonthBounds(now, 0, IM_ROUTINE_TIME_ZONE);
+  const uploadSince = timeZoneMonthStartUtcIso(periodStart, IM_ROUTINE_TIME_ZONE);
   const [xero, qbo, sage, uploads] = await Promise.all([
     db.from("xero_connections").select("id").eq("client_id", clientId).limit(1).maybeSingle(),
     db.from("qbo_connections").select("id").eq("client_id", clientId).limit(1).maybeSingle(),
@@ -96,7 +105,7 @@ async function pilotBooks(clientId: string, now: Date): Promise<{ hasLedger: boo
       .select("id")
       .eq("client_id", clientId)
       .eq("kind", "upload")
-      .gte("created_at", `${periodStart}T00:00:00.000Z`)
+      .gte("created_at", uploadSince)
       .limit(1)
       .maybeSingle(),
   ]);
@@ -106,11 +115,20 @@ async function pilotBooks(clientId: string, now: Date): Promise<{ hasLedger: boo
   };
 }
 
-async function loadClientFinancials(clientId: string): Promise<unknown> {
+async function loadClientBooksRow(
+  clientId: string,
+): Promise<{ financials: unknown; operating_profile: unknown }> {
   const db = admin();
-  const row = await db.from("clients").select("financials").eq("id", clientId).maybeSingle();
+  const row = await db
+    .from("clients")
+    .select("financials, operating_profile")
+    .eq("id", clientId)
+    .maybeSingle();
   if (row.error) throw new Error(row.error.message);
-  return row.data?.financials ?? null;
+  return {
+    financials: row.data?.financials ?? null,
+    operating_profile: row.data?.operating_profile ?? null,
+  };
 }
 
 async function loadBudgetDriftFlags(clientId: string, periodKey: string): Promise<{
@@ -159,8 +177,9 @@ export async function loadImRoutineScheduleContext(clientId: string, now = new D
   const periodKey = imRoutinePeriodKey(now);
   const books = await pilotBooks(clientId, now);
   const drift = await loadBudgetDriftFlags(clientId, periodKey);
-  const financials = await loadClientFinancials(clientId);
-  const cashCollectionsRisk = imCashCollectionsRiskFromFinancials(financials);
+  const booksRow = await loadClientBooksRow(clientId);
+  const cashCollectionsRisk = imCashCollectionsRiskFromFinancials(booksRow.financials);
+  const taxDeadlineApproaching = imTaxDeadlineApproaching(now, booksRow.operating_profile);
   return {
     ...books,
     now,
@@ -169,26 +188,19 @@ export async function loadImRoutineScheduleContext(clientId: string, now = new D
     varianceBreached: drift.varianceBreached,
     documentUploaded: books.hasUpload,
     cashCollectionsRisk,
+    taxDeadlineApproaching,
   };
-}
-
-function jhbDayBounds(now: Date): { from: string; to: string } {
-  const ymd = (() => {
-    const { year, month, day } = calendarDateInTimeZone(now, IM_ROUTINE_TIME_ZONE);
-    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  })();
-  return { from: `${ymd}T00:00:00.000Z`, to: `${ymd}T23:59:59.999Z` };
 }
 
 export async function countFirmRoutineInvokesToday(firmId: string, now: Date): Promise<number> {
   const db = admin();
-  const { from, to } = jhbDayBounds(now);
+  const { startIso, endIso } = timeZoneCalendarDayUtcBounds(now, IM_ROUTINE_TIME_ZONE);
   const res = await (db
     .from("agent_runs")
     .select("id, summary")
     .eq("firm_id", firmId)
-    .gte("queued_at", from)
-    .lte("queued_at", to)
+    .gte("queued_at", startIso)
+    .lt("queued_at", endIso)
     .limit(200) as unknown as Promise<{ data: Row[] | null; error: DbError }>);
   if (res.error) return 0;
   return (res.data ?? []).filter((row) => {
@@ -203,6 +215,7 @@ async function enqueueScheduledDraftRun(input: {
   firmId: string;
   actionItemId: string;
   periodKey: string;
+  botOwner?: string;
 }): Promise<DraftRunEnqueue | null> {
   const decision = handoffDecision(input.agent);
   if (!decision.ok) return null;
@@ -236,13 +249,18 @@ async function enqueueScheduledDraftRun(input: {
       status: "queued",
       action_item_id: input.actionItemId,
       attempt: 1,
-      summary: "Implementation Manager routine — draft only.",
+      summary: input.botOwner?.toLowerCase().includes("tax")
+        ? "Implementation Manager routine — draft for review."
+        : "Implementation Manager routine — draft only.",
       trace: [
         {
           tool: "im_routine_scheduler",
           label: `Queued for period ${input.periodKey}`,
           status: "queued",
           im_execution_model: CLAUDE_SONNET_55,
+          ...(input.botOwner?.toLowerCase().includes("tax")
+            ? { im_routine_owner: "Tax Specialist", no_sars: true }
+            : {}),
         },
       ],
     })
@@ -354,6 +372,15 @@ export async function runImRoutineSchedulerCore(
     const runs = runsRes.data ?? [];
 
     for (const meta of acceptedMetas) {
+      counts.skipped_stub_signal += countImRoutineStubSkips({
+        firmId: input.firmId,
+        clientId,
+        meta,
+        actions,
+        runs,
+        context: scheduleContext,
+        now,
+      });
       const plan = planImRoutineEnqueues({
         firmId: input.firmId,
         clientId,
@@ -365,13 +392,6 @@ export async function runImRoutineSchedulerCore(
       });
       for (const row of plan) {
         counts.due += 1;
-        if (
-          row.trigger === "event_cash_collections_risk" &&
-          !scheduleContext.cashCollectionsRisk
-        ) {
-          counts.skipped_stub_signal += 1;
-          continue;
-        }
         if (invokesLeft <= 0) {
           counts.skipped_cap += 1;
           continue;
@@ -398,6 +418,7 @@ export async function runImRoutineSchedulerCore(
           firmId: input.firmId,
           actionItemId: actionItem.id,
           periodKey: row.periodKey,
+          botOwner: row.botOwner,
         });
         const added = countNewlyEnqueuedRun(result);
         if (added > 0) {
@@ -420,18 +441,26 @@ export async function runImRoutineSchedulerCore(
 
 export async function listFirmIdsWithAcceptedRoutines(limit: number): Promise<string[]> {
   const db = admin();
-  const res = await (db
-    .from("client_artifacts")
-    .select("meta")
-    .eq("kind", "routine_map")
-    .limit(400) as unknown as Promise<{ data: Row[] | null; error: DbError }>);
-  if (res.error) throw new Error(res.error.message);
   const firms = new Set<string>();
-  for (const row of res.data ?? []) {
-    const meta = parseRoutineMapMeta(row.meta);
-    if (!meta?.accepted_at || !meta.firm_id) continue;
-    firms.add(meta.firm_id);
-    if (firms.size >= limit) break;
+  const pageSize = 100;
+  for (let offset = 0; firms.size < limit; offset += pageSize) {
+    const res = await (db
+      .from("client_artifacts")
+      .select("meta")
+      .eq("kind", "routine_map")
+      .not("meta->>accepted_at", "is", null)
+      .not("meta->>accepted_at", "eq", "")
+      .order("created_at", { ascending: true })
+      .range(offset, offset + pageSize - 1) as unknown as Promise<{ data: Row[] | null; error: DbError }>);
+    if (res.error) throw new Error(res.error.message);
+    const rows = res.data ?? [];
+    for (const row of rows) {
+      const meta = parseRoutineMapMeta(row.meta);
+      if (!meta?.accepted_at || !meta.firm_id) continue;
+      firms.add(meta.firm_id);
+      if (firms.size >= limit) break;
+    }
+    if (rows.length < pageSize) break;
   }
-  return [...firms];
+  return [...firms].slice(0, limit);
 }

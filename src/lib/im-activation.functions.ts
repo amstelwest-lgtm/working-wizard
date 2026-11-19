@@ -304,6 +304,7 @@ const acceptSchema = z.object({
         "monthly_pack",
         "cash_debtor_early_warning",
         "budget_actual_drift",
+        "tax_deadline_watch",
       ]),
       accepted: z.boolean(),
       hoursSavedPerRun: z.number().positive().max(40).optional().nullable(),

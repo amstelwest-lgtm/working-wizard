@@ -26,6 +26,10 @@ import { sanitizeMilonBrainRuleTextForPrompt, milonBrainRulesPromptLines } from 
 import { MILON_BRAIN_RULES_FENCE_CLOSE, MILON_BRAIN_RULES_FENCE_OPEN } from "../src/lib/milon-brain-rules.ts";
 import { normalizeTaxonomyTotals } from "../src/lib/budget.variance.ts";
 import { STRIKE7_BEN_ID } from "./strike7-firms.ts";
+import {
+  countImRoutineStubSkips,
+} from "../src/lib/im-routine-schedule.ts";
+import { imTaxDeadlineApproaching } from "../src/lib/im-routine-tax-deadlines.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -112,6 +116,28 @@ assert(!imRoutineTriggerMet("event_budget_drift_check", { hasLedger: true, hasUp
 const ctxCash = { hasLedger: true, hasUpload: false, cashCollectionsRisk: true, now: janEnd };
 assert(imRoutineTriggerMet("event_cash_collections_risk", ctxCash, true), "cash risk met");
 assert(!imRoutineTriggerMet("event_cash_collections_risk", { hasLedger: true, hasUpload: false, now: janEnd }, true), "no cash risk");
+
+const taxCtx = {
+  hasLedger: true,
+  hasUpload: false,
+  taxDeadlineApproaching: true,
+  now: new Date("2026-01-26T08:00:00.000Z"),
+};
+assert(imRoutineTriggerMet("event_tax_deadline_approaching", taxCtx, true), "tax deadline trigger");
+assert(!imRoutineTriggerMet("event_tax_deadline_approaching", { hasLedger: true, hasUpload: false, now: janEnd }, true), "no tax flag");
+
+const monthEndApproach = new Date("2026-01-28T10:00:00.000Z");
+assert(imTaxDeadlineApproaching(monthEndApproach, null), "VAT/EMP window near month end");
+
+const cashStub = countImRoutineStubSkips({
+  firmId: firm,
+  clientId: client,
+  meta: artifactFor(cashMap!),
+  actions: [],
+  runs: [],
+  context: { hasLedger: true, hasUpload: false, cashCollectionsRisk: false },
+});
+assert(cashStub === 1, "stub skip counted on cash map");
 
 const jhbBoundary = new Date("2026-11-30T23:30:00.000Z");
 assert(imRoutinePeriodKey(jhbBoundary) === "2026-12", "JHB period at 23:30 UTC");

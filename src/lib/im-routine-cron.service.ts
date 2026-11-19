@@ -11,7 +11,7 @@ import {
   cronSecretConfigured,
   hasValidCronBearer,
   imRoutineCronFirmDailyCap,
-  imRoutineCronKillSwitchOn,
+  imRoutineCronEnabled,
   imRoutineCronMaxFirms,
   imRoutineCronMaxInvokes,
 } from "@/lib/im-routine-cron-auth";
@@ -27,7 +27,7 @@ export async function runImRoutineCron(request: Request): Promise<ImRoutineCronR
   if (!hasValidCronBearer(request)) {
     return { ok: false, error: "unauthorized", wrote: false };
   }
-  if (!imRoutineCronKillSwitchOn()) {
+  if (!imRoutineCronEnabled()) {
     return { ok: true, wrote: true, noop: true, counts: emptyImRoutineSchedulerCounts() };
   }
 

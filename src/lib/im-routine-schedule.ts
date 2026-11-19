@@ -9,7 +9,11 @@ import {
   type TaxonomyTotals,
 } from "./budget.variance.ts";
 import type { BudgetMonthResult } from "./budget.types.ts";
-import { botOwnerToAgentKey, imActivationTriggerMet, type ImBooksContext } from "./im-activation-triggers.ts";
+import {
+  imActivationTriggerMet,
+  imRoutineRunnerAgentForStep,
+  type ImBooksContext,
+} from "./im-activation-triggers.ts";
 import { activationActionMoveKey, activationRunInputs } from "./im-activation-persist.ts";
 import type { ImRoutineMapArtifactMeta } from "./im-activation-persist.ts";
 import { calendarDateInTimeZone, calendarMonthBounds } from "./statement-period.ts";
@@ -30,6 +34,8 @@ export type ImRoutineEventContext = ImBooksContext & {
   documentUploaded?: boolean;
   /** Cash / collections pressure signal from ledger reads. */
   cashCollectionsRisk?: boolean;
+  /** VAT/EMP or company tax due within the approaching window (ZA). */
+  taxDeadlineApproaching?: boolean;
 };
 
 export function imRoutinePeriodKey(now: Date = new Date()): string {
@@ -125,6 +131,9 @@ export function imRoutineTriggerMet(trigger: string, context: ImRoutineEventCont
   if (trigger === "event_cash_collections_risk") {
     return Boolean(context.cashCollectionsRisk && (context.hasLedger || context.hasUpload));
   }
+  if (trigger === "event_tax_deadline_approaching") {
+    return Boolean(context.taxDeadlineApproaching && (context.hasLedger || context.hasUpload));
+  }
   return imActivationTriggerMet(trigger, context);
 }
 
@@ -195,9 +204,55 @@ export type ImRoutineEnqueuePlan = {
   stepId: string;
   actionMoveKey: string;
   agent: "financial_manager" | "analyst" | "advisor";
+  botOwner: string;
   trigger: string;
   periodKey: string;
 };
+
+/** Cash-collections stub: books on file but risk signal false — count before planning drops the step. */
+export function countImRoutineStubSkips(input: {
+  meta: ImRoutineMapArtifactMeta;
+  actions: readonly RoutineActionRow[];
+  runs: readonly RoutineRunRow[];
+  context: ImRoutineEventContext;
+  firmId: string;
+  clientId: string;
+  now?: Date;
+}): number {
+  if (!input.meta.accepted_at || input.meta.routine !== "cash_debtor_early_warning") return 0;
+  const now = input.now ?? input.context.now ?? new Date();
+  const periodKey = imRoutinePeriodKey(now);
+  let priorSucceeded = true;
+  for (const step of input.meta.steps) {
+    const moveKey = activationActionMoveKey(input.firmId, input.clientId, input.meta.routine, step.id);
+    const action = input.actions.find((row) => row.source_move_key === moveKey);
+    const relatedRuns = input.runs.filter(
+      (run) => run.action_item_id && run.action_item_id === action?.id,
+    );
+    const periodRuns = runsForStepInPeriod(relatedRuns, periodKey);
+    const succeeded = periodRuns.some((run) =>
+      ["succeeded", "partial", "skipped"].includes(run.status),
+    );
+    const open = periodRuns.some((run) => run.status === "queued" || run.status === "running");
+    if (succeeded) {
+      priorSucceeded = true;
+      continue;
+    }
+    if (open) break;
+    if (
+      step.trigger === "event_cash_collections_risk" &&
+      priorSucceeded &&
+      (input.context.hasLedger || input.context.hasUpload) &&
+      !input.context.cashCollectionsRisk &&
+      !imRoutineTriggerMet(step.trigger, { ...input.context, now }, priorSucceeded)
+    ) {
+      return 1;
+    }
+    priorSucceeded = false;
+    break;
+  }
+  return 0;
+}
 
 export function planImRoutineEnqueues(input: {
   firmId: string;
@@ -231,7 +286,7 @@ export function planImRoutineEnqueues(input: {
     }
     if (open) break;
 
-    const agent = botOwnerToAgentKey(step.botOwner);
+    const agent = imRoutineRunnerAgentForStep(step.botOwner);
     if (!agent) {
       priorSucceeded = false;
       continue;
@@ -249,6 +304,7 @@ export function planImRoutineEnqueues(input: {
       stepId: step.id,
       actionMoveKey: moveKey,
       agent,
+      botOwner: step.botOwner,
       trigger: step.trigger,
       periodKey,
     });

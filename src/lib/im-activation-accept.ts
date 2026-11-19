@@ -7,7 +7,7 @@ import {
   activationArtifactKey,
   type ImActivationRoutine,
 } from "./im-activation-persist.ts";
-import { botOwnerToAgentKey, type ImBooksContext } from "./im-activation-triggers.ts";
+import { imRoutineRunnerAgentForStep, type ImBooksContext } from "./im-activation-triggers.ts";
 import { imRoutineTriggerMet } from "./im-routine-schedule.ts";
 
 export type ImActivationAcceptInput = {
@@ -43,7 +43,7 @@ export function planActivationAccept(input: ImActivationAcceptInput): ImActivati
   for (const step of input.map.steps) {
     const moveKey = activationActionMoveKey(input.firmId, input.clientId, input.routine, step.id);
     if (!input.existingActionKeys.has(moveKey)) actionKeys.push(moveKey);
-    const agent = botOwnerToAgentKey(step.botOwner);
+    const agent = imRoutineRunnerAgentForStep(step.botOwner);
     if (!agent) continue;
     if (!imRoutineTriggerMet(step.trigger, { ...input.books, now: new Date() }, true)) continue;
     if (enqueue.some((row) => row.routine === input.routine)) continue;

@@ -6,7 +6,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runQueueJob, type RunnerJob } from "../_shared/agent-core/job.ts";
 import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
 import { ADVISOR_SYSTEM, advisorToolSchemas } from "../_shared/agent-prompts/advisor.ts";
-import { modelForAgent } from "../../../src/lib/claude-request.ts";
+import { CLAUDE_SONNET_55, modelForAgent } from "../../../src/lib/claude-request.ts";
 import { ADVISOR_DRAFT_NUDGE } from "../../../src/lib/owner-handoff.ts";
 import {
   ADVISOR_COST_CEILING_USD,
@@ -22,6 +22,11 @@ import { executeAdvisorTool } from "./execute.ts";
 const OBJECTIVE =
   "Draft the next move and any advisory deliverable from the stored figures and findings. Do not mark anything signed off. Drafts only: a person approves before anything is sent.";
 
+function advisorModelForJob(inputs: string): string {
+  if (inputs.startsWith("im_activation:run:")) return CLAUDE_SONNET_55;
+  return modelForAgent("advisor", { standard: CLAUDE_MODEL });
+}
+
 export function runAdvisorJob(db: SupabaseClient, job: RunnerJob) {
   return runQueueJob(db, job, {
     agent: "advisor",
@@ -36,7 +41,7 @@ export function runAdvisorJob(db: SupabaseClient, job: RunnerJob) {
     writeTools: ADVISOR_WRITE_TOOLS,
     fallbackDraftKind: ADVISOR_DRAFT_KINDS[0],
     costCeilingUsd: ADVISOR_COST_CEILING_USD,
-    model: modelForAgent("advisor", { standard: CLAUDE_MODEL }),
+    model: advisorModelForJob(job.inputs),
     draftNudge: ADVISOR_DRAFT_NUDGE,
     runOutcome: advisorRunOutcome,
     execute: executeAdvisorTool,

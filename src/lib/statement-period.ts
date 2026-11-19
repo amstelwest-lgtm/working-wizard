@@ -254,6 +254,25 @@ function asUtcCalendarDate(now: Date, timeZone: string): Date {
  * Month 0 ends today when the month is still open.
  * Without `timeZone` the day is UTC. Sage passes Africa/Johannesburg.
  */
+/** UTC ISO bounds for the calendar day `now` has in `timeZone` (Johannesburg uses +02:00). */
+export function timeZoneCalendarDayUtcBounds(
+  now: Date,
+  timeZone: string,
+): { startIso: string; endIso: string; dayYmd: string } {
+  const { year, month, day } = calendarDateInTimeZone(now, timeZone);
+  const dayYmd = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const offset = timeZone === "Africa/Johannesburg" ? "+02:00" : "+00:00";
+  const startIso = new Date(`${dayYmd}T00:00:00${offset}`).toISOString();
+  const endIso = new Date(new Date(`${dayYmd}T00:00:00${offset}`).getTime() + 86_400_000).toISOString();
+  return { startIso, endIso, dayYmd };
+}
+
+/** UTC ISO instant at local midnight on the first day of the calendar month in `timeZone`. */
+export function timeZoneMonthStartUtcIso(monthStartYmd: string, timeZone: string): string {
+  const offset = timeZone === "Africa/Johannesburg" ? "+02:00" : "+00:00";
+  return new Date(`${monthStartYmd}T00:00:00${offset}`).toISOString();
+}
+
 export function calendarMonthBounds(
   now = new Date(),
   monthsBack = 0,
