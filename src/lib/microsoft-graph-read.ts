@@ -38,6 +38,21 @@ export function buildMicrosoftGraphAuthUrl(input: {
   return `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/authorize?${params.toString()}`;
 }
 
+/** List children when folder id is a drive item id under the signed-in user's default drive. */
+export async function microsoftGraphListFolderByItemId(
+  accessToken: string,
+  folderItemId: string,
+): Promise<GraphDriveItem[]> {
+  assertCloudReadOnlyMethod("list");
+  const url = `https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(folderItemId)}/children?$top=100`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) throw new Error(`graph_list_failed:${res.status}`);
+  const body = (await res.json()) as { value?: GraphDriveItem[] };
+  return body.value ?? [];
+}
+
 export async function graphListFolderChildren(
   accessToken: string,
   driveId: string,

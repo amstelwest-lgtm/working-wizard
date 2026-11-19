@@ -249,6 +249,7 @@
     "test:im-routine-schedule": "vite-node --config scripts/vite-test.config.ts scripts/im-routine-schedule-test.mts",
     "test:im-routine-cron": "vite-node --config scripts/vite-test.config.ts scripts/im-routine-cron-test.mts",
     "test:im-access-ladder": "vite-node --config scripts/vite-test.config.ts scripts/im-access-ladder-test.mts",
+    "test:im-cloud-token": "vite-node --config scripts/vite-test.config.ts scripts/im-cloud-token-test.mts",
     "test:agent-draft-decision": "vite-node --config scripts/vite-test.config.ts scripts/agent-draft-decision-test.mts",
     "test:agent-draft-decision-client": "vite-node --config scripts/vite-test.config.ts scripts/agent-draft-decision-client-test.mts",
     "test:claude-model": "vite-node --config scripts/vite-test.config.ts scripts/claude-model-default-test.mts",

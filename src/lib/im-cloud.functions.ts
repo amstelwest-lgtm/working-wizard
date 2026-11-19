@@ -23,6 +23,13 @@ import {
   microsoftGraphCredentialsConfigured,
 } from "@/lib/microsoft-graph-read";
 import { cloudIngestPaused } from "@/lib/im-access-settings";
+import {
+  getImCloudConnectionMap,
+  insertImCloudOAuthState,
+  revokeImCloudProvider,
+  syncImCloudFolderIds,
+} from "@/lib/im-cloud-connection.server";
+import { imCloudOauthSqlReady } from "@/lib/im-cloud-token";
 
 const pickSchema = z.object({
   provider: z.enum(["google", "microsoft"]),
@@ -32,12 +39,16 @@ const pickSchema = z.object({
 
 export const getImCloudConfig = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async () => ({
-    google: googleDriveCredentialsConfigured(),
-    microsoft: microsoftGraphCredentialsConfigured(),
-    inboundDomain: (process.env[INBOUND_FORWARD_DOMAIN_ENV] ?? "").trim() || null,
-    tokensNeedSql: true,
-  }));
+  .handler(async () => {
+    const oauthSqlReady = imCloudOauthSqlReady();
+    return {
+      google: googleDriveCredentialsConfigured(),
+      microsoft: microsoftGraphCredentialsConfigured(),
+      inboundDomain: (process.env[INBOUND_FORWARD_DOMAIN_ENV] ?? "").trim() || null,
+      oauthSqlReady,
+      tokensNeedSql: !oauthSqlReady,
+    };
+  });
 
 export const getImCloudStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -51,13 +62,14 @@ export const getImCloudStatus = createServerFn({ method: "POST" })
       forwarding: { allowedSenders: [] },
     };
     const domain = (process.env[INBOUND_FORWARD_DOMAIN_ENV] ?? "").trim();
-  return {
+    const connected = await getImCloudConnectionMap(data.clientId);
+    return {
       picks: settings.picks,
       revoked: cloudIngestPaused(settings),
       forwardingAddress: domain ? forwardingAddress(data.clientId, domain) : null,
       allowedSenders: settings.forwarding.allowedSenders,
-      googleConnected: false,
-      microsoftConnected: false,
+      googleConnected: connected.google,
+      microsoftConnected: connected.microsoft,
     };
   });
 
@@ -75,6 +87,10 @@ export const saveImCloudPicks = createServerFn({ method: "POST" })
     assertClientScope(context.actingAsClientId, data.clientId);
     const ok = await saveImAccessSettings(data.clientId, { picks: data.picks, revokedAt: null });
     if (!ok) throw new Error("Could not save folder picks");
+    const googleIds = data.picks.filter((p) => p.provider === "google").map((p) => p.folderId);
+    const msIds = data.picks.filter((p) => p.provider === "microsoft").map((p) => p.folderId);
+    await syncImCloudFolderIds(data.clientId, "google", googleIds);
+    await syncImCloudFolderIds(data.clientId, "microsoft", msIds);
     return { ok: true };
   });
 
@@ -116,7 +132,9 @@ export const disconnectImCloud = createServerFn({ method: "POST" })
       revokedAt: new Date().toISOString(),
     });
     if (!ok) throw new Error("Could not disconnect");
-    return { ok: true, tokensRevoked: false, note: "tokens_need_sql" };
+    await revokeImCloudProvider(data.clientId, data.provider);
+    const tokensRevoked = imCloudOauthSqlReady();
+    return { ok: true, tokensRevoked, note: tokensRevoked ? null : "tokens_need_sql" };
   });
 
 export const getImCloudAuthUrl = createServerFn({ method: "POST" })
@@ -132,13 +150,15 @@ export const getImCloudAuthUrl = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     assertClientScope(context.actingAsClientId, data.clientId);
-    if (process.env.IM_CLOUD_OAUTH_SQL_READY !== "1") {
+    if (!imCloudOauthSqlReady()) {
       throw new Error("Cloud OAuth needs an approved database migration");
     }
     const settings = await loadImAccessSettings(data.clientId);
-    const state = crypto.randomUUID();
-    void data.returnPath;
-    void state;
+    const { state } = await insertImCloudOAuthState({
+      clientId: data.clientId,
+      provider: data.provider,
+      returnPath: data.returnPath,
+    });
     if (data.provider === "google") {
       if (!googleDriveCredentialsConfigured()) throw new Error("Google Drive OAuth is not configured");
       const redirectUri = `${process.env.PUBLIC_APP_URL ?? ""}/api/google-drive/callback`;
