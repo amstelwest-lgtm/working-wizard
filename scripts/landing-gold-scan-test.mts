@@ -341,7 +341,7 @@ async function main() {
     for (const width of [1280, 390]) {
       for (const theme of ["light", "dark"] as const) {
         const page = await browser.newPage({ viewport: { width, height: 900 } });
-        await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+        await page.goto(`${BASE}/`, { waitUntil: "load" });
         await page.evaluate((next) => {
           document.documentElement.dataset.theme = next;
           document.documentElement.classList.toggle("dark", next === "dark");
@@ -389,7 +389,7 @@ async function main() {
       for (const width of [1280, 390]) {
         for (const theme of ["light", "dark"] as const) {
           const page = await browser.newPage({ viewport: { width, height: 900 } });
-          await page.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
+          await page.goto(`${BASE}${path}`, { waitUntil: "load" });
           await page.evaluate((next) => {
             document.documentElement.dataset.theme = next;
             document.documentElement.classList.toggle("dark", next === "dark");
@@ -412,7 +412,7 @@ async function main() {
     for (const width of [1280, 390]) {
       for (const theme of ["light", "dark"] as const) {
         const page = await browser.newPage({ viewport: { width, height: 900 } });
-        await page.goto(`${BASE}/join/sampletok`, { waitUntil: "networkidle" });
+        await page.goto(`${BASE}/join/sampletok`, { waitUntil: "load" });
         await page.evaluate((next) => {
           document.documentElement.dataset.theme = next;
           document.documentElement.classList.toggle("dark", next === "dark");
