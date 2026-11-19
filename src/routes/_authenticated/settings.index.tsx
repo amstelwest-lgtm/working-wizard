@@ -12,6 +12,7 @@ import {
   Trash2,
   User,
   CreditCard,
+  FolderSync,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { AI_MODEL_DISCLOSURE } from "@/lib/marketing-faq";
@@ -553,6 +554,10 @@ function SettingsPage() {
             <Link to="/settings/brand" className="settings-row">
               <Palette className="h-4 w-4" />
               Brand & logo on reports
+            </Link>
+            <Link to="/settings/desktop-sync" className="settings-row" data-settings-desktop-sync="">
+              <FolderSync className="h-4 w-4" />
+              Desktop folder sync
             </Link>
             <Link to="/dashboard" className="settings-row">
               <Building2 className="h-4 w-4" />

@@ -16,7 +16,7 @@ Status: approved by CoS 2026-11-19; desktop sync build approved by Theo 2026-11-
 - The practice is the responsible party for its clients' data, and Milōn is the operator (s21). The notice says so.
 
 ## 3. What is read
-- Read: files in the named folders, filtered to an allow-list of extensions (pdf, csv, xlsx, xls, png, jpg). The size cap matches the existing upload cap.
+- Read: files in the named folders, filtered to PDF and images only — extensions pdf, jpeg/jpg, png, webp, heic, heif (MIME set matches live `source_documents`). No CSV or XLSX. The size cap matches the existing upload cap. Other types are skipped locally and on the server without upload.
 - Never read: anything outside the named folders, hidden or system files, .env, key or certificate files, browser profiles, email stores, password vaults, or anything matching secret patterns.
 - Metadata sent: file name, size, hash, modified time and folder label. The full local path is not sent; it's replaced by the folder label.
 - Hash-based dedupe means an unchanged file is never uploaded twice.
@@ -30,7 +30,8 @@ Status: approved by CoS 2026-11-19; desktop sync build approved by Theo 2026-11-
 
 ## 5. Auth and least privilege
 - The device token is scoped to one firm with upload-only rights to its mapped clients, and is short-lived and refreshable. It cannot read back other documents, list clients or call agents.
-- The token is stored in the OS keychain (macOS Keychain or Windows Credential Manager) and never in plain files. It's never logged, and Milōn staff can't see it.
+- The token is stored **only** in the OS keychain (macOS Keychain or Windows Credential Manager) via `keytar`. The agent **fails closed** without keytar: it will not pair and will not run `watch`. Tokens are never written to `~/.milon-desktop-sync/state.json` or any other plain file (that file may hold non-secret folder maps and dedupe hashes only). Tokens are never logged, and Milōn staff can't see them.
+- HOLD migration (#992, not applied) adds five tables: `desktop_sync_firms`, `desktop_sync_folder_maps`, `desktop_sync_devices`, `desktop_sync_pairing_codes`, `desktop_sync_activity` (daily caps on `desktop_sync_devices`, not a separate usage table).
 - Pairing is done from the signed-in web app (a one-time code), with no password typed into the agent.
 - Uploads are rate-limited per device, with hard caps on files and bytes per day.
 
@@ -53,7 +54,7 @@ Status: approved by CoS 2026-11-19; desktop sync build approved by Theo 2026-11-
   - The server side: the firm opt-in flag with notice and consent logging, device pairing with the scoped upload-only token, revoke, the activity list, and Tax Specialist deadline-watch steps as draft workings (no SARS).
   - The cron #986 nits are folded in: count skipped_stub_signal before planning, trailing newlines, a true SAST day for the upload-since and daily-cap windows, filter listFirmIdsWithAcceptedRoutines on accepted (or paginate), and rename imRoutineCronKillSwitchOn to imRoutineCronEnabled.
 - **PR G:** the minimal opt-in desktop agent (packaging approach to be proposed in PR F's body), using only the PR F endpoints.
-- No SQL is expected. If the device token or consent needs a table or column, I'll stop and flag it to CoS first.
+- SQL is in a separate HOLD migration PR (#992); nothing applied until Theo schedules it.
 
 ## Open questions for CoS
 1. P2 PR E (read-only Drive/OneDrive plus the forwarding inbox, rungs 3–4) hasn't been built yet. Should it go before P3, or is P3 first OK? The plan says the desktop agent is "only if rungs 1–4 are not enough."
