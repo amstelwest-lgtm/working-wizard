@@ -191,7 +191,7 @@ const BASE_COVERED: readonly Omit<ImStepClassifier, "fitNote" | "priority">[] = 
     effort: "S",
   },
   {
-    re: /\b(cash|collections?|debtors?|debtor|early warning)\b/i,
+    re: /\b(cash\s+collections?|collections?\s+risk|debtors?\s+ageing|aged\s+debtors?|debtor\s+early\s+warning|overdue\s+receivables?)\b/i,
     capability: "financial-manager",
     stepType: "cash_collections",
     bucket: "covered",
@@ -199,7 +199,7 @@ const BASE_COVERED: readonly Omit<ImStepClassifier, "fitNote" | "priority">[] = 
     effort: "S",
   },
   {
-    re: /\b(budget.*actual|variance|drift)\b/i,
+    re: /\b(budget\s*(?:vs\.?|versus)\s*actual|budget[-\s]actual|variance\s+(?:to|vs\.?)\s*budget|budget\s+drift)\b/i,
     capability: "analyst",
     stepType: "budget_variance",
     bucket: "covered",

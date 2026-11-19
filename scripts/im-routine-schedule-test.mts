@@ -16,7 +16,9 @@ import {
   scheduleAfterMonthEndMet,
   scheduleNBusinessDaysBeforeMonthEndMet,
   scheduledRunInputs,
+  runStampInRoutinePeriod,
 } from "../src/lib/im-routine-schedule.ts";
+import { buildCapabilityManifest, matchManifestClassifier } from "../src/lib/im-capability-manifest.ts";
 import { activationActionMoveKey } from "../src/lib/im-activation-persist.ts";
 import { accountantRoutineSteps } from "../src/lib/client-routines.ts";
 import { routineMapArtifactMeta } from "../src/lib/im-activation-persist.ts";
@@ -110,6 +112,16 @@ assert(!imRoutineTriggerMet("event_budget_drift_check", { hasLedger: true, hasUp
 const ctxCash = { hasLedger: true, hasUpload: false, cashCollectionsRisk: true, now: janEnd };
 assert(imRoutineTriggerMet("event_cash_collections_risk", ctxCash, true), "cash risk met");
 assert(!imRoutineTriggerMet("event_cash_collections_risk", { hasLedger: true, hasUpload: false, now: janEnd }, true), "no cash risk");
+
+const jhbBoundary = new Date("2026-11-30T23:30:00.000Z");
+assert(imRoutinePeriodKey(jhbBoundary) === "2026-12", "JHB period at 23:30 UTC");
+assert(runStampInRoutinePeriod("2026-11-30T23:30:00.000Z", "2026-12"), "run stamp uses JHB month");
+
+const manifest = buildCapabilityManifest("ZA");
+assert(!matchManifestClassifier("Keep cash healthy", manifest), "classifier negative: generic cash");
+assert(matchManifestClassifier("Aged debtors follow-up", manifest)?.stepType === "cash_collections", "classifier positive: aged debtors");
+assert(!matchManifestClassifier("Track variance narratives", manifest), "classifier negative: generic variance");
+assert(matchManifestClassifier("Budget versus actual drift check", manifest)?.stepType === "budget_variance", "classifier positive: budget actual");
 
 function artifactFor(map: ImRoutineMap) {
   return routineMapArtifactMeta({

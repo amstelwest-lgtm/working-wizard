@@ -2,14 +2,26 @@ import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { fetchFirmInterviewDraft, fetchFirmSetupPlan } from "@/lib/setup-partner-client";
-import { pickPilotClients, type ImActivationPlan, type ImPilotClient } from "@/lib/im-activation-planner";
+import {
+  pickPilotClients,
+  type ImActivationPlan,
+  type ImPilotClient,
+  type ImRoutineKind,
+} from "@/lib/im-activation-planner";
 import { acceptImActivation, loadImActivationContext } from "@/lib/im-activation.functions";
 import { SETUP_PARTNER_DISPLAY_NAME } from "@/lib/setup-partner";
 
 type RoutineChoice = {
-  routine: "document_chase" | "monthly_pack";
+  routine: ImRoutineKind;
   accepted: boolean;
   hours: string;
+};
+
+const ROUTINE_LABELS: Record<ImRoutineKind, string> = {
+  document_chase: "Document chase",
+  monthly_pack: "Monthly pack",
+  cash_debtor_early_warning: "Cash and debtor early warning",
+  budget_actual_drift: "Budget-versus-actual drift",
 };
 
 export function ImActivationStep() {
@@ -19,10 +31,7 @@ export function ImActivationStep() {
   const [activation, setActivation] = useState<ImActivationPlan | null>(null);
   const [pilots, setPilots] = useState<ImPilotClient[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [choices, setChoices] = useState<RoutineChoice[]>([
-    { routine: "document_chase", accepted: false, hours: "" },
-    { routine: "monthly_pack", accepted: false, hours: "" },
-  ]);
+  const [choices, setChoices] = useState<RoutineChoice[]>([]);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -48,6 +57,13 @@ export function ImActivationStep() {
         return;
       }
       setActivation(ctx.activation);
+      setChoices(
+        ctx.activation.routineMaps.map((map) => ({
+          routine: map.routine,
+          accepted: false,
+          hours: "",
+        })),
+      );
       const defaultPilots = pickPilotClients(ctx.pilots);
       setPilots(ctx.pilots);
       setSelected(defaultPilots.map((row) => row.id));
@@ -150,9 +166,12 @@ export function ImActivationStep() {
             </ul>
 
             {localPlan.routineMaps.map((map) => {
-              const choice = choices.find((row) => row.routine === map.routine);
-              if (!choice) return null;
-              const title = map.routine === "document_chase" ? "Document chase" : "Monthly pack";
+              const choice = choices.find((row) => row.routine === map.routine) ?? {
+                routine: map.routine,
+                accepted: false,
+                hours: "",
+              };
+              const title = ROUTINE_LABELS[map.routine];
               return (
                 <div key={map.routine} className="im-card" data-im-routine="" style={{ borderColor: "#DBEAFE" }}>
                   <h3 style={{ color: "#102A43" }}>{title}</h3>

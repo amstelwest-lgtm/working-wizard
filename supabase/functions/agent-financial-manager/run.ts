@@ -9,7 +9,7 @@ import {
   FINANCIAL_MANAGER_SYSTEM,
   financialManagerToolSchemas,
 } from "../_shared/agent-prompts/financial-manager.ts";
-import { CLAUDE_OPUS_55, modelForAgent } from "../../../src/lib/claude-request.ts";
+import { CLAUDE_OPUS_55, CLAUDE_SONNET_55, modelForAgent } from "../../../src/lib/claude-request.ts";
 import {
   FM_COST_CEILING_USD,
   FM_DRAFT_KINDS,
@@ -24,6 +24,14 @@ import { executeFinancialManagerTool } from "./execute.ts";
 
 const OBJECTIVE =
   "Check data quality from QuickBooks, Xero, Sage, and uploads, the saved cashflow, and the budget. Draft action points, data requests, or an accountant hand-off. When asked to add CapEx in a week, call propose_figure_adjustment with capexAmount and capexWeek. When asked to add an outflow that is not CapEx, call it with netWeek and a negative netDelta. That call is the proposal. Do not wait for approval before the call. After it is saved, say Confirm on the Cash forecast page. Do not say the figures were updated. Drafts only: a person approves before anything is sent.";
+
+function financialManagerModelForJob(inputs: string): string {
+  if (inputs.startsWith("im_activation:run:")) return CLAUDE_SONNET_55;
+  return modelForAgent("financial_manager", {
+    standard: CLAUDE_MODEL,
+    financialManager: CLAUDE_MODEL_FM || CLAUDE_OPUS_55,
+  });
+}
 
 export function runFinancialManagerJob(db: SupabaseClient, job: RunnerJob) {
   return runQueueJob(db, job, {
@@ -42,10 +50,7 @@ export function runFinancialManagerJob(db: SupabaseClient, job: RunnerJob) {
     // claude-opus-5-5. CLAUDE_MODEL does not select this agent. Opus list
     // rates are about double Sonnet 5.5, and adaptive thinking is billed as
     // output, so the unchanged $0.06 ceiling can stop a run sooner.
-    model: modelForAgent("financial_manager", {
-      standard: CLAUDE_MODEL,
-      financialManager: CLAUDE_MODEL_FM || CLAUDE_OPUS_55,
-    }),
+    model: financialManagerModelForJob(job.inputs),
     runOutcome: fmRunOutcome,
     execute: executeFinancialManagerTool,
   });

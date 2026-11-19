@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { loadClientImRoutineScheduleContext } from "@/lib/im-routine-runner.functions";
+import type { ImRoutineEventContext } from "@/lib/im-routine-schedule";
 import {
   accountantRoutineSteps,
   ownerRoutineMonthLines,
@@ -28,6 +31,8 @@ export function ClientRoutinesPanel({
   const [actions, setActions] = useState<RoutineActionRow[]>([]);
   const [runs, setRuns] = useState<RoutineRunRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [scheduleContext, setScheduleContext] = useState<ImRoutineEventContext | null>(null);
+  const loadScheduleContext = useServerFn(loadClientImRoutineScheduleContext);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,6 +66,22 @@ export function ClientRoutinesPanel({
       cancelled = true;
     };
   }, [clientId]);
+
+  useEffect(() => {
+    if (ownerSeat) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const ctx = await loadScheduleContext({ data: { clientId } });
+        if (!cancelled && ctx.ok) setScheduleContext(ctx.scheduleContext);
+      } catch {
+        if (!cancelled) setScheduleContext(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, loadScheduleContext, ownerSeat]);
 
   const metas = useMemo(
     () => artifacts.map((row) => parseRoutineMapMeta(row.meta)).filter((row): row is NonNullable<typeof row> => !!row),
@@ -116,7 +137,14 @@ export function ClientRoutinesPanel({
   return (
     <section data-client-routines="" style={{ display: "grid", gap: 16 }}>
       {metas.map((meta) => {
-        const steps = accountantRoutineSteps({ firmId, clientId, meta, actions, runs });
+        const steps = accountantRoutineSteps({
+          firmId,
+          clientId,
+          meta,
+          actions,
+          runs,
+          scheduleContext: scheduleContext ?? undefined,
+        });
         const completed = runs.filter(
           (run) => run.status === "succeeded" || run.status === "partial" || run.status === "skipped",
         ).length;

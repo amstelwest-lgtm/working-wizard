@@ -1,7 +1,7 @@
 import { ClientRoutinesPanel } from "@/components/client-routines-panel";
 import { imRoutinePeriodKey } from "@/lib/im-routine-schedule";
 
-/** Owner seat — plain “This month” under Books. No bot names or rule ids. */
+/** Owner seat — plain “This month” under Books. Schedule context stays on the accountant tab. */
 export function OwnerRoutinesMonth({ clientId }: { clientId: string }) {
   const periodKey = imRoutinePeriodKey();
   return (

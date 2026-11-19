@@ -128,14 +128,25 @@ export function imRoutineTriggerMet(trigger: string, context: ImRoutineEventCont
   return imActivationTriggerMet(trigger, context);
 }
 
+/** True when `instant` falls in the JHB calendar month `periodKey` (YYYY-MM). */
+export function imRoutineInstantInPeriod(instant: Date, periodKey: string): boolean {
+  return imRoutinePeriodKey(instant) === periodKey;
+}
+
+export function runStampInRoutinePeriod(stamp: string | null | undefined, periodKey: string): boolean {
+  if (!stamp) return false;
+  const instant = new Date(stamp);
+  if (Number.isNaN(instant.getTime())) return false;
+  return imRoutineInstantInPeriod(instant, periodKey);
+}
+
 function runFinishedInPeriod(run: RoutineRunRow, periodKey: string): boolean {
   const stamp = run.finished_at ?? run.started_at ?? run.queued_at;
-  if (!stamp) return false;
-  return stamp.slice(0, 7) === periodKey;
+  return runStampInRoutinePeriod(stamp, periodKey);
 }
 
 function runsForStepInPeriod(runs: readonly RoutineRunRow[], periodKey: string): RoutineRunRow[] {
-  return runs.filter((run) => runFinishedInPeriod(run, periodKey) || (run.queued_at?.slice(0, 7) === periodKey));
+  return runs.filter((run) => runFinishedInPeriod(run, periodKey));
 }
 
 export function routineStepLastRunAt(runs: readonly RoutineRunRow[]): string | null {
