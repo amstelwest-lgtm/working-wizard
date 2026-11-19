@@ -375,7 +375,6 @@ import { ClientLibrary } from "@/components/client-library";
 import { archiveUploads, describeArchiveFailures } from "@/lib/client-documents-browser";
 import { ingestLibraryArtifacts } from "@/lib/library-ingest-client";
 import { DEFAULT_UPLOAD_VISIBILITY, type UploadVisibility } from "@/lib/client-documents";
-import { ImCloudAccessPanel } from "@/components/im-cloud-access-panel";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { SageConnectCard } from "@/components/sage-connect";
@@ -7118,11 +7117,6 @@ function Index() {
                   </button>
                 ) : null}
               </div>
-              {effectiveClientId ? (
-                <div className="mt-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
-                  <ImCloudAccessPanel clientId={effectiveClientId} />
-                </div>
-              ) : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <button
                   disabled={uploading}

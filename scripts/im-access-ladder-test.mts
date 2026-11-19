@@ -122,6 +122,8 @@ assert.ok(panel.includes("ImCloudAccessPanel"), "accountant panel exists");
 assert.ok(!panel.includes("post to a ledger"), "no ledger auto-post copy");
 const dataUp = readFileSync(resolve("src/components/data-up-to-date.tsx"), "utf8");
 assert.ok(dataUp.includes("ImCloudAccessPanel"), "accountant books embeds cloud access");
+const ownerSlot = readFileSync(resolve("src/components/owner-im-cloud-access.tsx"), "utf8");
+assert.ok(ownerSlot.includes("OwnerImCloudAccessPanel"), "owner export slot exists for parity wiring");
 
 const googleRead = readFileSync(resolve("src/lib/google-drive-read.ts"), "utf8");
 assert.ok(!googleRead.includes("method: \"POST\"") || !googleRead.includes("/files?"), "no write create in read module");

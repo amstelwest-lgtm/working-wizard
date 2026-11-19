@@ -4624,7 +4624,7 @@ function ClientView() {
                       id="connections"
                       eyebrow="Books"
                       title="Connections"
-                      subtitle="Xero, QuickBooks, Sage, and read-only document folders for this client."
+                      subtitle="Xero, QuickBooks, and Sage for this client."
                     >
                       <DataUpToDate
                         clientId={clientId}
