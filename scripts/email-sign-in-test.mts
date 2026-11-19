@@ -7,14 +7,19 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   EMAIL_SIGN_IN_CODE_INSTEAD,
+  EMAIL_SIGN_IN_CODE_LABEL,
   EMAIL_SIGN_IN_RATE_LIMIT,
   EMAIL_SIGN_IN_SENT,
   EMAIL_SIGN_IN_TAP_LINK,
+  OTP_LENGTH,
   emailCodeFallbackEnabled,
+  emailSignInCodeDigits,
+  emailSignInCodeReady,
   emailSignInHidesAccount,
   emailSignInNotice,
   emailSignInOtpArgs,
   emailSignInRedirectTo,
+  emailSignInVerifyOtpArgs,
   parseEmailSignInCallback,
 } from "../src/lib/email-sign-in.ts";
 
@@ -127,7 +132,7 @@ assert(
   "a Google hash without an email door is not an email sign-in",
 );
 
-assert(emailCodeFallbackEnabled() === true, "the default client flow accepts the 6-digit code");
+assert(emailCodeFallbackEnabled() === true, "the default client flow accepts the email code");
 assert(emailCodeFallbackEnabled("pkce") === true, "PKCE still accepts verifyOtp email");
 assert(emailCodeFallbackEnabled("implicit") === true, "implicit accepts verifyOtp email");
 
@@ -141,7 +146,16 @@ assert(lib.includes("shouldCreateUser: false"), "the otp helper hard-codes shoul
 assert(!lib.includes("shouldCreateUser: true"), "the helper never creates users");
 assert(lib.includes("signInWithOtp(args)"), "signInWithOtp receives the helper args");
 assert(lib.includes("emailSignInOtpArgs"), "those args come from emailSignInOtpArgs");
-assert(lib.includes('type: "email"'), "the 6-digit fallback uses verifyOtp type email");
+assert(lib.includes('type: "email"'), "the code fallback uses verifyOtp type email");
+assert(OTP_LENGTH === 8, "the shared code length is 8");
+const pasted = emailSignInCodeDigits("12 34 56 78");
+assert(pasted === "12345678", "pasting 8 digits keeps all eight");
+assert(emailSignInCodeDigits("123456789") === "12345678", "a longer paste is capped at 8");
+const submitted = emailSignInVerifyOtpArgs("ada@firm.example", pasted);
+assert(submitted?.token === "12345678" && submitted.type === "email", "an 8-digit code is submitted to verifyOtp");
+assert(emailSignInVerifyOtpArgs("ada@firm.example", "123456")?.token === "123456", "a 6-digit code still verifies");
+assert(emailSignInVerifyOtpArgs("ada@firm.example", "12345") === null, "five digits are not submitted");
+assert(emailSignInCodeReady(pasted), "eight digits are ready");
 assert(lib.includes(EMAIL_SIGN_IN_SENT), "the helper owns the neutral sentence");
 
 const otpFiles = [
@@ -181,17 +195,20 @@ assert(
   EMAIL_SIGN_IN_TAP_LINK === "Check your email and tap the link.",
   "the link instruction is the primary sentence",
 );
-assert(entry.includes("<details"), "the 6-digit form stays collapsed");
+assert(entry.includes("<details"), "the code form stays collapsed");
 assert(entry.includes("EMAIL_SIGN_IN_CODE_INSTEAD"), "the code is a secondary disclosure");
 assert(
-  EMAIL_SIGN_IN_CODE_INSTEAD === "Have a 6-digit code instead?",
-  "the disclosure asks for a code instead of the link",
+  EMAIL_SIGN_IN_CODE_INSTEAD === "Have an 8-digit code instead?",
+  "the disclosure asks for an 8-digit code instead of the link",
 );
 assert(
-  entry.indexOf("EMAIL_SIGN_IN_CODE_INSTEAD") < entry.indexOf("Enter the 6-digit code"),
+  entry.indexOf("EMAIL_SIGN_IN_CODE_INSTEAD") < entry.indexOf("EMAIL_SIGN_IN_CODE_LABEL"),
   "the disclosure comes before the code field",
 );
-assert(entry.includes("Enter the 6-digit code"), "the code fallback is labelled once opened");
+assert(EMAIL_SIGN_IN_CODE_LABEL === "Enter the 8-digit code", "the opened field says 8-digit");
+assert(entry.includes("maxLength={OTP_LENGTH}"), "both doors cap the field at the shared length");
+assert(!entry.includes("maxLength={6}"), "neither door hard-codes 6 digits");
+assert(!entry.includes("6-digit"), "the sign-in UI does not say 6-digit");
 assert(
   entry.includes(EMAIL_SIGN_IN_SENT) || entry.includes("notice"),
   "the control shows the helper notice",

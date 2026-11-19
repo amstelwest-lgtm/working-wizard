@@ -15,8 +15,14 @@ export const EMAIL_SIGN_IN_SENT = "If an account exists for that email, we've se
 /** Primary instruction after a send. The live template may not include a code yet. */
 export const EMAIL_SIGN_IN_TAP_LINK = "Check your email and tap the link.";
 
+/** Supabase emails an 8-digit code. Older 6-digit codes still verify. */
+export const OTP_LENGTH = 8;
+export const OTP_LENGTH_MIN = 6;
+
 /** Collapsed until the person asks. The prod template has no code until it is pasted. */
-export const EMAIL_SIGN_IN_CODE_INSTEAD = "Have a 6-digit code instead?";
+export const EMAIL_SIGN_IN_CODE_INSTEAD = "Have an 8-digit code instead?";
+
+export const EMAIL_SIGN_IN_CODE_LABEL = "Enter the 8-digit code";
 
 export const EMAIL_SIGN_IN_RATE_LIMIT = "Too many sign-in emails. Wait a minute and try again.";
 
@@ -82,7 +88,7 @@ export function emailSignInOtpArgs(
 export type EmailSignInNotice = {
   kind: "sent" | "rate_limited" | "failed";
   message: string;
-  /** True when the 6-digit fallback may be shown. Same UI whether or not an account exists. */
+  /** True when the code fallback may be shown. Same UI whether or not an account exists. */
   offerCode: boolean;
 };
 
@@ -275,24 +281,38 @@ export async function requestEmailSignInLink(input: {
   return notice;
 }
 
+/** Digits only, capped at the code Supabase sends. */
+export function emailSignInCodeDigits(raw: string): string {
+  return raw.replace(/\D/g, "").slice(0, OTP_LENGTH);
+}
+
+/** 6, 7, or 8 digits. Anything else is not sent to verifyOtp. */
+export function emailSignInCodeReady(digits: string): boolean {
+  return digits.length >= OTP_LENGTH_MIN && digits.length <= OTP_LENGTH && /^\d+$/.test(digits);
+}
+
+/** Args for verifyOtp. Null when the code is not 6–8 digits. */
+export function emailSignInVerifyOtpArgs(
+  email: string,
+  token: string,
+): { email: string; token: string; type: "email" } | null {
+  const clean = email.trim();
+  const digits = emailSignInCodeDigits(token);
+  if (!clean.includes("@") || !emailSignInCodeReady(digits)) return null;
+  return { email: clean, token: digits, type: "email" };
+}
+
 export async function verifyEmailSignInCode(input: {
   email: string;
   token: string;
 }): Promise<
   { ok: true; userId: string; meta: Record<string, unknown> } | { ok: false; message: string }
 > {
-  const email = input.email.trim();
-  const token = input.token.replace(/\D/g, "");
-  if (!email.includes("@") || token.length !== 6) {
-    return { ok: false, message: EMAIL_SIGN_IN_CODE_FAILED };
-  }
+  const args = emailSignInVerifyOtpArgs(input.email, input.token);
+  if (!args) return { ok: false, message: EMAIL_SIGN_IN_CODE_FAILED };
   wakeAuth();
   const { supabase } = await import("@/integrations/supabase/client");
-  const { data, error } = await supabase.auth.verifyOtp({
-    email,
-    token,
-    type: "email",
-  });
+  const { data, error } = await supabase.auth.verifyOtp(args);
   if (error || !data.user) return { ok: false, message: EMAIL_SIGN_IN_CODE_FAILED };
   return {
     ok: true,
