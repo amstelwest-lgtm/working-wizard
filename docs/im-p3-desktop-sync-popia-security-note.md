@@ -1,4 +1,4 @@
-Status: approved by CoS 2026-11-19; desktop agent build PARKED pending Theo OK
+Status: approved by CoS 2026-11-19; desktop sync build approved by Theo 2026-11-19 and in PR #990 (HOLD — SQL in a separate HOLD migration PR, nothing applied); live testing still subject to CoS review and deploy; signing and distribution out of scope
 
 # IM P3: Desktop folder-sync agent, POPIA and security note (draft v1, Eng3, 19 Nov 2026)
 
