@@ -350,23 +350,27 @@ export function chartRevenueActuals(input: {
   return { actuals: aligned.values, caption: aligned.caption };
 }
 
-/** The table uses the same rescale sentence as the chart when a series is scaled. */
+/**
+ * The table uses the same caption as the chart. Statement pace (no uploaded
+ * months) is the even-split sentence. Stored months that are scaled say so.
+ */
 export function budgetActualsNote(input: {
   views: readonly { actual: { revenue: number; ebit: number } | null }[];
   yearRevenue: number | null;
   yearOperatingProfit: number | null;
+  /** False when the months are statement pace, matching the chart's storedMonths flag. */
+  storedMonths: boolean;
 }): string | null {
-  const stored = input.views.some((row) => row.actual);
-  if (!stored) return null;
+  if (!input.storedMonths && !input.views.some((row) => row.actual)) return null;
   const revenue = alignMonthsToYear({
     months: input.views.map((row) => row.actual?.revenue ?? null),
     year: input.yearRevenue,
-    stored: true,
+    stored: input.storedMonths,
   });
   const profit = alignMonthsToYear({
     months: input.views.map((row) => row.actual?.ebit ?? null),
     year: input.yearOperatingProfit,
-    stored: true,
+    stored: input.storedMonths,
   });
   if (revenue.scaled || profit.scaled) return CHART_ACTUALS_SCALED;
   if (revenue.caption === CHART_ACTUALS_EVEN_SPLIT || profit.caption === CHART_ACTUALS_EVEN_SPLIT) {
@@ -439,31 +443,20 @@ export function budgetPeriodTotalCell(
   key: VarianceLine["key"],
   label: string,
   higherIsBetter: boolean,
-  yearActual?: number | null,
 ): BudgetTableCell {
   let budget: number | null = null;
+  let actual = 0;
   let budgetCompared = 0;
   let hasActual = false;
   for (const item of cells) {
     if (item.budget != null) budget = (budget ?? 0) + item.budget;
     if (item.actual != null) {
       hasActual = true;
+      actual += item.actual;
       budgetCompared += item.budget ?? 0;
     }
   }
   if (!hasActual) return { budget, actual: null, variance: null };
-  const aligned =
-    yearActual != null
-      ? alignMonthsToYear({
-          months: cells.map((item) => item.actual),
-          year: yearActual,
-          stored: true,
-        })
-      : null;
-  const actual = (aligned ? aligned.values : cells.map((item) => item.actual)).reduce<number>(
-    (sum, value) => sum + (value ?? 0),
-    0,
-  );
   return {
     budget,
     actual,
@@ -537,7 +530,12 @@ export function budgetTableRows(
   doc: BudgetDocument,
   views: readonly BudgetMonthView[],
   revenueLabel?: (name: string, index: number) => string | null,
-  year?: { revenue: number | null; operatingProfit: number | null } | null,
+  year?: {
+    revenue: number | null;
+    cogs?: number | null;
+    grossProfit?: number | null;
+    operatingProfit: number | null;
+  } | null,
 ): BudgetTableRow[] {
   const months = fyMonths(doc.fyStart);
   const viewByMonth = new Map(views.map((row) => [row.month, row]));
@@ -634,9 +632,44 @@ export function budgetTableRows(
     ),
   ];
   if (!year) return rows;
-  return rows.map((row) => {
+  const aligned = rows.map((row) => {
     if (row.id === "revenue") return alignTableRow(row, year.revenue, "revenue");
+    if (row.id === "cogs") return alignTableRow(row, year.cogs ?? null, "cogs");
     if (row.id === "profit") return alignTableRow(row, year.operatingProfit, "ebit");
+    return row;
+  });
+  const revenue = aligned.find((row) => row.id === "revenue");
+  const cogs = aligned.find((row) => row.id === "cogs");
+  const profit = aligned.find((row) => row.id === "profit");
+  const depreciation = aligned.find((row) => row.id === "depreciation");
+  return aligned.map((row) => {
+    if (row.id === "gross" && revenue && cogs) {
+      return {
+        ...row,
+        cells: row.cells.map((item, index) => {
+          const earned = revenue.cells[index]?.actual;
+          const cost = cogs.cells[index]?.actual;
+          const actual = earned == null || cost == null ? null : Math.round((earned - cost) * 100) / 100;
+          return cell(item.budget, actual, "gross_profit", row.label, row.higherIsBetter);
+        }),
+      };
+    }
+    if (row.id === "overheads" && revenue && cogs && profit) {
+      return {
+        ...row,
+        cells: row.cells.map((item, index) => {
+          const earned = revenue.cells[index]?.actual;
+          const cost = cogs.cells[index]?.actual;
+          const operating = profit.cells[index]?.actual;
+          const worn = depreciation?.cells[index]?.actual ?? 0;
+          if (earned == null || cost == null || operating == null) {
+            return cell(item.budget, item.actual, "overheads_total", row.label, row.higherIsBetter);
+          }
+          const actual = Math.round((earned - cost - operating - worn) * 100) / 100;
+          return cell(item.budget, actual, "overheads_total", row.label, row.higherIsBetter);
+        }),
+      };
+    }
     return row;
   });
 }
