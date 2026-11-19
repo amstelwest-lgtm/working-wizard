@@ -464,6 +464,7 @@ export const desktopSyncDeviceScopes = {
 } as const;
 
 export const probeDesktopSyncDeviceRead = createServerFn({ method: "GET" }).handler(async () => {
+  if (!desktopSyncSqlReady()) return { ok: false, blocked: "not_enabled" as const };
   const token = bearerToken();
   if (!token) return { ok: false, blocked: "unauthorised" as const };
   const device = await loadDeviceByAccessToken(token);
