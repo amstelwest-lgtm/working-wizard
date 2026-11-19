@@ -28,15 +28,19 @@ CREATE TABLE IF NOT EXISTS public.im_cloud_connections (
   provider        TEXT NOT NULL CHECK (provider IN ('google', 'microsoft')),
   folder_ids      TEXT[] NOT NULL DEFAULT '{}'::TEXT[],
   drive_id        TEXT,
-  access_token_enc  TEXT NOT NULL,
-  refresh_token_enc TEXT NOT NULL,
+  access_token_enc  TEXT,
+  refresh_token_enc TEXT,
   token_expiry    TIMESTAMPTZ NOT NULL,
   connected_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_polled_at  TIMESTAMPTZ,
   revoked_at      TIMESTAMPTZ,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (client_id, provider)
+  UNIQUE (client_id, provider),
+  CONSTRAINT im_cloud_connections_tokens_revoked_ck CHECK (
+    revoked_at IS NOT NULL
+    OR (access_token_enc IS NOT NULL AND refresh_token_enc IS NOT NULL)
+  )
 );
 
 CREATE INDEX IF NOT EXISTS im_cloud_connections_client_idx
@@ -63,4 +67,4 @@ COMMENT ON COLUMN public.im_cloud_connections.folder_ids IS
 COMMENT ON COLUMN public.im_cloud_connections.drive_id IS
   'Microsoft Graph drive id when provider is microsoft.';
 COMMENT ON COLUMN public.im_cloud_connections.revoked_at IS
-  'When set, poll and refresh must stop; disconnect sets this and clears tokens in app code.';
+  'When set, poll and refresh must stop; disconnect sets this and NULLs access_token_enc and refresh_token_enc.';

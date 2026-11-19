@@ -20,8 +20,8 @@ One row per client per provider (or separate rows with `unique(client_id, provid
 - `client_id` uuid
 - `provider` text
 - `folder_ids` text[] (picked roots, mirrored from UI)
-- `access_token_enc` text — AES-GCM ciphertext (`IM_CLOUD_TOKEN_KEY`), never plaintext
-- `refresh_token_enc` text — same
+- `access_token_enc` / `refresh_token_enc` text nullable — AES-GCM ciphertext (`IM_CLOUD_TOKEN_KEY`); NULL after disconnect when `revoked_at` is set
+- CHECK: `revoked_at IS NOT NULL OR (access_token_enc IS NOT NULL AND refresh_token_enc IS NOT NULL)`
 - `token_expiry` timestamptz
 - `drive_id` text nullable (Microsoft)
 - `connected_at`, `last_polled_at`, `revoked_at` timestamptz nullable

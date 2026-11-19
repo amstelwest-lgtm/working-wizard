@@ -129,4 +129,13 @@ const googleRead = readFileSync(resolve("src/lib/google-drive-read.ts"), "utf8")
 assert.ok(!googleRead.includes("method: \"POST\"") || !googleRead.includes("/files?"), "no write create in read module");
 assert.ok(googleRead.includes("assertCloudReadOnlyMethod"), "write guard wired");
 
+const cloudMig = readFileSync(
+  resolve("supabase/migrations/20261119103000_im_cloud_oauth_connections.sql"),
+  "utf8",
+);
+assert.ok(!cloudMig.includes("access_token_enc  TEXT NOT NULL"), "access_token_enc is nullable");
+assert.ok(!cloudMig.includes("refresh_token_enc TEXT NOT NULL"), "refresh_token_enc is nullable");
+assert.ok(cloudMig.includes("im_cloud_connections_tokens_revoked_ck"), "revoke clears tokens check");
+assert.ok(cloudMig.endsWith("\n"), "migration file has trailing newline");
+
 console.log("im-access-ladder-test: ok");
