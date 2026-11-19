@@ -276,7 +276,13 @@ export async function buildContext(
         const benchMap = new Map<
           string,
           { p25: number; p50: number; p75: number; higher_is_better: boolean }
-        >((benchmarks ?? []).map((b) => [b.metric_key, b]));
+        >((benchmarks ?? []).map((b: {
+          metric_key: string;
+          p25: number;
+          p50: number;
+          p75: number;
+          higher_is_better: boolean;
+        }) => [b.metric_key, b]));
 
         for (const { camelKey, value } of entries) {
           const b = benchMap.get(camelKey);
