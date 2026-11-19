@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import chokidar from "chokidar";
 import { readFile } from "node:fs/promises";
-import { shouldUpload } from "./filter.ts";
+import { shouldUpload, skippedTypeLogLine } from "./filter.ts";
 import { readState, saveState, type StoredState } from "./keychain.ts";
 import { refreshTokens, uploadFile } from "./api.ts";
 
@@ -34,7 +34,11 @@ export async function runWatcher(onStatus?: (status: WatchStatus) => void): Prom
     const stat = await readFile(filePath).catch(() => null);
     if (!stat) return;
     const size = stat.byteLength;
-    if (!shouldUpload(filePath, size)) return;
+    if (!shouldUpload(filePath, size)) {
+      const skipLine = skippedTypeLogLine(filePath, size);
+      if (skipLine) console.error(skipLine);
+      return;
+    }
 
     const hash = await sha256File(filePath);
   const dedupeKey = `${folderLabel}|${hash}`;
@@ -70,6 +74,11 @@ export async function runWatcher(onStatus?: (status: WatchStatus) => void): Prom
         onStatus?.("disconnected");
         await watcher.close();
       }
+      return;
+    }
+    if (result.skipped) {
+      const base = filePath.split(/[/\\]/).pop() ?? filePath;
+      console.error(`skipped ${base} (server: ${result.reason ?? "type"})`);
       return;
     }
     state.seenHashes[dedupeKey] = new Date().toISOString();

@@ -48,7 +48,8 @@ pnpm run dev -- uninstall
 ## Behaviour
 
 - Watches **only** folders you pass at pair time (no home disk, no drive root).
-- Allow-list: pdf, csv, xlsx, xls, png, jpg/jpeg. Max size 20 MiB (same as source docs).
+- Allow-list: pdf, png, jpg/jpeg, webp, heic, heif (same MIME set as source documents). Max size 20 MiB.
+- Other file types are logged as skipped locally and on the server; they are not uploaded and do not count toward caps.
 - Skips hidden, system, secret-pattern paths (see `src/filter.ts`).
 - **Never** writes, moves, renames, or deletes local files.
 - Sends **folder label** only; dedupes on SHA-256 before upload.

@@ -9,25 +9,26 @@ export const DESKTOP_SYNC_CONSENT_VERSION = "popia-desktop-sync-1";
 
 export const DESKTOP_SYNC_MAX_BYTES = SOURCE_DOCS_MAX_BYTES;
 
+/** Same set as public.source_documents.mime CHECK (see 20261013170000_source_documents_to_ledger). */
 export const DESKTOP_SYNC_EXTENSIONS = [
   "pdf",
-  "csv",
-  "xlsx",
-  "xls",
   "png",
   "jpg",
   "jpeg",
+  "webp",
+  "heic",
+  "heif",
 ] as const;
 
 const EXT_SET = new Set(DESKTOP_SYNC_EXTENSIONS);
 
 export const DESKTOP_SYNC_MIMES = [
   "application/pdf",
-  "text/csv",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "image/png",
   "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
 ] as const;
 
 const MIME_SET = new Set(DESKTOP_SYNC_MIMES);
@@ -57,7 +58,7 @@ export function desktopSyncConsentNotice(practiceName: string): string {
   return [
     `${name} may turn on an optional desktop folder sync on a computer you choose.`,
     "Milōn reads only files you put in folders you name, one client per folder.",
-    "Allowed types: PDF, CSV, Excel, PNG, and JPG, up to 20 MB each.",
+    "Allowed types: PDF and images (JPEG, PNG, WebP, HEIC, HEIF), up to 20 MB each.",
     "Files upload into each client's source documents for review. Nothing is auto-filed to a ledger.",
     "Metadata sent: file name, size, hash, modified time, and the folder label — not the full path on disk.",
     "The practice is responsible for its clients' data; Milōn is the operator processing uploads you start.",
@@ -84,12 +85,38 @@ export function mimeAllowed(mime: string | null | undefined): boolean {
 export function desktopSyncFileRejected(
   fileName: string,
   sizeBytes: number,
-): "hidden" | "secret" | "extension" | "size" | null {
+): "hidden" | "secret" | "size" | null {
   if (HIDDEN_OR_SYSTEM.test(fileName)) return "hidden";
   if (SECRET_NAME.test(fileName)) return "secret";
-  if (!extensionAllowed(fileName)) return "extension";
   if (sizeBytes <= 0 || sizeBytes > DESKTOP_SYNC_MAX_BYTES) return "size";
   return null;
+}
+
+export function desktopSyncUnsupportedType(
+  fileName: string,
+  mime?: string | null,
+): "extension" | "mime" | null {
+  if (!extensionAllowed(fileName)) return "extension";
+  if (mime != null && mime !== "" && !mimeAllowed(mime)) return "mime";
+  return null;
+}
+
+const MIME_BY_EXT: Record<string, (typeof DESKTOP_SYNC_MIMES)[number]> = {
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  heic: "image/heic",
+  heif: "image/heif",
+};
+
+export function desktopSyncMimeForFileName(fileName: string): string {
+  const base = fileName.split(/[/\\]/).pop() ?? fileName;
+  const dot = base.lastIndexOf(".");
+  if (dot < 1) return "application/octet-stream";
+  const ext = base.slice(dot + 1).toLowerCase();
+  return MIME_BY_EXT[ext] ?? "application/octet-stream";
 }
 
 export function folderLabelValid(label: string): boolean {
@@ -132,7 +159,8 @@ export type DesktopSyncActivityKind =
   | "paired"
   | "disconnected"
   | "upload"
-  | "upload_rejected";
+  | "upload_rejected"
+  | "upload_skipped";
 
 export function deviceTokenCanRead(): false {
   return false;

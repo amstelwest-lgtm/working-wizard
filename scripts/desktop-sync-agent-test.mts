@@ -11,6 +11,8 @@ function assert(cond: boolean, msg: string) {
 
 const readme = readFileSync(resolve("desktop-sync/README.md"), "utf8");
 assert(readme.includes("keytar"), "keychain documented");
+assert(readme.includes("webp"), "image allow-list documented");
+assert(!readme.includes("xlsx"), "no spreadsheet types in readme");
 assert(readme.includes("Tauri"), "tray packaging proposal");
 assert(readme.includes("APPLE_"), "signing env names");
 

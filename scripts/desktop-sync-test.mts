@@ -6,7 +6,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   DESKTOP_SYNC_CONSENT_VERSION,
+  DESKTOP_SYNC_EXTENSIONS,
+  DESKTOP_SYNC_MIMES,
   desktopSyncFileRejected,
+  desktopSyncUnsupportedType,
   extensionAllowed,
   folderLabelValid,
   mimeAllowed,
@@ -31,10 +34,18 @@ assert(DESKTOP_SYNC_CONSENT_VERSION.startsWith("popia-"), "consent version");
 assert(folderLabelValid("VAT 2026"), "folder label ok");
 assert(!folderLabelValid("../escape"), "folder label rejects path");
 assert(extensionAllowed("invoice.PDF"), "pdf ok");
+assert(extensionAllowed("scan.webp"), "webp ok");
+assert(!extensionAllowed("book.csv"), "csv not allowed");
 assert(!extensionAllowed("script.exe"), "exe blocked");
 assert(desktopSyncFileRejected(".env", 10) === "hidden", "hidden env");
 assert(desktopSyncFileRejected("/home/user/id_rsa", 10) === "secret", "secret blocked");
+assert(desktopSyncFileRejected("book.csv", 10) === null, "csv not a hard reject");
+assert(desktopSyncUnsupportedType("book.csv", "text/csv") === "extension", "csv skipped");
 assert(mimeAllowed("application/pdf"), "mime pdf");
+assert(mimeAllowed("image/webp"), "mime webp");
+assert(!mimeAllowed("text/csv"), "csv mime blocked");
+assert(DESKTOP_SYNC_MIMES.length === 6, "six server mimes");
+assert(DESKTOP_SYNC_EXTENSIONS.includes("heif"), "heif extension");
 assert(!deviceTokenCanRead(), "token cannot read");
 assert(!desktopSyncDeviceScopes.canListClients, "no client list");
 assert(!desktopSyncDeviceScopes.canCallAgents, "no agents");
@@ -53,6 +64,8 @@ assert(functions.includes("desktopSyncFirmAllowed"), "allowlist on server");
 assert(device.includes('reason: "off"'), "off flag blocks upload");
 assert(device.includes('reason: "revoked"'), "revoke blocks upload");
 assert(device.includes('reason: "folder"'), "unmapped folder rejected");
+assert(device.includes("upload_skipped"), "unsupported types logged as skipped");
+assert(device.includes("desktopSyncUnsupportedType"), "type gate before caps");
 assert(!device.includes("writeFile"), "agent server must not write local files");
 
 const agentFilter = readFileSync(resolve("desktop-sync/src/filter.ts"), "utf8");

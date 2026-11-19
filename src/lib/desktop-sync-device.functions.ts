@@ -17,9 +17,9 @@ import {
   DESKTOP_SYNC_REFRESH_TTL_MS,
   DESKTOP_SYNC_TOKEN_TTL_MS,
   desktopSyncFileRejected,
+  desktopSyncUnsupportedType,
   hashDeviceToken,
   hashPairingCode,
-  mimeAllowed,
   normalizeFolderLabel,
   sanitizeUploadFileName,
   sastUsageDay,
@@ -335,7 +335,11 @@ export async function desktopSyncDeviceUploadImpl(
     contentBase64: string;
   },
   accessToken: string | null,
-): Promise<{ ok: true; duplicate: boolean; documentId: string | null } | { ok: false; reason: string }> {
+): Promise<
+  | { ok: true; duplicate: boolean; documentId: string | null; skipped?: false }
+  | { ok: true; skipped: true; reason: "extension" | "mime" }
+  | { ok: false; reason: string }
+> {
       if (!desktopSyncSqlReady()) return { ok: false, reason: "not_enabled" };
       if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
       const token = accessToken;
@@ -357,7 +361,21 @@ export async function desktopSyncDeviceUploadImpl(
         );
         return { ok: false, reason: reject };
       }
-      if (!mimeAllowed(data.mime)) return { ok: false, reason: "mime" };
+      const unsupported = desktopSyncUnsupportedType(data.fileName, data.mime);
+      if (unsupported) {
+        await logActivity(
+          device.firm_id,
+          "upload_skipped",
+          {
+            reason: unsupported,
+            fileName: data.fileName,
+            folderLabel: data.folderLabel,
+            mime: data.mime,
+          },
+          device.id,
+        );
+        return { ok: true, skipped: true, reason: unsupported };
+      }
 
       const label = normalizeFolderLabel(data.folderLabel);
       const map = await table("desktop_sync_folder_maps")
