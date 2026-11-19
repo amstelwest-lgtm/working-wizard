@@ -4,6 +4,7 @@
 -- AES-GCM ciphertext from the app (IM_CLOUD_TOKEN_KEY). RLS enabled with no
 -- policies (service role only).
 -- im_source_inbound_aliases intentionally omitted — webhook keeps admin scan.
+-- Disconnect rows may NULL *_enc while revoked_at IS NOT NULL (see CHECK below).
 
 -- ── Short-lived OAuth state (CSRF + return path, ~10-minute TTL) ───────────
 CREATE TABLE IF NOT EXISTS public.im_cloud_oauth_states (
