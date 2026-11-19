@@ -31,5 +31,14 @@ assert(
 );
 assert(folded.includes("token_hash text not null"), "token hash only");
 assert(!/\btoken\s+text\b/i.test(code), "no raw token column");
+assert(!folded.includes("text/csv"), "no csv mime in migration");
+assert(!folded.includes("spreadsheetml"), "no xlsx mime in migration");
+assert(folded.includes("image/webp"), "webp mime allowed");
+assert(folded.includes("desktop_sync_folder_map_guard"), "folder map firm guard");
+assert(
+  folded.includes("revoke all on table public.desktop_sync_pairing_codes from public, anon, authenticated"),
+  "pairing codes deny authenticated",
+);
+assert(folded.includes("upload_skipped"), "upload_skipped activity kind");
 
 console.log("desktop_sync migration static checks ok");

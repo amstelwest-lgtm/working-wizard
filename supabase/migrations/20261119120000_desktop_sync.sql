@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS public.desktop_sync_activity (
   device_id uuid REFERENCES public.desktop_sync_devices(id) ON DELETE SET NULL,
   actor_user_id uuid REFERENCES auth.users(id),
   kind text NOT NULL CHECK (kind IN (
-    'enabled', 'disabled', 'paired', 'disconnected', 'upload', 'upload_rejected'
+    'enabled', 'disabled', 'paired', 'disconnected', 'upload', 'upload_rejected', 'upload_skipped'
   )),
   detail jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
@@ -134,9 +134,9 @@ BEGIN
     'application/pdf',
     'image/jpeg',
     'image/png',
-    'text/csv',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    'image/webp',
+    'image/heic',
+    'image/heif'
   ) THEN
     RETURN jsonb_build_object('ok', false, 'error', 'mime_not_allowed');
   END IF;
@@ -193,6 +193,32 @@ GRANT EXECUTE ON FUNCTION public.register_desktop_sync_source_document(
   uuid, text, text, text, bigint, uuid
 ) TO service_role;
 
+-- Folder map rows must point at a client owned by the same firm.
+CREATE OR REPLACE FUNCTION public.desktop_sync_folder_map_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.clients c
+    WHERE c.id = NEW.client_id AND c.firm_id = NEW.firm_id
+  ) THEN
+    RAISE EXCEPTION 'client_firm_mismatch' USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.desktop_sync_folder_map_guard() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS desktop_sync_folder_map_guard ON public.desktop_sync_folder_maps;
+CREATE TRIGGER desktop_sync_folder_map_guard
+  BEFORE INSERT OR UPDATE OF client_id, firm_id ON public.desktop_sync_folder_maps
+  FOR EACH ROW
+  EXECUTE FUNCTION public.desktop_sync_folder_map_guard();
+
 ALTER TABLE public.desktop_sync_firms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.desktop_sync_folder_maps ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.desktop_sync_devices ENABLE ROW LEVEL SECURITY;
@@ -202,7 +228,7 @@ ALTER TABLE public.desktop_sync_activity ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.desktop_sync_firms FROM PUBLIC, anon;
 REVOKE ALL ON TABLE public.desktop_sync_folder_maps FROM PUBLIC, anon;
 REVOKE ALL ON TABLE public.desktop_sync_devices FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON TABLE public.desktop_sync_pairing_codes FROM PUBLIC, anon;
+REVOKE ALL ON TABLE public.desktop_sync_pairing_codes FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.desktop_sync_activity FROM PUBLIC, anon;
 
 CREATE POLICY desktop_sync_firms_select ON public.desktop_sync_firms
