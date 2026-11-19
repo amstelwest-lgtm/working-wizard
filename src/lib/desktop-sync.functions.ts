@@ -7,6 +7,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { isSupabaseAdminConfigured, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { desktopSyncFirmAllowed } from "@/lib/desktop-sync-allowlist";
+import { desktopSyncSqlReady } from "@/lib/desktop-sync-ready";
 import {
   DESKTOP_SYNC_CONSENT_VERSION,
   DESKTOP_SYNC_PAIRING_TTL_MS,
@@ -80,6 +81,7 @@ async function logActivity(
 
 export type DesktopSyncStatus = {
   available: boolean;
+  sqlPending: boolean;
   enabled: boolean;
   notice: string;
   noticeVersion: string;
@@ -101,6 +103,7 @@ export const loadDesktopSyncStatus = createServerFn({ method: "GET" })
   .handler(async ({ data, context }): Promise<DesktopSyncStatus> => {
     const empty: DesktopSyncStatus = {
       available: false,
+      sqlPending: !desktopSyncSqlReady(),
       enabled: false,
       notice: "",
       noticeVersion: DESKTOP_SYNC_CONSENT_VERSION,
@@ -110,8 +113,16 @@ export const loadDesktopSyncStatus = createServerFn({ method: "GET" })
       openPairingExpiresAt: null,
       activity: [],
     };
-    if (!isSupabaseAdminConfigured() || !desktopSyncFirmAllowed(data.firmId)) return empty;
+    if (!desktopSyncSqlReady()) {
+      empty.notice = desktopSyncConsentNotice("Your practice");
+      return empty;
+    }
+    if (!isSupabaseAdminConfigured() || !desktopSyncFirmAllowed(data.firmId)) {
+      empty.notice = desktopSyncConsentNotice("Your practice");
+      return empty;
+    }
     if (!(await isFirmOwner(context.userId, data.firmId))) return empty;
+    empty.sqlPending = false;
 
     const firm = await supabaseAdmin.from("firms").select("name").eq("id", data.firmId).maybeSingle();
     const practiceName = typeof firm.data?.name === "string" ? firm.data.name : "";
@@ -139,6 +150,7 @@ export const loadDesktopSyncStatus = createServerFn({ method: "GET" })
       }));
     }
 
+    // Device list via service role only — no token_hash columns (migration denies authenticated SELECT).
     const devices = await table("desktop_sync_devices")
       .select("id, device_label, paired_at, revoked_at")
       .eq("firm_id", data.firmId)
@@ -194,6 +206,7 @@ export const enableDesktopSync = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    if (!desktopSyncSqlReady()) return { ok: false, reason: "not_enabled" };
     if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
     if (!desktopSyncFirmAllowed(data.firmId)) return { ok: false, reason: "not_allowed" };
     if (!(await isFirmOwner(context.userId, data.firmId))) return { ok: false, reason: "forbidden" };
@@ -264,6 +277,7 @@ export const disableDesktopSync = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ firmId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    if (!desktopSyncSqlReady()) return { ok: false, reason: "not_enabled" };
     if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
     if (!desktopSyncFirmAllowed(data.firmId)) return { ok: false, reason: "not_allowed" };
     if (!(await isFirmOwner(context.userId, data.firmId))) return { ok: false, reason: "forbidden" };
@@ -304,6 +318,7 @@ export const mintDesktopPairingCode = createServerFn({ method: "POST" })
       | { ok: true; code: string; expiresAt: string }
       | { ok: false; reason: string }
     > => {
+      if (!desktopSyncSqlReady()) return { ok: false, reason: "not_enabled" };
       if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
       if (!desktopSyncFirmAllowed(data.firmId)) return { ok: false, reason: "not_allowed" };
       if (!(await isFirmOwner(context.userId, data.firmId))) return { ok: false, reason: "forbidden" };
@@ -339,6 +354,7 @@ export const revokeDesktopDevice = createServerFn({ method: "POST" })
     z.object({ firmId: z.string().uuid(), deviceId: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data, context }): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    if (!desktopSyncSqlReady()) return { ok: false, reason: "not_enabled" };
     if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
     if (!desktopSyncFirmAllowed(data.firmId)) return { ok: false, reason: "not_allowed" };
     if (!(await isFirmOwner(context.userId, data.firmId))) return { ok: false, reason: "forbidden" };

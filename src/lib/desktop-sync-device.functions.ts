@@ -8,6 +8,7 @@ import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { isSupabaseAdminConfigured, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { SOURCE_DOCS_BUCKET } from "@/lib/source-document-hooks";
+import { desktopSyncSqlReady } from "@/lib/desktop-sync-ready";
 import {
   DESKTOP_SYNC_DAILY_BYTE_CAP,
   DESKTOP_SYNC_DAILY_FILE_CAP,
@@ -97,25 +98,35 @@ function rateLimited(deviceId: string): boolean {
 
 async function bumpDailyUsage(deviceId: string, bytes: number): Promise<boolean> {
   const day = sastUsageDay();
-  const existing = await table("desktop_sync_daily_usage")
-    .select("file_count, byte_count")
-    .eq("device_id", deviceId)
-    .eq("usage_day", day)
+  const existing = await table("desktop_sync_devices")
+    .select("usage_date, usage_count, usage_byte_count")
+    .eq("id", deviceId)
     .maybeSingle();
-  const fileCount = Number(existing.data?.file_count ?? 0) + 1;
-  const byteCount = Number(existing.data?.byte_count ?? 0) + bytes;
+  if (existing.error) {
+    if (missingDesktopTable(existing.error)) return true;
+    throw new Error(existing.error.message);
+  }
+  const storedDay =
+    existing.data?.usage_date != null ? String(existing.data.usage_date).slice(0, 10) : day;
+  let fileCount = Number(existing.data?.usage_count ?? 0);
+  let byteCount = Number(existing.data?.usage_byte_count ?? 0);
+  if (storedDay !== day) {
+    fileCount = 0;
+    byteCount = 0;
+  }
+  fileCount += 1;
+  byteCount += bytes;
   if (fileCount > DESKTOP_SYNC_DAILY_FILE_CAP || byteCount > DESKTOP_SYNC_DAILY_BYTE_CAP) {
     return true;
   }
-  await table("desktop_sync_daily_usage").upsert(
-    {
-      device_id: deviceId,
-      usage_day: day,
-      file_count: fileCount,
-      byte_count: byteCount,
-    },
-    { onConflict: "device_id,usage_day" },
-  );
+  const updated = await table("desktop_sync_devices")
+    .update({
+      usage_date: day,
+      usage_count: fileCount,
+      usage_byte_count: byteCount,
+    })
+    .eq("id", deviceId);
+  if (updated.error) throw new Error(updated.error.message);
   return false;
 }
 
@@ -186,6 +197,7 @@ export async function pairDesktopSyncDeviceImpl(
     }
   | { ok: false; reason: string }
 > {
+      if (!desktopSyncSqlReady()) return { ok: false, reason: "not_enabled" };
       if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
       const codeHash = await hashPairingCode(data.pairingCode);
       const codeRow = await table("desktop_sync_pairing_codes")
@@ -268,6 +280,7 @@ export async function refreshDesktopSyncDeviceImpl(data: { refreshToken: string 
   | { ok: true; accessToken: string; accessExpiresAt: string; refreshToken: string; refreshExpiresAt: string }
   | { ok: false; reason: string }
 > {
+      if (!desktopSyncSqlReady()) return { ok: false, reason: "not_enabled" };
       if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
       const refreshHash = await hashDeviceToken(data.refreshToken);
       const found = await table("desktop_sync_devices")
@@ -323,6 +336,7 @@ export async function desktopSyncDeviceUploadImpl(
   },
   accessToken: string | null,
 ): Promise<{ ok: true; duplicate: boolean; documentId: string | null } | { ok: false; reason: string }> {
+      if (!desktopSyncSqlReady()) return { ok: false, reason: "not_enabled" };
       if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
       const token = accessToken;
       if (!token) return { ok: false, reason: "unauthorised" };

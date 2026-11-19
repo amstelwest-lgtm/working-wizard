@@ -15,6 +15,7 @@ import {
 } from "../src/lib/desktop-sync.ts";
 import { desktopSyncFirmAllowed, DESKTOP_SYNC_FIRM_ALLOWLIST } from "../src/lib/desktop-sync-allowlist.ts";
 import { desktopSyncDeviceScopes } from "../src/lib/desktop-sync-device.functions.ts";
+import { desktopSyncSqlReady } from "../src/lib/desktop-sync-ready.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -37,12 +38,18 @@ assert(mimeAllowed("application/pdf"), "mime pdf");
 assert(!deviceTokenCanRead(), "token cannot read");
 assert(!desktopSyncDeviceScopes.canListClients, "no client list");
 assert(!desktopSyncDeviceScopes.canCallAgents, "no agents");
+assert(!desktopSyncSqlReady(), "sql ready off by default");
 
 const functions = readFileSync(resolve("src/lib/desktop-sync.functions.ts"), "utf8");
+const device = readFileSync(resolve("src/lib/desktop-sync-device.functions.ts"), "utf8");
+const pairApi = readFileSync(resolve("src/routes/api/desktop-sync/pair.ts"), "utf8");
+
+assert(functions.includes("desktopSyncSqlReady"), "server gated on sql ready");
+assert(pairApi.includes("desktopSyncSqlReady"), "pair api gated");
+assert(device.includes("usage_date"), "daily caps on devices");
+assert(!device.includes("desktop_sync_daily_usage"), "no daily_usage table in code");
 assert(functions.includes("if (!(await firmEnabled"), "pairing blocked when firm off");
 assert(functions.includes("desktopSyncFirmAllowed"), "allowlist on server");
-
-const device = readFileSync(resolve("src/lib/desktop-sync-device.functions.ts"), "utf8");
 assert(device.includes('reason: "off"'), "off flag blocks upload");
 assert(device.includes('reason: "revoked"'), "revoke blocks upload");
 assert(device.includes('reason: "folder"'), "unmapped folder rejected");

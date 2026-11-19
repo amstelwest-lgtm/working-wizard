@@ -3,6 +3,7 @@
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { desktopSyncDeviceUploadImpl } from "@/lib/desktop-sync-device.functions";
+import { desktopSyncSqlReady } from "@/lib/desktop-sync-ready";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -21,6 +22,9 @@ export const Route = createFileRoute("/api/desktop-sync/upload")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        if (!desktopSyncSqlReady()) {
+          return json({ ok: false, reason: "not_enabled" }, 503);
+        }
         const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
         if (!body) return json({ ok: false, reason: "body" }, 400);
         const result = await desktopSyncDeviceUploadImpl(

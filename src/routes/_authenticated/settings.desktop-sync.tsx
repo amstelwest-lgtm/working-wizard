@@ -11,6 +11,7 @@ import { SettingsShell } from "@/components/settings-shell";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { supabase } from "@/integrations/supabase/client";
 import { onlyActiveClients } from "@/lib/archive-client";
+import { desktopSyncClientReady } from "@/lib/desktop-sync-ready";
 import {
   disableDesktopSync,
   enableDesktopSync,
@@ -130,7 +131,14 @@ function DesktopSyncSettingsPage() {
           subtitle="Optional. Watches folders you name on one computer and uploads into client source documents for review."
         />
 
-        {loading ? (
+        {!desktopSyncClientReady() || status?.sqlPending ? (
+          <SectionCard title="Coming soon">
+            <p className="text-sm text-[var(--ink-muted)]">
+              Desktop folder sync will appear here after the database migration is applied and
+              enabled for this environment. Nothing is watching your computer yet.
+            </p>
+          </SectionCard>
+        ) : loading ? (
           <p className="text-sm text-[var(--ink-muted)]">Loading…</p>
         ) : !status?.available ? (
           <SectionCard title="Not available">

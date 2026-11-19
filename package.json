@@ -175,7 +175,6 @@
     "test:tax-deliverable": "vite-node --config scripts/vite-test.config.ts scripts/tax-deliverable-test.mts",
     "test:source-documents-ui": "vite-node --config scripts/vite-test.config.ts scripts/source-documents-ui-test.mts",
     "test:desktop-sync": "vite-node --config scripts/vite-test.config.ts scripts/desktop-sync-test.mts",
-    "test:desktop-sync-migration": "vite-node --config scripts/vite-test.config.ts scripts/desktop-sync-migration-test.mts",
     "test:desktop-sync-agent": "vite-node --config scripts/vite-test.config.ts scripts/desktop-sync-agent-test.mts",
     "test:statement-text-layer": "vite-node --config scripts/vite-test.config.ts scripts/statement-text-layer-test.mts",
     "test:auto-populate": "vite-node --config scripts/vite-test.config.ts scripts/auto-populate-test.mts",
