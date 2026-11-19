@@ -41,16 +41,20 @@ export type ProductMix = {
   totalRevenue?: number;
 };
 
+/**
+ * Legacy v1/v2 share bands. Q5 no longer shows these. The old sales-share
+ * hints are omitted: nothing reads them, and that copy must not ship in
+ * the US entry bundle.
+ */
 export const SHARE_BANDS: Array<{
   id: ProductShareBand;
   label: string;
-  hint: string;
   pct: number;
 }> = [
-  { id: "small", label: "A small slice", hint: "Roughly 10% of sales", pct: 10 },
-  { id: "quarter", label: "About a quarter", hint: "Roughly 25% of sales", pct: 25 },
-  { id: "half", label: "About half", hint: "Roughly 50% of sales", pct: 50 },
-  { id: "most", label: "Most of the book", hint: "Roughly 70%+ of sales", pct: 70 },
+  { id: "small", label: "A small slice", pct: 10 },
+  { id: "quarter", label: "About a quarter", pct: 25 },
+  { id: "half", label: "About half", pct: 50 },
+  { id: "most", label: "Most of the book", pct: 70 },
 ];
 
 const SHARE_IDS = new Set<ProductShareBand>(SHARE_BANDS.map((b) => b.id));
