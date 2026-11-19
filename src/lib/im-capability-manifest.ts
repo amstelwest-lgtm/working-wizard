@@ -223,7 +223,7 @@ const FIT_GAP = "Fits the universal finance function. Not in Milōn yet.";
 const BESPOKE_SIGNALS =
   /\b(desktop|remote desktop|anydesk|teamviewer|screen ?share|whatsapp|bespoke|one-off|one off|custom website|marketing campaign|legal case)\b/i;
 
-const FINANCE_DEADLINE_SIGNALS =
+export const FINANCE_DEADLINE_SIGNALS =
   /\b(deadlines?|due dates?|deadline tracking)\b.*\b(vat|emp201|provisional|tax)\b|\b(vat|emp201|provisional)\b.*\bdeadlines?\b/i;
 
 function toolLabels(tools: readonly string[], labels: Record<string, string>): string[] {

@@ -22,6 +22,7 @@ const ROUTINE_LABELS: Record<ImRoutineKind, string> = {
   monthly_pack: "Monthly pack",
   cash_debtor_early_warning: "Cash and debtor early warning",
   budget_actual_drift: "Budget-versus-actual drift",
+  tax_deadline_watch: "Tax deadline watch (Tax Specialist)",
 };
 
 export function ImActivationStep() {

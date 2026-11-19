@@ -56,6 +56,7 @@ export function parseRoutineMapMeta(meta: unknown): ImRoutineMapArtifactMeta | n
     "monthly_pack",
     "cash_debtor_early_warning",
     "budget_actual_drift",
+    "tax_deadline_watch",
   ];
   if (!allowed.includes(routine as ImRoutineKind)) return null;
   const steps = Array.isArray(row.steps) ? row.steps : [];
@@ -163,6 +164,7 @@ export function routineTitle(routine: ImRoutineKind): string {
   if (routine === "monthly_pack") return "Monthly pack routine";
   if (routine === "cash_debtor_early_warning") return "Cash and debtor early warning";
   if (routine === "budget_actual_drift") return "Budget-versus-actual drift check";
+  if (routine === "tax_deadline_watch") return "Tax deadline watch (Tax Specialist)";
   return "Pilot routine";
 }
 

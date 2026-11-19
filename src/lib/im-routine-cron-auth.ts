@@ -23,7 +23,7 @@ export function hasValidCronBearer(request: Request): boolean {
   return timingSafeEqual(a, b);
 }
 
-export function imRoutineCronKillSwitchOn(): boolean {
+export function imRoutineCronEnabled(): boolean {
   return (process.env.IM_ROUTINE_CRON_ENABLED || "").trim() === "true";
 }
 

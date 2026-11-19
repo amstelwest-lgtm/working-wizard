@@ -11,6 +11,7 @@ import type { PracticeImplementationPlan, PracticePlanStep } from "./setup-partn
 import { classifyPracticeStep } from "./setup-partner-plan.ts";
 import type { ImReplayFixtureMeta } from "./im-replay.ts";
 import type { SetupPartnerCountry } from "./setup-partner.ts";
+import { FINANCE_DEADLINE_SIGNALS } from "./im-capability-manifest.ts";
 
 export type ImPilotClient = {
   id: string;
@@ -39,7 +40,8 @@ export type ImRoutineKind =
   | "document_chase"
   | "monthly_pack"
   | "cash_debtor_early_warning"
-  | "budget_actual_drift";
+  | "budget_actual_drift"
+  | "tax_deadline_watch";
 
 export type ImRoutineMap = {
   kind: "routine_map";
@@ -172,6 +174,50 @@ const CASH_DEBTOR_MAP: ImRoutineMap = {
   ],
 };
 
+const TAX_DEADLINE_WATCH_MAP: ImRoutineMap = {
+  kind: "routine_map",
+  routine: "tax_deadline_watch",
+  tags: ["action_items", "routine_map", "tax_deadline_watch"],
+  steps: [
+    {
+      id: "tax_deadline_watch-1",
+      title: "Watch VAT201, EMP201, provisional and annual tax deadlines (draft for review)",
+      botOwner: "Tax Specialist",
+      trigger: "event_tax_deadline_approaching",
+      cadence: "monthly",
+      approvalGate: SEND_GATE,
+      sends: false,
+    },
+    {
+      id: "tax_deadline_watch-2",
+      title: "Draft workings or checklist for the accountant from Milōn data (draft for review)",
+      botOwner: "Tax Specialist",
+      trigger: "event_prior_step_succeeded",
+      cadence: "monthly",
+      approvalGate: SEND_GATE,
+      sends: false,
+    },
+    {
+      id: "tax_deadline_watch-3",
+      title: "Draft unsent reminder — no SARS filing or login (draft for review)",
+      botOwner: "Tax Specialist",
+      trigger: "event_prior_step_succeeded",
+      cadence: "monthly",
+      approvalGate: SEND_GATE,
+      sends: false,
+    },
+    {
+      id: "tax_deadline_watch-4",
+      title: "Accountant reviews before anything is sent",
+      botOwner: "Accountant",
+      trigger: "human_approval_gate",
+      cadence: "monthly",
+      approvalGate: SEND_GATE,
+      sends: false,
+    },
+  ],
+};
+
 const BUDGET_DRIFT_MAP: ImRoutineMap = {
   kind: "routine_map",
   routine: "budget_actual_drift",
@@ -207,12 +253,21 @@ const BUDGET_DRIFT_MAP: ImRoutineMap = {
   ],
 };
 
+function planHasFinanceTaxDeadlines(steps: readonly PracticePlanStep[]): boolean {
+  return steps.some(
+    (row) =>
+      FINANCE_DEADLINE_SIGNALS.test(row.step) ||
+      /\b(vat201|emp201|provisional|itr14|itr12|annual return)\b/i.test(row.step),
+  );
+}
+
 export function buildRoutineMaps(
   plan: PracticeImplementationPlan,
   manifest: ImCapabilityManifest,
+  country?: SetupPartnerCountry | null,
 ): ImRoutineMap[] {
   const steps = plan.steps.map((row) => classifyPracticeStep(row.step, { manifest }));
-  return [
+  const maps: ImRoutineMap[] = [
     {
       kind: "routine_map",
       routine: "document_chase",
@@ -228,6 +283,10 @@ export function buildRoutineMaps(
     CASH_DEBTOR_MAP,
     BUDGET_DRIFT_MAP,
   ];
+  if (country === "ZA" && planHasFinanceTaxDeadlines(steps)) {
+    maps.push(TAX_DEADLINE_WATCH_MAP);
+  }
+  return maps;
 }
 
 export function buildFirstValueMilestone(
@@ -279,7 +338,7 @@ export function buildActivationPlan(input: {
 }): ImActivationPlan {
   const manifest = input.manifest ?? buildCapabilityManifest(input.country);
   const pilots = pickPilotClients(input.pilots);
-  const routineMaps = buildRoutineMaps(input.plan, manifest);
+  const routineMaps = buildRoutineMaps(input.plan, manifest, input.country);
   return {
     partnerChecklist: buildPartnerChecklist(pilots, input.meta),
     firstValueMilestone: buildFirstValueMilestone(input.plan, pilots),

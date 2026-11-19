@@ -22,3 +22,13 @@ export function botOwnerToAgentKey(
   if (label.includes("advisor")) return "advisor";
   return "financial_manager";
 }
+
+/** Runner agent for IM cron enqueue. Tax Specialist steps use the Advisor runner (no Tax runner yet). */
+export function imRoutineRunnerAgentForStep(
+  botOwner: string,
+): "financial_manager" | "analyst" | "advisor" | null {
+  const mapped = botOwnerToAgentKey(botOwner);
+  if (mapped) return mapped;
+  if (botOwner.toLowerCase().includes("tax")) return "advisor";
+  return null;
+}

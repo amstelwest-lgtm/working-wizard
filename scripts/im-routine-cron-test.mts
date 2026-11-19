@@ -7,7 +7,7 @@ import {
   cronSecretConfigured,
   hasValidCronBearer,
   imRoutineCronFirmDailyCap,
-  imRoutineCronKillSwitchOn,
+  imRoutineCronEnabled,
   imRoutineCronMaxFirms,
   imRoutineCronMaxInvokes,
 } from "../src/lib/im-routine-cron-auth.ts";
@@ -21,10 +21,15 @@ import {
   imCashCollectionsRiskFromFinancials,
 } from "../src/lib/im-routine-signals.ts";
 import {
+  countImRoutineStubSkips,
   imRoutineInstantInPeriod,
   imRoutinePeriodKey,
   runStampInRoutinePeriod,
 } from "../src/lib/im-routine-schedule.ts";
+import { timeZoneCalendarDayUtcBounds } from "../src/lib/statement-period.ts";
+import { buildActivationPlan } from "../src/lib/im-activation-planner.ts";
+import { routineMapArtifactMeta } from "../src/lib/im-activation-persist.ts";
+import { replayImplementationPlan } from "../src/lib/im-replay.ts";
 import { buildCapabilityManifest, matchManifestClassifier } from "../src/lib/im-capability-manifest.ts";
 import { STRIKE7_BEN_ID } from "./strike7-firms.ts";
 import { CLAUDE_OPUS_55, CLAUDE_SONNET_55, isClaudeOpus55 } from "../src/lib/claude-request.ts";
@@ -49,14 +54,14 @@ assert(
   "valid bearer",
 );
 
-assert(!imRoutineCronKillSwitchOn(), "kill switch default off");
+assert(!imRoutineCronEnabled(), "cron default off");
 const noop = await runImRoutineCron(
   new Request("http://local", { headers: { authorization: "Bearer test-cron-secret" } }),
 );
 assert(noop.ok && noop.wrote && noop.noop, "kill switch off is noop");
 
 process.env.IM_ROUTINE_CRON_ENABLED = "true";
-assert(imRoutineCronKillSwitchOn(), "kill switch on when true");
+assert(imRoutineCronEnabled(), "cron on when env true");
 assert(imRoutineCronMaxFirms() === 5, "default max firms");
 assert(imRoutineCronMaxInvokes() === 20, "default max invokes");
 assert(imRoutineCronFirmDailyCap() === 10, "default firm daily cap");
@@ -99,7 +104,11 @@ assert(service.includes("CLAUDE_SONNET_55") && !service.includes("im_design_mode
 assert(!isClaudeOpus55(CLAUDE_SONNET_55), "scheduled model is not Opus");
 
 const fmRun = readFileSync("supabase/functions/agent-financial-manager/run.ts", "utf8");
+const advisorRun = readFileSync("supabase/functions/agent-advisor/run.ts", "utf8");
 assert(fmRun.includes('inputs.startsWith("im_activation:run:")'), "FM sonnet path for IM runs");
+assert(advisorRun.includes('inputs.startsWith("im_activation:run:")'), "Advisor sonnet path for IM / Tax Specialist runs");
+assert(advisorRun.includes("CLAUDE_SONNET_55"), "Advisor IM path names Sonnet");
+assert(!advisorRun.includes("CLAUDE_OPUS_55"), "Advisor IM path never Opus");
 
 const cronRoute = readFileSync("src/routes/api/im-routine-cron.ts", "utf8");
 const vercel = readFileSync("vercel.json", "utf8");
@@ -110,6 +119,94 @@ assert(
   !service.includes("resend") && !service.includes("accountant_request_respond"),
   "no send paths",
 );
+assert(!service.includes("efiling") && !service.includes("sars_login"), "scheduler has no SARS filing path");
+assert(service.includes("no_sars"), "tax routine trace marks no SARS");
+assert(service.includes('meta->>accepted_at'), "accepted firms filtered at query time");
+assert(service.includes("timeZoneCalendarDayUtcBounds"), "firm daily cap uses SAST day");
+assert(service.includes("timeZoneMonthStartUtcIso"), "upload-since uses SAST month start");
+assert(service.includes("countImRoutineStubSkips"), "stub signal counted before planning");
+assert(!service.includes("skipped_stub_signal += 1;\n          continue"), "no unreachable stub skip in loop");
+
+const sastDay = timeZoneCalendarDayUtcBounds(new Date("2026-11-30T22:30:00.000Z"), "Africa/Johannesburg");
+assert(sastDay.dayYmd === "2026-12-01", "22:30 UTC is 1 Dec SAST for day cap");
+assert(sastDay.startIso === "2026-11-30T22:00:00.000Z", "SAST midnight maps to 22:00 UTC previous day");
+
+const taxReplay = replayImplementationPlan({
+  confirmRules: [
+    {
+      rule_text:
+        "Practice: Prepare VAT201, EMP201, and provisional tax for the book — Practice; Monthly — Fits.",
+      status: "active",
+      source_event: "setup_partner_confirm",
+    },
+  ],
+  meta: { country: "ZA" },
+});
+assert(taxReplay.status === "ready", "ZA tax replay");
+if (taxReplay.status === "ready") {
+  const taxActivation = buildActivationPlan({
+    plan: taxReplay.plan,
+    country: "ZA",
+    pilots: [{ id: client, name: "Pilot", hasLedger: true, hasUpload: false }],
+    manifest: taxReplay.manifest,
+  });
+  const taxMap = taxActivation.routineMaps.find((row) => row.routine === "tax_deadline_watch");
+  assert(taxMap, "tax deadline watch map on ZA tax plan");
+  assert(taxMap!.steps.every((step) => step.sends === false), "tax steps do not send");
+  assert(
+    taxMap!.steps[2]?.title.includes("no SARS filing"),
+    "reminder step explicitly avoids SARS filing",
+  );
+  assert(taxMap!.steps[0]?.botOwner === "Tax Specialist", "Tax Specialist owns deadline watch");
+  const meta = routineMapArtifactMeta({
+    firmId: firm,
+    clientId: client,
+    map: taxMap!,
+    hoursSavedPerRun: null,
+    acceptedAt: new Date(0).toISOString(),
+  });
+  const stub = countImRoutineStubSkips({
+    firmId: firm,
+    clientId: client,
+    meta,
+    actions: [],
+    runs: [],
+    context: { hasLedger: true, hasUpload: false, cashCollectionsRisk: false },
+  });
+  assert(stub === 0, "tax map does not stub-skip");
+}
+
+const cashReplay = replayImplementationPlan({
+  confirmRules: [{ rule_text: "Practice: Overdue receivables — covered", status: "active", source_event: "x" }],
+  meta: { country: "ZA" },
+});
+if (cashReplay.status === "ready") {
+  const cashActivation = buildActivationPlan({
+    plan: cashReplay.plan,
+    country: "ZA",
+    pilots: [{ id: client, name: "Pilot", hasLedger: true, hasUpload: false }],
+    manifest: cashReplay.manifest,
+  });
+  const cashMap = cashActivation.routineMaps.find((row) => row.routine === "cash_debtor_early_warning");
+  if (cashMap) {
+    const meta = routineMapArtifactMeta({
+      firmId: firm,
+      clientId: client,
+      map: cashMap,
+      hoursSavedPerRun: null,
+      acceptedAt: new Date(0).toISOString(),
+    });
+    const stub = countImRoutineStubSkips({
+      firmId: firm,
+      clientId: client,
+      meta,
+      actions: [],
+      runs: [],
+      context: { hasLedger: true, hasUpload: false, cashCollectionsRisk: false },
+    });
+    assert(stub === 1, "cash stub signal counted before plan");
+  }
+}
 
 let clientRejected = false;
 try {
