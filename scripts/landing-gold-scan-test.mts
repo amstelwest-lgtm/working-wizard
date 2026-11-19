@@ -164,7 +164,7 @@ async function withLivePage<T>(page: Page, fn: () => Promise<T>): Promise<T> {
 
 async function paintLandingTheme(page: Page, theme: "light" | "dark") {
   await withLivePage(page, async () => {
-    await page.locator(".logo-word").waitFor({ timeout: 20000 });
+    await page.locator(".logo-word").first().waitFor({ timeout: 20000 });
     await page.evaluate((next) => {
       document.documentElement.dataset.theme = next;
       document.documentElement.classList.toggle("dark", next === "dark");
