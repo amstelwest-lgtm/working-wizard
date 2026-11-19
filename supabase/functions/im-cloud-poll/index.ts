@@ -4,9 +4,11 @@
  */
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { googleDriveListChildren } from "../../../src/lib/google-drive-read.ts";
-import { microsoftGraphListFolderByItemId } from "../../../src/lib/microsoft-graph-read.ts";
-import { refreshImCloudTokens } from "../../../src/lib/im-cloud-oauth.server.ts";
+import {
+  edgeGoogleDriveListChildren,
+  edgeMicrosoftGraphListFolderByItemId,
+} from "../../../src/lib/im-cloud-edge-list.ts";
+import { edgeRefreshImCloudTokens } from "../../../src/lib/im-cloud-edge-oauth.ts";
 import { decryptImCloudSecret, encryptImCloudSecret } from "../../../src/lib/im-cloud-token.ts";
 
 type ConnectionRow = {
@@ -29,7 +31,7 @@ async function accessTokenForRow(
   const fresh = Number.isFinite(expiryMs) && expiryMs > Date.now() + 60_000;
   if (fresh) return decryptImCloudSecret(row.access_token_enc);
   const refreshPlain = decryptImCloudSecret(row.refresh_token_enc);
-  const refreshed = await refreshImCloudTokens(row.provider, refreshPlain);
+  const refreshed = await edgeRefreshImCloudTokens(row.provider, refreshPlain);
   const tokenExpiry = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
   await supabase
     .from("im_cloud_connections")
@@ -93,9 +95,9 @@ serve(async (req) => {
       if (!folderId) continue;
       try {
         if (row.provider === "google") {
-          listed += (await googleDriveListChildren(token, folderId)).length;
+          listed += (await edgeGoogleDriveListChildren(token, folderId)).length;
         } else {
-          listed += (await microsoftGraphListFolderByItemId(token, folderId)).length;
+          listed += (await edgeMicrosoftGraphListFolderByItemId(token, folderId)).length;
         }
       } catch (e) {
         console.error("[im-cloud-poll] list failed", {
