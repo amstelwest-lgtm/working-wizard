@@ -267,7 +267,9 @@ assert(
 assert(magic.includes(">Sign in</a>"), "the sign-in button is labelled Sign in");
 assert(magic.includes(">Milōn</p>"), "the sign-in mail signs off as Milōn");
 assert(magic.includes("{{ .ConfirmationURL }}"), "the sign-in button uses ConfirmationURL");
-assert(magic.includes("{{ .Token }}"), "the sign-in mail shows the 6-digit code");
+assert(magic.includes("{{ .Token }}"), "the sign-in mail shows the code");
+assert(magic.includes("8-digit code"), "the sign-in mail says 8-digit");
+assert(!magic.includes("6-digit"), "the sign-in mail does not say 6-digit");
 assert(magic.includes("#0B5FFF") && magic.includes("#102A43") && magic.includes("#DBEAFE"), "sign-in mail uses brand v1.1");
 assert(magic.includes("background:#ffffff"), "sign-in mail uses a white canvas");
 assert(magic.includes("#d4af37"), "gold is on the wordmark");

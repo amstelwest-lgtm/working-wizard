@@ -6,8 +6,12 @@ import {
 } from "@/components/auth-entry-shell";
 import {
   EMAIL_SIGN_IN_CODE_INSTEAD,
+  EMAIL_SIGN_IN_CODE_LABEL,
   EMAIL_SIGN_IN_TAP_LINK,
+  OTP_LENGTH,
   emailCodeFallbackEnabled,
+  emailSignInCodeDigits,
+  emailSignInCodeReady,
   requestEmailSignInLink,
   verifyEmailSignInCode,
   type EmailSignInDoor,
@@ -15,7 +19,7 @@ import {
 } from "@/lib/email-sign-in";
 
 /**
- * "Email me a sign-in link" plus the 6-digit code fallback.
+ * "Email me a sign-in link" plus the email-code fallback.
  * Shared by /auth (accountant) and the landing sign-in modal (owner).
  */
 export function EmailSignInOption({
@@ -63,12 +67,12 @@ export function EmailSignInOption({
     }
   };
 
-  const verify = async () => {
+  const verify = async (token = code) => {
     if (busy || disabled) return;
     setBusy(true);
     setCodeError("");
     try {
-      const result = await verifyEmailSignInCode({ email, token: code });
+      const result = await verifyEmailSignInCode({ email, token });
       if (!result.ok) {
         setCodeError(result.message);
         return;
@@ -81,6 +85,13 @@ export function EmailSignInOption({
     } finally {
       setBusy(false);
     }
+  };
+
+  const applyCode = (raw: string) => {
+    const next = emailSignInCodeDigits(raw);
+    setCode(next);
+    setCodeError("");
+    if (next.length === OTP_LENGTH) void verify(next);
   };
 
   const status = notice?.message ?? "";
@@ -108,23 +119,20 @@ export function EmailSignInOption({
               {EMAIL_SIGN_IN_CODE_INSTEAD}
             </summary>
             <div className="mt-4">
-              <AuthEntryFieldLabel htmlFor={codeId}>Enter the 6-digit code</AuthEntryFieldLabel>
+              <AuthEntryFieldLabel htmlFor={codeId}>{EMAIL_SIGN_IN_CODE_LABEL}</AuthEntryFieldLabel>
               <AuthEntryInput
                 id={codeId}
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 pattern="[0-9]*"
-                maxLength={6}
+                maxLength={OTP_LENGTH}
                 value={code}
-                onChange={(event) => {
-                  setCode(event.target.value.replace(/\D/g, "").slice(0, 6));
-                  setCodeError("");
-                }}
+                onChange={(event) => applyCode(event.target.value)}
               />
               <AuthEntryGhostButton
                 type="button"
                 className="mt-3"
-                disabled={busy || disabled || code.length !== 6}
+                disabled={busy || disabled || !emailSignInCodeReady(code)}
                 onClick={() => void verify()}
               >
                 {busy ? "Signing in…" : "Sign in with code"}
@@ -198,19 +206,16 @@ export function EmailSignInOption({
           </summary>
           <div style={{ marginTop: 12 }}>
           <label htmlFor={codeId} style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
-            Enter the 6-digit code
+            {EMAIL_SIGN_IN_CODE_LABEL}
           </label>
           <input
             id={codeId}
             inputMode="numeric"
             autoComplete="one-time-code"
             pattern="[0-9]*"
-            maxLength={6}
+            maxLength={OTP_LENGTH}
             value={code}
-            onChange={(event) => {
-              setCode(event.target.value.replace(/\D/g, "").slice(0, 6));
-              setCodeError("");
-            }}
+            onChange={(event) => applyCode(event.target.value)}
             style={{
               width: "100%",
               padding: "12px 14px",
@@ -224,7 +229,7 @@ export function EmailSignInOption({
           <button
             type="button"
             className="btn btn-cobalt"
-            disabled={busy || disabled || code.length !== 6}
+            disabled={busy || disabled || !emailSignInCodeReady(code)}
             onClick={() => void verify()}
             style={{ width: "100%", justifyContent: "center", marginTop: 12 }}
           >

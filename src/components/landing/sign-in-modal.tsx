@@ -68,7 +68,7 @@ export function LandingSignInModal({
   onBackToSignIn: () => void;
   onResend: () => void;
   onCreateAccount: () => void;
-  /** 6-digit code established a session. The caller lands it the same way as a password grant. */
+  /** Email code established a session. The caller lands it the same way as a password grant. */
   onEmailSignedIn?: (user: {
     id: string;
     user_metadata: Record<string, unknown>;
