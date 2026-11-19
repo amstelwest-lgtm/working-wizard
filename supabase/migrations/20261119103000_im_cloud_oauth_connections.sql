@@ -1,7 +1,8 @@
 -- Implementation Manager cloud OAuth (Google Drive / OneDrive).
 -- Tables only — not applied to production until ops runs this migration.
--- Token storage matches Xero/QBO: TEXT columns, RLS enabled with no policies
--- (service role only). Supabase disk encryption at rest; no separate vault.
+-- Token storage (CoS option b): access_token_enc / refresh_token_enc hold
+-- AES-GCM ciphertext from the app (IM_CLOUD_TOKEN_KEY). RLS enabled with no
+-- policies (service role only).
 -- im_source_inbound_aliases intentionally omitted — webhook keeps admin scan.
 
 -- ── Short-lived OAuth state (CSRF + return path, ~10-minute TTL) ───────────
@@ -27,8 +28,8 @@ CREATE TABLE IF NOT EXISTS public.im_cloud_connections (
   provider        TEXT NOT NULL CHECK (provider IN ('google', 'microsoft')),
   folder_ids      TEXT[] NOT NULL DEFAULT '{}'::TEXT[],
   drive_id        TEXT,
-  access_token    TEXT NOT NULL,
-  refresh_token   TEXT NOT NULL,
+  access_token_enc  TEXT NOT NULL,
+  refresh_token_enc TEXT NOT NULL,
   token_expiry    TIMESTAMPTZ NOT NULL,
   connected_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_polled_at  TIMESTAMPTZ,
@@ -52,7 +53,11 @@ ALTER TABLE public.im_cloud_connections ENABLE ROW LEVEL SECURITY;
 COMMENT ON TABLE public.im_cloud_oauth_states IS
   'CSRF state for IM cloud OAuth. Service-role only. Expire after ~10 minutes.';
 COMMENT ON TABLE public.im_cloud_connections IS
-  'Per-client Google Drive or OneDrive connection. Tokens are service-role only, matching xero_connections.';
+  'Per-client Google Drive or OneDrive connection. Token columns are service-role only (RLS deny-all).';
+COMMENT ON COLUMN public.im_cloud_connections.access_token_enc IS
+  'AES-GCM ciphertext encrypted by the app with env IM_CLOUD_TOKEN_KEY; never plaintext.';
+COMMENT ON COLUMN public.im_cloud_connections.refresh_token_enc IS
+  'AES-GCM ciphertext encrypted by the app with env IM_CLOUD_TOKEN_KEY; never plaintext.';
 COMMENT ON COLUMN public.im_cloud_connections.folder_ids IS
   'Picked folder root ids; ingest rejects files outside these roots.';
 COMMENT ON COLUMN public.im_cloud_connections.drive_id IS

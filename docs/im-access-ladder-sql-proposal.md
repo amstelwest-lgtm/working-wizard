@@ -1,6 +1,6 @@
 # IM access ladder rungs 3–4 — minimal SQL (needs approval)
 
-OAuth tokens must not live in `clients` jsonb (RLS). Follow the Xero/QBO pattern: service-role-only tables with RLS enabled and no policies.
+OAuth tokens must not live in `clients` jsonb (RLS). Service-role-only tables with RLS enabled and no policies. CoS option **(b)**: app-level AES-GCM in `*_enc` columns (`IM_CLOUD_TOKEN_KEY`).
 
 ## Tables
 
@@ -20,8 +20,8 @@ One row per client per provider (or separate rows with `unique(client_id, provid
 - `client_id` uuid
 - `provider` text
 - `folder_ids` text[] (picked roots, mirrored from UI)
-- `access_token` text encrypted at rest
-- `refresh_token` text encrypted at rest
+- `access_token_enc` text — AES-GCM ciphertext (`IM_CLOUD_TOKEN_KEY`), never plaintext
+- `refresh_token_enc` text — same
 - `token_expiry` timestamptz
 - `drive_id` text nullable (Microsoft)
 - `connected_at`, `last_polled_at`, `revoked_at` timestamptz nullable
