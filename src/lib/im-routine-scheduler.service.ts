@@ -6,6 +6,7 @@ import { agentIdempotencyKey, agentInputHash } from "@/lib/agent-bus";
 import { handoffDecision, runnerEnabled, AGENT_RUNNERS } from "@/lib/owner-handoff";
 import {
   countNewlyEnqueuedRun,
+  imRoutineMapArtifactFilter,
   IM_ACTIVATION_SOURCE,
   type DraftRunEnqueue,
 } from "@/lib/im-activation-persist";
@@ -38,6 +39,7 @@ type DbResult<T> = { data: T; error: DbError };
 
 type Filter = {
   eq: (column: string, value: string) => Filter;
+  or: (filters: string) => Filter;
   is: (column: string, value: null) => Filter;
   not: (column: string, operator: string, value: string) => Filter;
   order: (column: string, options: { ascending: boolean }) => Filter;
@@ -342,7 +344,7 @@ export async function runImRoutineSchedulerCore(
       .from("client_artifacts")
       .select("meta")
       .eq("client_id", clientId)
-      .eq("kind", "routine_map")
+      .or(imRoutineMapArtifactFilter())
       .limit(12) as unknown as Promise<{ data: Row[] | null; error: DbError }>);
     if (artifacts.error) continue;
     const metas = (artifacts.data ?? [])
@@ -447,7 +449,7 @@ export async function listFirmIdsWithAcceptedRoutines(limit: number): Promise<st
     const res = await (db
       .from("client_artifacts")
       .select("meta")
-      .eq("kind", "routine_map")
+      .or(imRoutineMapArtifactFilter())
       .not("meta->>accepted_at", "is", null)
       .not("meta->>accepted_at", "eq", "")
       .order("created_at", { ascending: true })

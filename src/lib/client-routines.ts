@@ -10,6 +10,7 @@ import {
 } from "./im-routine-schedule.ts";
 import {
   IM_ACTIVATION_DOC_TYPE,
+  IM_ACTIVATION_META_KIND,
   IM_ACTIVATION_MOVE_PREFIX,
   IM_ACTIVATION_SOURCE,
   hoursSavedDisplay,
@@ -89,6 +90,8 @@ export function parseRoutineMapMeta(meta: unknown): ImRoutineMapArtifactMeta | n
   return {
     doc_type: IM_ACTIVATION_DOC_TYPE,
     source: IM_ACTIVATION_SOURCE,
+    im_kind: IM_ACTIVATION_META_KIND,
+    type: IM_ACTIVATION_META_KIND,
     firm_id: typeof row.firm_id === "string" ? row.firm_id : "",
     routine: routine as ImRoutineKind,
     idempotency_key: typeof row.idempotency_key === "string" ? row.idempotency_key : "",
