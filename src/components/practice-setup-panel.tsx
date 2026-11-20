@@ -1,12 +1,10 @@
-import { createElement, useEffect, useMemo, useState } from "react";
+import { createElement, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   ArrowLeft,
   ArrowRight,
   Check,
-  ClipboardList,
-  ListChecks,
   Map as MapIcon,
   MessageSquare,
   RefreshCw,
@@ -14,10 +12,7 @@ import {
   Undo2,
 } from "lucide-react";
 import "./setup-partner-panel.css";
-import "@/components/owner-door/owner-door.css";
-import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
 import { PageHeader } from "@/components/primitives/page-header";
-import { ImProposalDecisions } from "@/components/im-proposal-decisions";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { parseMarketSelection } from "@/lib/market/parse";
 import {
@@ -46,9 +41,7 @@ import { ImCloudAccessPanel } from "@/components/im-cloud-access-panel";
 import { desktopSyncClientReady } from "@/lib/desktop-sync-ready";
 import { buildIntegrationPlanTable, type IntegrationPlanRow } from "@/lib/im-integration-plan";
 import {
-  approvalDraftTitles,
   buildPracticeImplementationPlan,
-  cleanFlowLine,
   dedupePracticeSteps,
   type PracticeImplementationPlan,
 } from "@/lib/setup-partner-plan";
@@ -266,9 +259,9 @@ export function PracticeSetupInterview({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionKind, setSessionKind] = useState<"redo" | null>(null);
   const [pastDrafts, setPastDrafts] = useState<FirmInterviewDraft[]>([]);
-  const [reviewOpen, setReviewOpen] = useState(false);
   const [integrationStarted, setIntegrationStarted] = useState(false);
   const [starting, setStarting] = useState(false);
+  const startingRef = useRef(false);
   const [firmRunCount, setFirmRunCount] = useState(0);
   const [pilotIds, setPilotIds] = useState<string[]>([]);
   const [runningLines, setRunningLines] = useState<RunningLine[]>([]);
@@ -597,12 +590,6 @@ export function PracticeSetupInterview({
   const thinkingNow = booting || loading;
   const showInterview =
     !visibleMap && (thinkingNow || phase === "interview" || redoOpen || continuing);
-  const flowLines = visibleMap ? visibleMap.todaysFlow.map(cleanFlowLine).filter(Boolean) : [];
-  const checklist = visibleMap ? visibleMap.checklist.map(cleanFlowLine).filter(Boolean) : [];
-  const stepLines = [...(preview?.steps ?? []), ...(plan?.steps ?? [])]
-    .filter((step) => step.bucket === "client_setup" || step.bucket === "covered")
-    .map((step) => step.step);
-  const nextLines = [...new Set([...flowLines, ...checklist, ...stepLines])];
   const status = implementationManagerStatus({
     booting: booting && !loading,
     phase,
@@ -617,11 +604,12 @@ export function PracticeSetupInterview({
   });
 
   const onStart = async () => {
-    if (!firmId || starting) return;
+    if (!firmId || startingRef.current || integrationStarted) return;
     if (!startIntegration) {
       setError("Start integration is not available.");
       return;
     }
+    startingRef.current = true;
     setStarting(true);
     setError(null);
     try {
@@ -640,6 +628,7 @@ export function PracticeSetupInterview({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start integration.");
     } finally {
+      startingRef.current = false;
       setStarting(false);
     }
   };
@@ -761,7 +750,7 @@ export function PracticeSetupInterview({
         <div className="im-card">{actions}</div>
       ) : null}
 
-      {!booting && (phase === "done" || nextLines.length > 0 || visibleMap || tableRows.length > 0) ? (
+      {!booting && (phase === "done" || visibleMap || tableRows.length > 0) ? (
         <div className="im-card setup-partner__next" data-im-next="">
           {tableRows.length > 0 ? (
             <div data-im-plan="" {...(visibleMap ? { "data-im-coverage": "" } : {})}>
@@ -799,10 +788,10 @@ export function PracticeSetupInterview({
                   type="button"
                   className="setup-partner__primary im-plan-start"
                   data-im-start=""
-                  disabled={starting}
+                  disabled={starting || integrationStarted}
                   onClick={() => void onStart()}
                 >
-                  {starting ? "Starting…" : "Start integration"}
+                  {starting ? "Starting…" : integrationStarted ? "Integration started" : "Start integration"}
                 </button>
               </div>
             </div>
@@ -820,45 +809,6 @@ export function PracticeSetupInterview({
                 ))}
               </ul>
             </div>
-          ) : null}
-          <h2 className="im-card__title">
-            <ListChecks size={18} aria-hidden />
-            Recommended next steps
-          </h2>
-          {nextLines.length > 0 ? (
-            <ul className="im-checks">
-              {nextLines.map((line) => (
-                <li key={line}>
-                  <Check size={16} aria-hidden />
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="im-muted">The next steps appear once the map is ready.</p>
-          )}
-          {visibleMap && approvalDraftTitles(visibleMap).length > 0 ? (
-            <div data-im-approval-drafts="">
-              <h3>Drafts that need approval</h3>
-              <ul className="im-checks">
-                {approvalDraftTitles(visibleMap).map((title) => (
-                  <li key={title}>
-                    <Check size={16} aria-hidden />
-                    <span>{title}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {firmId ? (
-            <details
-              className="im-folded"
-              data-im-folded="review"
-              onToggle={(event) => setReviewOpen(event.currentTarget.open)}
-            >
-              <summary>Review proposals</summary>
-              {reviewOpen ? <ImProposalDecisions firmId={firmId} quiet startOpen /> : null}
-            </details>
           ) : null}
         </div>
       ) : null}
@@ -964,14 +914,14 @@ function PracticeSetupHero({
 }) {
   const current = SETUP_STEPS.findIndex((item) => item.id === step);
   return (
-    <article className="im-card im-hero" data-im-card="solo" data-im-hero="">
+    <article className="im-card im-hero" data-im-card="solo" data-im-hero="" data-im-working={working ? "true" : "false"}>
       <div className="setup-partner__head im-hero__id">
-        <OwnerAvatar
-          agent="setup_partner"
-          variant="character"
-          motion={working ? "working" : "idle"}
-          size="md"
-          label={IMPLEMENTATION_MANAGER_LABEL}
+        <img
+          className="im-hero-portrait"
+          src="/avatars/implementation-manager/implementation-manager-poster.jpg"
+          alt="Implementation Manager"
+          width={64}
+          height={64}
         />
         <div className="setup-partner__head-text">
           <div className="im-hero__name">

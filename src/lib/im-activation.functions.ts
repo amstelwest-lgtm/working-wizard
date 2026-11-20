@@ -472,7 +472,11 @@ const startSchema = z.object({
   country: z.enum(["US", "ZA"]).optional(),
 });
 
-/** Accept every routine, pick up to 3 pilots, and enqueue draft runs now. */
+/**
+ * Accept every routine, pick up to 3 pilots, and enqueue draft runs now.
+ * A second click reuses the same artifact keys, action move keys, and
+ * agent_run idempotency keys, so it does not insert duplicates.
+ */
 export const startImIntegration = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => startSchema.parse(input))

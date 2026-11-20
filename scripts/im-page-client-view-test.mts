@@ -120,7 +120,9 @@ await act(async () => {
 const text = document.body.textContent ?? "";
 const html = host.innerHTML;
 assert(text.includes("Who signs the pack"), "the client step is a next step");
-assert(text.includes("Recommended next steps"), "next steps have a heading");
+assert(text.includes("Your integration plan"), "the plan table replaces the next-steps list");
+assert(!text.includes("Recommended next steps"), "the next-steps list is not on the page");
+assert(!text.includes("Review proposals"), "the review fold is not on the page");
 assert(!text.includes("Build the missing tax form"), "a product gap step is not on the page");
 assert(!text.includes("custom website"), "a bespoke step is not on the page");
 for (const label of ["Product gap", "Bespoke", "Client setup", "Already covered", "Locked cap"]) {

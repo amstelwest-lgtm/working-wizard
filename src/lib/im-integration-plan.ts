@@ -56,11 +56,101 @@ function splitDash(text: string): [string, string] {
 }
 
 function botForWorkflow(text: string): string {
-  if (/\btax\b/i.test(text)) return "Tax Specialist";
+  if (/\b(sign off|signs off|sign-off)\b/i.test(text)) return "Accountant";
+  if (/\b(pdf|email attachment|bank statement|invoices?|receipts?)\b/i.test(text)) return "Financial Manager";
+  if (/\b(vat|tax|payroll|emp201|provisional)\b/i.test(text)) return "Tax Specialist";
   if (/\b(report|ratio|variance|management pack|month-?end pack)\b/i.test(text)) return "Analyst";
   if (/\b(deadline|narrative|advice|owner question)\b/i.test(text)) return "Advisor";
-  if (/\b(sign|review|approve)\b/i.test(text)) return "Accountant";
+  if (/\b(bookkeeping|books|xero|quickbooks|sage)\b/i.test(text)) return "Financial Manager";
   return "Financial Manager";
+}
+
+function cadencePhrase(raw: string): string | null {
+  const key = raw.trim().toLowerCase();
+  if (key === "monthly") return "every month";
+  if (key === "weekly") return "every week";
+  if (key === "quarterly") return "each quarter";
+  if (key === "annual" || key === "yearly") return "once a year";
+  if (key === "daily") return "each day";
+  if (key === "ad hoc" || key === "adhoc") return "when it comes up";
+  return null;
+}
+
+function isStoredFieldList(detail: string): boolean {
+  if (!detail.includes(";")) return false;
+  const parts = detail.split(";").map((part) => part.trim()).filter(Boolean);
+  return parts.length >= 2 && parts.every((part) => part.length < 64);
+}
+
+/** Turn "Firm; Monthly" into a sentence an accountant would say. */
+export function accountantToday(workflow: string, detail: string): string {
+  const rest = detail.trim();
+  if (!rest || rest === workflow) return workflow;
+  if (!isStoredFieldList(rest)) return rest;
+  const parts = rest.split(";").map((part) => part.trim()).filter(Boolean);
+  let cadence = "as part of the close";
+  let channel: string | null = null;
+  const who: string[] = [];
+  for (const part of parts) {
+    const cadenceLabel = cadencePhrase(part);
+    if (cadenceLabel) {
+      cadence = cadenceLabel;
+      continue;
+    }
+    if (/\b(email|pdf|xero|quickbooks|sage|spreadsheet)\b/i.test(part)) {
+      channel = part;
+      continue;
+    }
+    who.push(part);
+  }
+  const whoText = who.join(" and ");
+  const work = workflow.toLowerCase();
+  if (/\binvoices?\b/.test(work) && /\bbank statements?\b/.test(work)) {
+    return cadence === "every month"
+      ? "Clients email PDF invoices and bank statements each month."
+      : `Clients email PDF invoices and bank statements ${cadence}.`;
+  }
+  if (channel && /email|pdf/i.test(channel)) {
+    return `Clients email the documents ${cadence}.`;
+  }
+  if (who.length === 1 && /^firm$/i.test(who[0] ?? "") && !channel) {
+    return cadence === "every month" ? "Done in-house every month." : `Done in-house ${cadence}.`;
+  }
+  if (/\bmanager\b/i.test(whoText) && /\bpartner\b/i.test(whoText)) {
+    return `The manager reviews the work and the partner signs off ${cadence}.`;
+  }
+  if (channel && /xero/i.test(channel)) {
+    const people = whoText ? `${whoText} ` : "The team ";
+    return `${people}do this in Xero ${cadence}.`;
+  }
+  if (whoText) return `${whoText} do this ${cadence}.`;
+  return `The practice does this ${cadence}.`;
+}
+
+function milonWillDo(workflow: string): string {
+  const text = workflow.toLowerCase();
+  if (/\b(pdf|email attachment|bank statement|invoices?)\b/.test(text)) {
+    return "Collects the PDFs and files them per client for review.";
+  }
+  if (/\b(sign off|signs off|sign-off)\b/.test(text)) {
+    return "Drafts the review pack and waits for the partner to sign off.";
+  }
+  if (/\bvat\b/.test(text) && /\b(xero|books|workings)\b/.test(text)) {
+    return "Drafts the VAT workings from the books for review. Nothing is filed.";
+  }
+  if (/\b(bookkeeping|payroll)\b/.test(text)) {
+    return "Drafts the monthly bookkeeping pack for review. Nothing is posted.";
+  }
+  if (/\b(xero|books)\b/.test(text)) {
+    return "Drafts the bookkeeping from the ledger for review. Nothing is posted.";
+  }
+  if (/\b(pack|report)\b/.test(text)) {
+    return "Drafts the management pack for review. Nothing is sent.";
+  }
+  if (/\bcash\b/.test(text)) {
+    return "Drafts the cash position for review. Nothing is sent.";
+  }
+  return "Drafts this step for your review. Nothing is sent.";
 }
 
 function grantForWorkflow(text: string): string {
@@ -115,10 +205,10 @@ export function buildIntegrationPlanTable(input: {
     const row = finishRow(
       {
         workflow,
-        today: rest || plain,
-        milon: "Milōn prepares a draft for your review. Nothing is sent.",
-        bot: botForWorkflow(plain),
-        grant: grantForWorkflow(plain),
+        today: accountantToday(workflow, rest),
+        milon: milonWillDo(workflow),
+        bot: botForWorkflow(`${workflow} ${rest}`),
+        grant: grantForWorkflow(`${workflow} ${rest}`),
         status,
       },
       input.country,

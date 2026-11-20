@@ -245,6 +245,36 @@ const fitBlob = JSON.stringify(fitRows);
 assert(fitBlob.includes("Prepare the books in Xero"), "the workflow stays");
 assert(!fitBlob.includes("Firm setting"), "plan table drops fit notes");
 assert(!fitBlob.includes("Practice:"), "fit-note rows still drop the Practice prefix");
+assert(!fitBlob.includes("Xero; Monthly"), "today is not a stored field list");
+const spoken = buildIntegrationPlanTable({
+  steps: [
+    {
+      step: "Provide monthly bookkeeping, VAT and payroll services — Firm; Monthly",
+      bucket: "covered",
+    },
+    {
+      step: "Clients send invoices and bank statements to the firm as PDF email attachments — Clients; Email (PDF attachments); Monthly",
+      bucket: "client_setup",
+    },
+    {
+      step: "Manager reviews the prepared books, then the partner signs off — Manager; Partner; Monthly",
+      bucket: "client_setup",
+    },
+  ],
+  country: "ZA",
+});
+const spokenBlob = JSON.stringify(spoken);
+assert(spokenBlob.includes("Done in-house every month"), "a firm monthly habit is plain English");
+assert(
+  spokenBlob.includes("Clients email PDF invoices and bank statements each month"),
+  "a client email habit is plain English",
+);
+assert(!spokenBlob.includes("Firm; Monthly") && !/; Monthly/.test(spokenBlob), "stored fields stay off the table");
+assert(new Set(spoken.map((row) => row.milon)).size === spoken.length, "each workflow says what Milōn will do");
+assert(spoken.some((row) => row.bot === "Financial Manager"), "document collection stays with Financial Manager");
+assert(spoken.some((row) => row.bot === "Tax Specialist"), "VAT work stays with Tax Specialist");
+assert(spoken.some((row) => row.bot === "Accountant"), "sign-off stays with the accountant");
+assert(spoken.filter((row) => row.bot === "Financial Manager").length < spoken.length, "bots are not all Financial Manager");
 assert(integrationPlanOpusBody(planRows).model === "claude-opus-5-5", "the plan table is drafted by Opus 5.5");
 
 const enqueueBlock = activationSource.slice(

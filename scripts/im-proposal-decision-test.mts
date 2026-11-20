@@ -65,8 +65,8 @@ assert(ui.includes("costLine"), "the approve screen shows the estimated cost");
 assert(!ui.includes("enqueue"), "the approve screen does not enqueue");
 
 const panel = readFileSync("src/components/practice-setup-panel.tsx", "utf8");
-assert(panel.includes("ImProposalDecisions"), "the page can open the review queue");
-assert(panel.includes("quiet"), "the page hides the cap and the cost line");
+assert(!panel.includes("ImProposalDecisions"), "the setup page does not open the review queue");
+assert(!panel.includes("Review proposals"), "the review fold is not on the setup page");
 assert(!panel.includes("Locked cap"), "the page source does not print the locked cap");
 
 console.log("im-proposal-decision ok");
