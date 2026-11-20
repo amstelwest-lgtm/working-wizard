@@ -266,6 +266,8 @@ export function PracticeSetupInterview({
   const [pilotIds, setPilotIds] = useState<string[]>([]);
   const [runningLines, setRunningLines] = useState<RunningLine[]>([]);
   const [opusRows, setOpusRows] = useState<IntegrationPlanRow[] | null>(null);
+  /** Rows already on screen when Start was clicked. Later Opus replies do not replace them. */
+  const heldPlanRef = useRef<IntegrationPlanRow[] | null>(null);
   const country = parseMarketSelection(firmMarket)?.country ?? null;
   const marketCountry: SetupPartnerCountry | null =
     country === "US" || country === "ZA" ? country : null;
@@ -456,11 +458,20 @@ export function PracticeSetupInterview({
     [planKey, coverageKey, marketCountry, integrationStarted, firmRunCount, runningLines],
   );
   const tableRows = useMemo(() => {
-    if (!opusRows || opusRows.length !== localRows.length) return localRows;
-    return localRows.map((row, index) => ({ ...opusRows[index]!, status: row.status }));
+    const live =
+      !opusRows || opusRows.length !== localRows.length
+        ? localRows
+        : localRows.map((row, index) => ({ ...opusRows[index]!, status: row.status }));
+    const held = heldPlanRef.current;
+    if (!held) return live;
+    return held.map((row) => {
+      const match = live.find((item) => item.workflow === row.workflow && item.bot === row.bot);
+      return match ? { ...row, status: match.status } : row;
+    });
   }, [localRows, opusRows]);
 
   useEffect(() => {
+    if (heldPlanRef.current) return;
     if (!firmId || !loadPlanTable || localRows.length === 0) return;
     let cancel = false;
     const country = marketCountry === "US" ? "US" : marketCountry === "ZA" ? "ZA" : undefined;
@@ -477,6 +488,7 @@ export function PracticeSetupInterview({
   }, [firmId, loadPlanTable, planKey, coverageKey, marketCountry]);
 
   const redo = () => {
+    heldPlanRef.current = null;
     setArchive((prev) => (prev.length > 0 ? prev : messages));
     setMessages([]);
     setQuestion("");
@@ -610,6 +622,7 @@ export function PracticeSetupInterview({
       return;
     }
     startingRef.current = true;
+    if (!heldPlanRef.current) heldPlanRef.current = tableRows;
     setStarting(true);
     setError(null);
     try {

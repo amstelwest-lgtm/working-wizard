@@ -12,7 +12,7 @@ import {
   type RoutineActionRow,
   type RoutineRunRow,
 } from "@/lib/client-routines";
-import { IM_ACTIVATION_SOURCE } from "@/lib/im-activation-persist";
+import { imRoutineMapArtifactFilter, IM_ACTIVATION_SOURCE } from "@/lib/im-activation-persist";
 import { formatLastRun } from "@/lib/milon-team";
 
 export function ClientRoutinesPanel({
@@ -39,7 +39,12 @@ export function ClientRoutinesPanel({
     void (async () => {
       setError(null);
       const [artifactRes, actionRes, runRes] = await Promise.all([
-        supabase.from("client_artifacts").select("meta").eq("client_id", clientId).eq("kind", "routine_map").limit(12),
+        supabase
+          .from("client_artifacts")
+          .select("meta")
+          .eq("client_id", clientId)
+          .or(imRoutineMapArtifactFilter())
+          .limit(12),
         supabase
           .from("action_items")
           .select("id, title, status, source_move_key, sent_at, driver_key")

@@ -13,13 +13,14 @@ import { replayImplementationPlan } from "@/lib/im-replay";
 import { currentQuarterLabel, defaultTargetDate } from "@/lib/action-plan-counts";
 import {
   activationActionDrafts,
-  activationActionMoveKey,
   activationArtifactKey,
-  activationRunInputs,
-  routineMapArtifactMeta,
+  assertImActivationArtifactKinds,
+  imRoutineMapArtifactFilter,
+  routineMapArtifactInsert,
   IM_ACTIVATION_SOURCE,
   countNewlyEnqueuedRun,
   type DraftRunEnqueue,
+  type ImActivationActionDraft,
 } from "@/lib/im-activation-persist";
 import { planActivationAccept } from "@/lib/im-activation-accept";
 import { imRoutinePeriodKey, scheduledRunInputs } from "@/lib/im-routine-schedule";
@@ -39,6 +40,7 @@ type DbResult<T> = { data: T; error: DbError };
 
 type Filter = {
   eq: (column: string, value: string) => Filter;
+  or: (filters: string) => Filter;
   in: (column: string, values: string[]) => Filter;
   is: (column: string, value: null) => Filter;
   order: (column: string, options: { ascending: boolean }) => Filter;
@@ -50,10 +52,15 @@ type InsertFilter = {
   select: (columns: string) => { maybeSingle: () => Promise<DbResult<Row | null>> };
 };
 
+type DeleteFilter = {
+  eq: (column: string, value: string) => Promise<DbResult<null>>;
+};
+
 type Admin = {
   from: (table: string) => {
     select: (columns: string) => Filter;
     insert: (row: Row | Row[]) => InsertFilter;
+    delete: () => DeleteFilter;
     upsert?: (row: Row, options: { onConflict: string }) => Promise<DbResult<null>>;
   };
   rpc: (
@@ -134,7 +141,7 @@ async function activePlanRules(firmId: string) {
   return (rules.data ?? []).filter((row) => !row.client_id);
 }
 
-async function ensureActivePlan(clientId: string): Promise<string> {
+async function findActivePlanId(clientId: string): Promise<string | null> {
   const db = admin();
   const found = await db
     .from("action_plans")
@@ -145,7 +152,24 @@ async function ensureActivePlan(clientId: string): Promise<string> {
     .limit(1)
     .maybeSingle();
   if (found.error) throw new Error(found.error.message);
-  if (typeof found.data?.id === "string") return found.data.id;
+  return typeof found.data?.id === "string" ? found.data.id : null;
+}
+
+async function nextActionSeq(planId: string): Promise<number> {
+  const db = admin();
+  const maxSeqRow = await db
+    .from("action_items")
+    .select("seq")
+    .eq("plan_id", planId)
+    .order("seq", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (maxSeqRow.error) throw new Error(maxSeqRow.error.message);
+  return ((maxSeqRow.data?.seq as number | undefined) ?? 0) + 1;
+}
+
+async function insertActivePlan(clientId: string): Promise<string> {
+  const db = admin();
   const created = await db
     .from("action_plans")
     .insert({
@@ -161,6 +185,20 @@ async function ensureActivePlan(clientId: string): Promise<string> {
     throw new Error(created.error?.message ?? "Could not open the action plan.");
   }
   return created.data.id;
+}
+
+type WrittenRow = {
+  table: "action_plans" | "client_artifacts" | "action_items" | "agent_runs";
+  id: string;
+};
+
+/** Delete only rows this click inserted, newest first, so a failed start leaves nothing behind. */
+async function rollbackActivationWrites(rows: readonly WrittenRow[]): Promise<void> {
+  const db = admin();
+  for (const row of [...rows].reverse()) {
+    const removed = await db.from(row.table).delete().eq("id", row.id);
+    if (removed.error) console.warn("im_activation_rollback", row.table);
+  }
 }
 
 async function existingActivationKeys(clientId: string, firmId: string) {
@@ -180,7 +218,7 @@ async function existingActivationKeys(clientId: string, firmId: string) {
     .from("client_artifacts")
     .select("meta")
     .eq("client_id", clientId)
-    .eq("kind", "routine_map")
+    .or(imRoutineMapArtifactFilter())
     .limit(20);
   if (artifacts.error) throw new Error(artifacts.error.message);
   const artifactKeys = new Set<string>();
@@ -348,13 +386,27 @@ async function acceptImActivationHandler(
   }
 
     const db = admin();
-    let wrote = 0;
-    let enqueued = 0;
     const now = new Date().toISOString();
+    const planIdByClient = new Map<string, string>();
+    const plansToCreate: string[] = [];
+    const artifacts: ReturnType<typeof routineMapArtifactInsert>[] = [];
+    const actions: ImActivationActionDraft[] = [];
+    const enqueues: Array<{
+      agent: "financial_manager" | "analyst" | "advisor";
+      clientId: string;
+      actionMoveKey: string;
+    }> = [];
 
     for (const pilot of pilots) {
       await assertClientAccess(context.supabase as never, userId, pilot.id);
-      const planId = await ensureActivePlan(pilot.id);
+      const existingPlanId = await findActivePlanId(pilot.id);
+      let seq = 1;
+      if (existingPlanId) {
+        planIdByClient.set(pilot.id, existingPlanId);
+        seq = await nextActionSeq(existingPlanId);
+      } else if (!plansToCreate.includes(pilot.id)) {
+        plansToCreate.push(pilot.id);
+      }
       const existing = await existingActivationKeys(pilot.id, data.firmId);
       const books = { hasLedger: pilot.hasLedger, hasUpload: pilot.hasUpload };
 
@@ -376,87 +428,116 @@ async function acceptImActivationHandler(
         });
 
         if (plan.writeArtifact) {
-          const meta = routineMapArtifactMeta({
-            firmId: data.firmId,
-            clientId: pilot.id,
-            map,
-            hoursSavedPerRun: hours,
-            acceptedAt: now,
-          });
-          const inserted = await db.from("client_artifacts").insert({
-            client_id: pilot.id,
-            kind: "routine_map",
-            meta,
-            visibility: "shared",
-          }).select("id").maybeSingle();
-          if (inserted.error && inserted.error.code !== "23505") throw new Error(inserted.error.message);
-          if (!inserted.error) {
-            wrote += 1;
-            existing.artifactKeys.add(plan.artifactKey);
-          }
+          artifacts.push(
+            routineMapArtifactInsert({
+              firmId: data.firmId,
+              clientId: pilot.id,
+              map,
+              hoursSavedPerRun: hours,
+              acceptedAt: now,
+            }),
+          );
+          existing.artifactKeys.add(plan.artifactKey);
         }
 
-        const maxSeqRow = await db
-          .from("action_items")
-          .select("seq")
-          .eq("plan_id", planId)
-          .order("seq", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        const seqStart = ((maxSeqRow.data?.seq as number | undefined) ?? 0) + 1;
         const drafts = activationActionDrafts({
           firmId: data.firmId,
           clientId: pilot.id,
-          planId,
+          planId: existingPlanId ?? "",
           map,
-          seqStart,
+          seqStart: seq,
         }).filter((row) => plan.actionKeys.includes(row.source_move_key));
-
-        const actionIdByKey = new Map<string, string>();
-        for (const draft of drafts) {
-          const inserted = await db.from("action_items").insert(draft).select("id, source_move_key").maybeSingle();
-          if (inserted.error) {
-            if (inserted.error.code === "23505") {
-              const found = await db
-                .from("action_items")
-                .select("id, source_move_key")
-                .eq("client_id", pilot.id)
-                .eq("source_move_key", draft.source_move_key)
-                .maybeSingle();
-              if (typeof found.data?.id === "string" && typeof found.data.source_move_key === "string") {
-                actionIdByKey.set(found.data.source_move_key, found.data.id);
-              }
-              continue;
-            }
-            throw new Error(inserted.error.message);
-          }
-          if (typeof inserted.data?.id === "string" && typeof inserted.data.source_move_key === "string") {
-            actionIdByKey.set(inserted.data.source_move_key, inserted.data.id);
-            existing.actionKeys.add(inserted.data.source_move_key);
-            wrote += 1;
-          }
-        }
+        actions.push(...drafts);
+        const usedSeq = drafts.reduce((max, row) => Math.max(max, row.seq), seq - 1);
+        seq = usedSeq + 1;
+        for (const draft of drafts) existing.actionKeys.add(draft.source_move_key);
 
         for (const row of plan.enqueue) {
-          const actionItemId =
-            actionIdByKey.get(row.actionMoveKey) ??
-            (await db
-              .from("action_items")
-              .select("id")
-              .eq("client_id", pilot.id)
-              .eq("source_move_key", row.actionMoveKey)
-              .maybeSingle()
-              .then((res) => (typeof res.data?.id === "string" ? res.data.id : null)));
-          if (!actionItemId) continue;
-          const run = await enqueueDraftRun({
+          enqueues.push({
             agent: row.agent,
             clientId: pilot.id,
-            firmId: data.firmId,
-            actionItemId,
+            actionMoveKey: row.actionMoveKey,
           });
-          enqueued += countNewlyEnqueuedRun(run);
         }
       }
+    }
+
+    assertImActivationArtifactKinds(artifacts.map((row) => row.kind));
+
+    const written: WrittenRow[] = [];
+    let wrote = 0;
+    let enqueued = 0;
+    try {
+      for (const clientId of plansToCreate) {
+        const id = await insertActivePlan(clientId);
+        written.push({ table: "action_plans", id });
+        planIdByClient.set(clientId, id);
+      }
+      for (const draft of actions) {
+        if (draft.plan_id) continue;
+        const id = planIdByClient.get(draft.client_id);
+        if (!id) throw new Error("Could not open the action plan.");
+        draft.plan_id = id;
+      }
+
+      for (const artifact of artifacts) {
+        const inserted = await db.from("client_artifacts").insert(artifact).select("id").maybeSingle();
+        if (inserted.error && inserted.error.code !== "23505") throw new Error(inserted.error.message);
+        if (inserted.error) continue;
+        if (typeof inserted.data?.id !== "string") throw new Error("Could not save the activation.");
+        written.push({ table: "client_artifacts", id: inserted.data.id });
+        wrote += 1;
+      }
+
+      const actionIdByKey = new Map<string, string>();
+      for (const draft of actions) {
+        const inserted = await db.from("action_items").insert(draft).select("id, source_move_key").maybeSingle();
+        if (inserted.error) {
+          if (inserted.error.code === "23505") {
+            const found = await db
+              .from("action_items")
+              .select("id, source_move_key")
+              .eq("client_id", draft.client_id)
+              .eq("source_move_key", draft.source_move_key)
+              .maybeSingle();
+            if (typeof found.data?.id === "string" && typeof found.data.source_move_key === "string") {
+              actionIdByKey.set(found.data.source_move_key, found.data.id);
+            }
+            continue;
+          }
+          throw new Error(inserted.error.message);
+        }
+        if (typeof inserted.data?.id !== "string" || typeof inserted.data.source_move_key !== "string") {
+          throw new Error("Could not save the activation.");
+        }
+        actionIdByKey.set(inserted.data.source_move_key, inserted.data.id);
+        written.push({ table: "action_items", id: inserted.data.id });
+        wrote += 1;
+      }
+
+      for (const row of enqueues) {
+        const actionItemId =
+          actionIdByKey.get(row.actionMoveKey) ??
+          (await db
+            .from("action_items")
+            .select("id")
+            .eq("client_id", row.clientId)
+            .eq("source_move_key", row.actionMoveKey)
+            .maybeSingle()
+            .then((res) => (typeof res.data?.id === "string" ? res.data.id : null)));
+        if (!actionItemId) continue;
+        const run = await enqueueDraftRun({
+          agent: row.agent,
+          clientId: row.clientId,
+          firmId: data.firmId,
+          actionItemId,
+        });
+        if (run?.created) written.push({ table: "agent_runs", id: run.runId });
+        enqueued += countNewlyEnqueuedRun(run);
+      }
+    } catch (err) {
+      await rollbackActivationWrites(written);
+      throw err instanceof Error ? err : new Error("Could not start integration.");
     }
 
     return { ok: true as const, wrote, enqueued };

@@ -14,8 +14,12 @@ import { activationAcceptWritesNothing, planActivationAccept } from "../src/lib/
 import { imRoutineTriggerMet } from "../src/lib/im-routine-schedule.ts";
 import {
   activationActionMoveKey,
+  CLIENT_ARTIFACT_KINDS,
   countNewlyEnqueuedRun,
   hoursSavedDisplay,
+  IM_ACTIVATION_WRITTEN_KINDS,
+  imRoutineMapArtifactFilter,
+  routineMapArtifactInsert,
   routineMapArtifactMeta,
 } from "../src/lib/im-activation-persist.ts";
 import { ownerRoutineMonthLines, accountantRoutineSteps, parseRoutineMapMeta } from "../src/lib/client-routines.ts";
@@ -132,6 +136,44 @@ const meta = routineMapArtifactMeta({
 });
 const parsed = parseRoutineMapMeta(meta);
 assert(parsed?.routine === "monthly_pack", "routine_map meta parses");
+const inserted = routineMapArtifactInsert({
+  firmId: firm,
+  clientId: clientA,
+  map: {
+    kind: "routine_map",
+    routine: "monthly_pack",
+    tags: [],
+    steps: meta.steps,
+  },
+  hoursSavedPerRun: null,
+  acceptedAt: new Date(0).toISOString(),
+});
+for (const kind of IM_ACTIVATION_WRITTEN_KINDS) {
+  assert(
+    (CLIENT_ARTIFACT_KINDS as readonly string[]).includes(kind),
+    `IM write kind ${kind} is in client_artifacts_kind_check`,
+  );
+}
+assert(
+  (CLIENT_ARTIFACT_KINDS as readonly string[]).includes(inserted.kind),
+  "insert kind is allowed",
+);
+assert(inserted.kind === "other", "routine map stores as other");
+assert(
+  inserted.meta.im_kind === "routine_map" && inserted.meta.type === "routine_map",
+  "real type stays in meta",
+);
+assert(parseRoutineMapMeta(inserted.meta)?.routine === "monthly_pack", "new shape parses");
+const legacyMeta = { ...inserted.meta } as Record<string, unknown>;
+delete legacyMeta.im_kind;
+delete legacyMeta.type;
+assert(parseRoutineMapMeta(legacyMeta)?.routine === "monthly_pack", "legacy meta still parses");
+const artifactFilter = imRoutineMapArtifactFilter();
+assert(artifactFilter.includes("kind.eq.routine_map"), "legacy kind still matches");
+assert(artifactFilter.includes("kind.eq.other"), "stored kind is other");
+assert(artifactFilter.includes("meta->>im_kind.eq.routine_map"), "meta.im_kind is the real type");
+assert(artifactFilter.includes("meta->>type.eq.routine_map"), "meta.type is the real type");
+assert(artifactFilter.includes("meta->>doc_type.eq.im_routine_map"), "doc_type still matches");
 const ownerLines = ownerRoutineMonthLines(
   [
     {
@@ -303,5 +345,23 @@ const enqueueBlock = activationSource.slice(
 assert(enqueueBlock.includes('audience: "accountant"'), "first agent_invoke runs stay accountant drafts");
 assert(enqueueBlock.includes("draft only"), "activation summary says draft only");
 assert(!enqueueBlock.includes("resend") && !enqueueBlock.includes("accountant_request_respond"), "enqueue does not send or post");
+assert(!activationSource.includes('kind: "routine_map"'), "activation does not write kind routine_map");
+assert(activationSource.includes("routineMapArtifactInsert("), "activation writes the shared artifact payload");
+assert(activationSource.includes("assertImActivationArtifactKinds("), "kinds are checked before writes");
+assert(activationSource.includes("imRoutineMapArtifactFilter()"), "activation loader uses the shared filter");
+assert(activationSource.includes("rollbackActivationWrites("), "a failed start deletes rows from this click");
+const writtenKindLiterals = [...activationSource.matchAll(/kind:\s*"([^"]+)"/g)].map((match) => match[1] ?? "");
+assert(
+  writtenKindLiterals.every((kind) => (CLIENT_ARTIFACT_KINDS as readonly string[]).includes(kind)),
+  `activation file kind literals stay in the allowlist (${writtenKindLiterals.join(",")})`,
+);
+const scheduler = readFileSync("src/lib/im-routine-scheduler.service.ts", "utf8");
+assert(scheduler.includes("imRoutineMapArtifactFilter()"), "cron scan uses the shared filter");
+assert(!scheduler.includes('eq("kind", "routine_map")'), "cron does not require the disallowed kind");
+const routinesPanel = readFileSync("src/components/client-routines-panel.tsx", "utf8");
+assert(routinesPanel.includes("imRoutineMapArtifactFilter()"), "routines panel reads the new and legacy shapes");
+const setupPanel = readFileSync("src/components/practice-setup-panel.tsx", "utf8");
+assert(setupPanel.includes("heldPlanRef"), "Start reuses the plan rows already on screen");
+assert(setupPanel.includes("if (heldPlanRef.current) return"), "Start does not call Opus again");
 
 console.log("im-activation-test: ok");
