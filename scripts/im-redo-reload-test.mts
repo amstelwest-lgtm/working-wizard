@@ -187,8 +187,12 @@ assert(log?.textContent?.includes(savedAnswer), "the saved answer is in the log"
 assert((log as { open?: boolean }).open === false, "the log starts collapsed");
 assert(document.querySelector("[data-im-status]")?.textContent?.trim() === "Saved", "the saved plan is not an interview");
 assert(
-  document.querySelector('[data-step="current"]')?.textContent?.includes("Live"),
-  "the saved plan is the Live step",
+  document.querySelector('[data-step="current"]')?.textContent?.includes("Your integration plan"),
+  "a saved plan with no agent runs stays on the integration plan",
+);
+assert(
+  ![...document.querySelectorAll(".im-stepper li")].some((item) => item.textContent?.trim() === "Live"),
+  "the stepper does not say Live before agent runs exist",
 );
 assert(button("Redo interview")?.tagName === "BUTTON", "Redo is still there on the saved plan");
 await saved.unmount();

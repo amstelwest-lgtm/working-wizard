@@ -90,13 +90,14 @@ export function ImActivationStep() {
   };
 
   const accept = async () => {
-    if (!firmId || !activation || selected.length < 2) return;
+    if (!firmId || !activation || selected.length < 1) return;
     setBusy(true);
     setNote(null);
     try {
       const result = await acceptActivation({
         data: {
           firmId,
+          country,
           pilotIds: selected,
           accepts: choices.map((row) => ({
             routine: row.routine,
@@ -238,7 +239,7 @@ export function ImActivationStep() {
               <button
                 type="button"
                 className="setup-partner__primary"
-                disabled={busy || selected.length < 2 || !choices.some((row) => row.accepted)}
+                disabled={busy || selected.length < 1 || !choices.some((row) => row.accepted)}
                 onClick={() => void accept()}
                 style={{ background: "#0B5FFF" }}
               >

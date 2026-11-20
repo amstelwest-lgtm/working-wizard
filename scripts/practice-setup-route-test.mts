@@ -179,7 +179,11 @@ assert(
 assert(panel.includes('role="alert"'), "the error paragraph stays");
 assert(route.includes("<Toaster"), "this route mounts the toast helper's Toaster");
 assert(route.includes("PRACTICE_SETUP_TOASTER_ID"), "confirm and the route share one toaster");
-assert(panel.includes("OwnerAvatar"), "firm page reuses the Implementation Manager avatar");
+assert(
+  panel.includes('src="/avatars/implementation-manager/implementation-manager-poster.jpg"'),
+  "firm page shows the Implementation Manager portrait",
+);
+assert(panel.includes('alt="Implementation Manager"'), "the portrait has a name");
 assert(panel.includes("PageHeader"), "firm page uses the shared page header");
 assert(panel.includes("implementationManagerStatus"), "status follows the live state");
 assert(
@@ -199,8 +203,9 @@ assert(!panel.includes("Buckets"), "the client page does not list triage buckets
 assert(!panel.includes("practiceBucketLabel"), "the client page does not print bucket labels");
 assert(!panel.includes("ImRoutineProposals"), "routine internals stay off the client page");
 assert(!panel.includes("ImTakeoverProposals"), "takeover internals stay off the client page");
-assert(panel.includes("ImProposalDecisions"), "review proposals opens the existing queue");
-assert(panel.includes("quiet"), "the page review hides the cap and the cost line");
+assert(!panel.includes("ImProposalDecisions"), "review proposals stay off this page");
+assert(!panel.includes("Recommended next steps"), "the plan table replaces the next-steps list");
+assert(!panel.includes("Review proposals"), "the review fold is not on this page");
 assert(!panel.includes("Locked cap"), "the page does not print the locked cap");
 assert(!panel.includes("setupPartnerMapPromptBlock"), "the client page does not render the map JSON");
 assert(
@@ -227,8 +232,8 @@ assert(panel.includes("Redo interview"), "a saved plan can be redone");
 assert(panel.includes("fetchFirmSetupPlan"), "saved rules load through the existing client");
 assert(panel.includes("fetchFirmInterviewDraft"), "an in-progress interview reloads on boot");
 assert(
-  panel.includes('agent="setup_partner"'),
-  "firm page mounts the Implementation Manager avatar",
+  panel.includes("im-hero-portrait"),
+  "firm page mounts the Implementation Manager portrait",
 );
 assert(panel.includes("withMarketCoverage"), "the firm page scrubs coverage for the firm country");
 assert(!panel.includes("setup-partner-panel.tsx"), "firm page does not fork the client panel file");

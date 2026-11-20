@@ -121,8 +121,16 @@ assert(
 );
 assert(shouldBuildInterviewMap({ answers: 0, modelDone: false, forced: true }), "That's enough maps immediately");
 assert(
-  implementationManagerStep({ phase: "map", interviewing: false }) === "proposals",
-  "the stepper lands on proposals",
+  implementationManagerStep({ phase: "map", interviewing: false }) === "plan",
+  "the stepper lands on the integration plan",
+);
+assert(
+  implementationManagerStep({ phase: "done", interviewing: false, firmRunCount: 0 }) === "plan",
+  "no agent runs means the stepper is not on what's running",
+);
+assert(
+  implementationManagerStep({ phase: "done", interviewing: false, firmRunCount: 1 }) === "running",
+  "agent runs move the stepper to what's running now",
 );
 
 const titles = approvalDraftTitles({
