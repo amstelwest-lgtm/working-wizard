@@ -1,4 +1,4 @@
-import { createElement, useEffect, useState } from "react";
+import { createElement, useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
@@ -42,6 +42,9 @@ import {
   firmInterviewTurn,
 } from "@/lib/setup-partner-client";
 import { InterviewExchange, PastInterviews } from "@/components/interview-exchange";
+import { ImCloudAccessPanel } from "@/components/im-cloud-access-panel";
+import { desktopSyncClientReady } from "@/lib/desktop-sync-ready";
+import { buildIntegrationPlanTable, type IntegrationPlanRow } from "@/lib/im-integration-plan";
 import {
   approvalDraftTitles,
   buildPracticeImplementationPlan,
@@ -57,9 +60,9 @@ export type ImplementationManagerStatus = "Not started" | "Interviewing" | "Redo
 
 const SETUP_STEPS = [
   { id: "interview", label: "Interview" },
-  { id: "map", label: "Map" },
-  { id: "proposals", label: "Proposals" },
-  { id: "live", label: "Live" },
+  { id: "plan", label: "Your integration plan" },
+  { id: "access", label: "Checklist and access" },
+  { id: "running", label: "What's running now" },
 ] as const;
 
 export type ImplementationManagerStep = (typeof SETUP_STEPS)[number]["id"];
@@ -116,10 +119,14 @@ export function implementationManagerStatus(input: {
 export function implementationManagerStep(input: {
   phase: "interview" | "map" | "done";
   interviewing: boolean;
+  integrationStarted?: boolean;
+  /** Activation agent_runs for this firm. The running step stays off until this is at least 1. */
+  firmRunCount?: number;
 }): ImplementationManagerStep {
   if (input.interviewing || input.phase === "interview") return "interview";
-  if (input.phase === "map") return "proposals";
-  return "live";
+  if ((input.firmRunCount ?? 0) > 0) return "running";
+  if (input.integrationStarted) return "access";
+  return "plan";
 }
 
 /** This route's Toaster. App chrome also mounts one; this id keeps a single toast. */
@@ -163,7 +170,37 @@ type AskTurn = (input: {
 }) => Promise<{ question: string; done: boolean; modelTurns: number; sessionId?: string }>;
 type DiscardRedo = (firmId: string) => Promise<void>;
 
-export function PracticeSetupPanel() {
+type RunningLine = { id: string; bot: string; status: string; summary: string };
+
+type StartIntegration = (input: {
+  firmId: string;
+  country?: "US" | "ZA";
+}) => Promise<{
+  ok: true;
+  wrote: number;
+  enqueued: number;
+  runCount: number;
+  pilotIds: string[];
+  lines?: RunningLine[];
+}>;
+
+type LoadPlanTable = (input: {
+  firmId: string;
+  country?: "US" | "ZA";
+  rows: IntegrationPlanRow[];
+}) => Promise<{ rows: IntegrationPlanRow[] }>;
+
+type LoadRunning = (firmId: string) => Promise<{ runCount: number; lines: RunningLine[] }>;
+
+export function PracticeSetupPanel({
+  startIntegration,
+  loadPlanTable,
+  loadRunning,
+}: {
+  startIntegration?: StartIntegration;
+  loadPlanTable?: LoadPlanTable;
+  loadRunning?: LoadRunning;
+} = {}) {
   const { firmId, firmMarket, refreshFirms, firmsLoaded, firmsLoadFailed } = useAccountantProfile();
   return (
     <PracticeSetupInterview
@@ -172,6 +209,9 @@ export function PracticeSetupPanel() {
       firmMarket={firmMarket}
       firmsReady={firmsLoaded || firmsLoadFailed}
       onRefreshFirms={() => void refreshFirms()}
+      startIntegration={startIntegration}
+      loadPlanTable={loadPlanTable}
+      loadRunning={loadRunning}
     />
   );
 }
@@ -187,6 +227,9 @@ export function PracticeSetupInterview({
   loadDraft = fetchFirmInterviewDraft,
   askTurn = firmInterviewTurn,
   discardRedo,
+  startIntegration,
+  loadPlanTable,
+  loadRunning,
 }: {
   firmId: string | null;
   firmMarket: unknown;
@@ -199,6 +242,9 @@ export function PracticeSetupInterview({
   loadDraft?: LoadDraft;
   askTurn?: AskTurn;
   discardRedo?: DiscardRedo;
+  startIntegration?: StartIntegration;
+  loadPlanTable?: LoadPlanTable;
+  loadRunning?: LoadRunning;
 }) {
   const [phase, setPhase] = useState<Phase>("interview");
   const [messages, setMessages] = useState<FirmInterviewMessage[]>([]);
@@ -221,6 +267,12 @@ export function PracticeSetupInterview({
   const [sessionKind, setSessionKind] = useState<"redo" | null>(null);
   const [pastDrafts, setPastDrafts] = useState<FirmInterviewDraft[]>([]);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [integrationStarted, setIntegrationStarted] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [firmRunCount, setFirmRunCount] = useState(0);
+  const [pilotIds, setPilotIds] = useState<string[]>([]);
+  const [runningLines, setRunningLines] = useState<RunningLine[]>([]);
+  const [opusRows, setOpusRows] = useState<IntegrationPlanRow[] | null>(null);
   const country = parseMarketSelection(firmMarket)?.country ?? null;
   const marketCountry: SetupPartnerCountry | null =
     country === "US" || country === "ZA" ? country : null;
@@ -375,6 +427,62 @@ export function PracticeSetupInterview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firmId, loadSaved, loadDraft]);
 
+  useEffect(() => {
+    if (!firmId || !loadRunning) return;
+    let cancel = false;
+    void loadRunning(firmId)
+      .then((res) => {
+        if (cancel) return;
+        setFirmRunCount(res.runCount);
+        setRunningLines(res.lines);
+        if (res.runCount > 0) setIntegrationStarted(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancel = true;
+    };
+  }, [firmId, loadRunning]);
+
+  const planSteps = useMemo(
+    () => [...(preview?.steps ?? []), ...(plan?.steps ?? [])],
+    [preview, plan],
+  );
+  const planKey = planSteps.map((row) => `${row.bucket}:${row.step}`).join("\n");
+  const coverageKey = (visibleMap?.milonCoverage ?? []).map((row) => `${row.agent}:${row.owns}`).join("\n");
+  const localRows = useMemo(
+    () =>
+      buildIntegrationPlanTable({
+        steps: planSteps,
+        coverage: visibleMap?.milonCoverage ?? [],
+        country: marketCountry,
+        started: integrationStarted || firmRunCount > 0,
+        running: runningLines.some((line) => line.status === "Running"),
+      }),
+    // planKey and coverageKey are the stable contents of planSteps and visibleMap.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [planKey, coverageKey, marketCountry, integrationStarted, firmRunCount, runningLines],
+  );
+  const tableRows = useMemo(() => {
+    if (!opusRows || opusRows.length !== localRows.length) return localRows;
+    return localRows.map((row, index) => ({ ...opusRows[index]!, status: row.status }));
+  }, [localRows, opusRows]);
+
+  useEffect(() => {
+    if (!firmId || !loadPlanTable || localRows.length === 0) return;
+    let cancel = false;
+    const country = marketCountry === "US" ? "US" : marketCountry === "ZA" ? "ZA" : undefined;
+    void loadPlanTable({ firmId, country, rows: localRows })
+      .then((res) => {
+        if (!cancel && res.rows.length > 0) setOpusRows(res.rows);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancel = true;
+    };
+    // Reload Opus when the workflows change, not when a row's status flips.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firmId, loadPlanTable, planKey, coverageKey, marketCountry]);
+
   const redo = () => {
     setArchive((prev) => (prev.length > 0 ? prev : messages));
     setMessages([]);
@@ -501,7 +609,40 @@ export function PracticeSetupInterview({
     interviewing: showInterview,
     redo: redoOpen,
   });
-  const step = implementationManagerStep({ phase, interviewing: showInterview });
+  const step = implementationManagerStep({
+    phase,
+    interviewing: showInterview,
+    integrationStarted,
+    firmRunCount,
+  });
+
+  const onStart = async () => {
+    if (!firmId || starting) return;
+    if (!startIntegration) {
+      setError("Start integration is not available.");
+      return;
+    }
+    setStarting(true);
+    setError(null);
+    try {
+      if (visibleMap && phase !== "done") {
+        const saved = await confirmMap(firmId, visibleMap);
+        setPlan(saved.plan ? { steps: dedupePracticeSteps(saved.plan.steps) } : null);
+        setRedoOpen(false);
+        setPhase("done");
+      }
+      const country = marketCountry === "US" ? "US" : "ZA";
+      const result = await startIntegration({ firmId, country });
+      setIntegrationStarted(true);
+      setPilotIds(result.pilotIds);
+      setFirmRunCount(result.runCount);
+      if (result.lines) setRunningLines(result.lines);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start integration.");
+    } finally {
+      setStarting(false);
+    }
+  };
   const actions = !booting ? (
     <div className="setup-partner__actions" data-im-actions="">
       {showInterview ? (
@@ -620,8 +761,66 @@ export function PracticeSetupInterview({
         <div className="im-card">{actions}</div>
       ) : null}
 
-      {!booting && (phase === "done" || nextLines.length > 0 || visibleMap) ? (
+      {!booting && (phase === "done" || nextLines.length > 0 || visibleMap || tableRows.length > 0) ? (
         <div className="im-card setup-partner__next" data-im-next="">
+          {tableRows.length > 0 ? (
+            <div data-im-plan="" {...(visibleMap ? { "data-im-coverage": "" } : {})}>
+              <h2 className="im-card__title" id="im-plan-heading">
+                Your integration plan
+              </h2>
+              <div className="im-plan-scroll">
+                <table className="im-plan-table" data-im-plan-table="" aria-labelledby="im-plan-heading">
+                  <thead>
+                    <tr>
+                      <th scope="col">Workflow</th>
+                      <th scope="col">How it's done today</th>
+                      <th scope="col">What Milōn will do</th>
+                      <th scope="col">Which bot</th>
+                      <th scope="col">What you need to grant or approve</th>
+                      <th scope="col">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableRows.map((row) => (
+                      <tr key={`${row.workflow}-${row.bot}-${row.milon}`}>
+                        <td>{row.workflow}</td>
+                        <td>{row.today}</td>
+                        <td>{row.milon}</td>
+                        <td>{row.bot}</td>
+                        <td>{row.grant}</td>
+                        <td>{row.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="setup-partner__actions">
+                <button
+                  type="button"
+                  className="setup-partner__primary im-plan-start"
+                  data-im-start=""
+                  disabled={starting}
+                  onClick={() => void onStart()}
+                >
+                  {starting ? "Starting…" : "Start integration"}
+                </button>
+              </div>
+            </div>
+          ) : visibleMap && visibleMap.milonCoverage.length > 0 ? (
+            <div data-im-coverage="">
+              <h3>Your integration plan</h3>
+              <ul className="im-checks">
+                {visibleMap.milonCoverage.map((row) => (
+                  <li key={`${row.agent}-${row.owns}`}>
+                    <Check size={16} aria-hidden />
+                    <span>
+                      {row.agent} takes {row.owns}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <h2 className="im-card__title">
             <ListChecks size={18} aria-hidden />
             Recommended next steps
@@ -638,21 +837,6 @@ export function PracticeSetupInterview({
           ) : (
             <p className="im-muted">The next steps appear once the map is ready.</p>
           )}
-          {visibleMap && visibleMap.milonCoverage.length > 0 ? (
-            <div data-im-coverage="">
-              <h3>Integration plan</h3>
-              <ul className="im-checks">
-                {visibleMap.milonCoverage.map((row) => (
-                  <li key={`${row.agent}-${row.owns}`}>
-                    <Check size={16} aria-hidden />
-                    <span>
-                      {row.agent} takes {row.owns}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
           {visibleMap && approvalDraftTitles(visibleMap).length > 0 ? (
             <div data-im-approval-drafts="">
               <h3>Drafts that need approval</h3>
@@ -667,17 +851,74 @@ export function PracticeSetupInterview({
             </div>
           ) : null}
           {firmId ? (
-            <div className="setup-partner__actions">
-              <button type="button" className="setup-partner__ghost" onClick={() => setReviewOpen(true)}>
-                <ClipboardList size={15} aria-hidden />
-                {"Review proposals"}
-              </button>
-            </div>
-          ) : null}
-          {reviewOpen && firmId ? (
-            <ImProposalDecisions firmId={firmId} quiet startOpen />
+            <details
+              className="im-folded"
+              data-im-folded="review"
+              onToggle={(event) => setReviewOpen(event.currentTarget.open)}
+            >
+              <summary>Review proposals</summary>
+              {reviewOpen ? <ImProposalDecisions firmId={firmId} quiet startOpen /> : null}
+            </details>
           ) : null}
         </div>
+      ) : null}
+
+      {!booting && integrationStarted ? (
+        <section className="im-card" data-im-access="" aria-label="Checklist and access">
+          <h2 className="im-card__title">Checklist and access</h2>
+          <p className="im-muted">
+            Grant read-only Drive, OneDrive, or inbox access. Milōn drafts only. Nothing is posted to a ledger.
+          </p>
+          <ul className="im-checks">
+            <li>
+              <Check size={16} aria-hidden />
+              <span>Google Drive folder, read only</span>
+            </li>
+            <li>
+              <Check size={16} aria-hidden />
+              <span>OneDrive folder, read only</span>
+            </li>
+            <li>
+              <Check size={16} aria-hidden />
+              <span>Forwarding inbox for documents</span>
+            </li>
+          </ul>
+          {pilotIds.map((clientId) => (
+            <ImCloudAccessPanel key={clientId} clientId={clientId} />
+          ))}
+          <div data-im-desktop-sync="">
+            <h3>Desktop folder sync</h3>
+            {desktopSyncClientReady() ? (
+              <Link to="/settings/desktop-sync" className="setup-partner__ghost">
+                Open desktop folder sync
+              </Link>
+            ) : (
+              <p className="im-muted">
+                Desktop folder sync will appear here after it is enabled for this environment. Nothing is watching
+                your computer yet.
+              </p>
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {!booting && firmRunCount > 0 ? (
+        <section className="im-card" data-im-running="" aria-label="What's running now">
+          <h2 className="im-card__title">What&apos;s running now</h2>
+          <ul className="im-checks">
+            {(runningLines.length > 0
+              ? runningLines
+              : [{ id: "queued", bot: "Milōn", status: "Draft queued", summary: "Draft for your review. Nothing has been sent." }]
+            ).map((line) => (
+              <li key={line.id}>
+                <Check size={16} aria-hidden />
+                <span>
+                  {line.bot} — {line.status}. {line.summary}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       {!booting ? (

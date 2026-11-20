@@ -8,7 +8,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { agentIdempotencyKey, agentInputHash } from "@/lib/agent-bus";
 import { handoffDecision, runnerEnabled, AGENT_RUNNERS } from "@/lib/owner-handoff";
-import { buildActivationPlan, type ImPilotClient } from "@/lib/im-activation-planner";
+import { buildActivationPlan, pickPilotClients, type ImPilotClient } from "@/lib/im-activation-planner";
 import { replayImplementationPlan } from "@/lib/im-replay";
 import { currentQuarterLabel, defaultTargetDate } from "@/lib/action-plan-counts";
 import {
@@ -25,6 +25,13 @@ import { planActivationAccept } from "@/lib/im-activation-accept";
 import { imRoutinePeriodKey, scheduledRunInputs } from "@/lib/im-routine-schedule";
 import { SETUP_PARTNER_SOURCE_EVENT, SETUP_PARTNER_TASK_WORKFLOW } from "@/lib/setup-partner";
 import { CLAUDE_OPUS_55, CLAUDE_SONNET_55 } from "@/lib/claude-request";
+import {
+  applyOpusIntegrationPlan,
+  integrationPlanOpusBody,
+  type IntegrationPlanRow,
+} from "@/lib/im-integration-plan";
+
+const ACTIVATION_RUN_SUMMARY = "Implementation Manager activation — draft only.";
 
 type Row = Record<string, unknown>;
 type DbError = { message: string; code?: string } | null;
@@ -296,6 +303,7 @@ export const loadImActivationContext = createServerFn({ method: "POST" })
 
 const acceptSchema = z.object({
   firmId: z.string().uuid(),
+  country: z.enum(["US", "ZA"]).optional(),
   pilotIds: z.array(z.string().uuid()).min(1).max(3),
   accepts: z.array(
     z.object({
@@ -312,15 +320,18 @@ const acceptSchema = z.object({
   ),
 });
 
-export const acceptImActivation = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => acceptSchema.parse(input))
-  .handler(async ({ data, context }) => {
+async function acceptImActivationHandler(
+  data: z.infer<typeof acceptSchema>,
+  context: {
+    userId?: string | null;
+    supabase: unknown;
+  },
+): Promise<{ ok: true; wrote: number; enqueued: number }> {
     const userId = context.userId;
     if (!userId) throw new Error("Not authenticated");
     await assertFirmAccess(userId, data.firmId);
     const rules = await activePlanRules(data.firmId);
-    const replay = replayImplementationPlan({ confirmRules: rules, meta: {} });
+    const replay = replayImplementationPlan({ confirmRules: rules, meta: { country: data.country } });
     if (replay.status === "needs_questions") throw new Error("Finish the Implementation Manager plan first.");
     const pilots = (await loadPilots(data.firmId)).filter((row) => data.pilotIds.includes(row.id));
     if (pilots.length < 1) throw new Error("Pick at least one pilot client.");
@@ -449,4 +460,170 @@ export const acceptImActivation = createServerFn({ method: "POST" })
     }
 
     return { ok: true as const, wrote, enqueued };
+}
+
+export const acceptImActivation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => acceptSchema.parse(input))
+  .handler(async ({ data, context }) => acceptImActivationHandler(data, context));
+
+const startSchema = z.object({
+  firmId: z.string().uuid(),
+  country: z.enum(["US", "ZA"]).optional(),
+});
+
+/** Accept every routine, pick up to 3 pilots, and enqueue draft runs now. */
+export const startImIntegration = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => startSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const userId = context.userId;
+    if (!userId) throw new Error("Not authenticated");
+    await assertFirmAccess(userId, data.firmId);
+    const pilots = pickPilotClients(await loadPilots(data.firmId));
+    if (pilots.length < 1) throw new Error("Add a client, then start integration.");
+    const rules = await activePlanRules(data.firmId);
+    const replay = replayImplementationPlan({ confirmRules: rules, meta: { country: data.country } });
+    if (replay.status === "needs_questions") throw new Error("Finish the Implementation Manager plan first.");
+    const activation = buildActivationPlan({
+      plan: replay.plan,
+      country: replay.country,
+      pilots,
+      manifest: replay.manifest,
+    });
+    const result = await acceptImActivationHandler(
+      {
+        firmId: data.firmId,
+        country: data.country,
+        pilotIds: pilots.map((row) => row.id),
+        accepts: activation.routineMaps.map((map) => ({
+          routine: map.routine,
+          accepted: true,
+          hoursSavedPerRun: null,
+        })),
+      },
+      context,
+    );
+    const running = await loadActivationRuns(data.firmId);
+    return {
+      ...result,
+      runCount: running.runCount,
+      pilotIds: pilots.map((row) => row.id),
+      lines: running.lines,
+    };
+  });
+
+const BOT_LABEL: Record<string, string> = {
+  financial_manager: "Financial Manager",
+  analyst: "Analyst",
+  advisor: "Advisor",
+};
+
+function activationRunStatus(status: string): string {
+  if (status === "queued") return "Draft queued";
+  if (status === "running") return "Running";
+  if (status === "succeeded" || status === "completed") return "Done";
+  if (status === "failed") return "Needs another look";
+  return "Waiting";
+}
+
+async function loadActivationRuns(firmId: string): Promise<{
+  runCount: number;
+  lines: { id: string; bot: string; status: string; summary: string }[];
+}> {
+  const db = admin();
+  const listed = (await db
+    .from("agent_runs")
+    .select("id, agent, status, summary")
+    .eq("firm_id", firmId)
+    .eq("summary", ACTIVATION_RUN_SUMMARY)
+    .order("queued_at", { ascending: false })
+    .limit(12)) as unknown as { data: Row[] | null; error: DbError };
+  if (listed.error) throw new Error(listed.error.message);
+  const lines = (listed.data ?? []).flatMap((row) => {
+    const id = typeof row.id === "string" ? row.id : "";
+    const agent = typeof row.agent === "string" ? row.agent : "";
+    const status = typeof row.status === "string" ? row.status : "";
+    if (!id) return [];
+    return [
+      {
+        id,
+        bot: BOT_LABEL[agent] ?? "Milōn",
+        status: activationRunStatus(status),
+        summary: "Draft for your review. Nothing has been sent.",
+      },
+    ];
+  });
+  return { runCount: lines.length, lines };
+}
+
+export const loadImRunningState = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ firmId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const userId = context.userId;
+    if (!userId) throw new Error("Not authenticated");
+    await assertFirmAccess(userId, data.firmId);
+    return loadActivationRuns(data.firmId);
+  });
+
+const draftSchema = z.object({
+  firmId: z.string().uuid(),
+  country: z.enum(["US", "ZA"]).optional(),
+  rows: z
+    .array(
+      z.object({
+        workflow: z.string().max(280),
+        today: z.string().max(280),
+        milon: z.string().max(280),
+        bot: z.string().max(80),
+        grant: z.string().max(280),
+        status: z.enum(["Waiting", "Draft queued", "Running"]),
+      }),
+    )
+    .max(12),
+});
+
+/** Rewrite the plan table with in-app Opus. Falls back to the rows already built. */
+export const draftImIntegrationPlan = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => draftSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const userId = context.userId;
+    if (!userId) throw new Error("Not authenticated");
+    await assertFirmAccess(userId, data.firmId);
+    const fallback = data.rows as IntegrationPlanRow[];
+    const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+    if (!apiKey || fallback.length === 0) return { rows: fallback, source: "fallback" as const };
+    const body = integrationPlanOpusBody(fallback);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 25_000);
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) return { rows: fallback, source: "fallback" as const };
+      const json = (await res.json()) as { content?: Array<{ type?: string; text?: string }> };
+      const text = (json.content ?? [])
+        .filter((block) => block.type === "text")
+        .map((block) => block.text ?? "")
+        .join("")
+        .trim();
+      if (!text) return { rows: fallback, source: "fallback" as const };
+      return {
+        rows: applyOpusIntegrationPlan(text, fallback, data.country),
+        source: "opus" as const,
+      };
+    } catch {
+      return { rows: fallback, source: "fallback" as const };
+    } finally {
+      clearTimeout(timer);
+    }
   });

@@ -20,6 +20,7 @@ import {
 } from "../src/lib/im-activation-persist.ts";
 import { ownerRoutineMonthLines, accountantRoutineSteps, parseRoutineMapMeta } from "../src/lib/client-routines.ts";
 import { replayImplementationPlan } from "../src/lib/im-replay.ts";
+import { buildIntegrationPlanTable, integrationPlanOpusBody } from "../src/lib/im-integration-plan.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -175,6 +176,76 @@ assert(ownerShell.includes('"routines"'), "owner shell vertical nav lists routin
 const setup = readFileSync("src/routes/_authenticated/practice_.setup.tsx", "utf8");
 assert(setup.includes("ImActivationStep"), "practice setup mounts activation");
 assert(setup.includes("implementation_manager"), "practice setup mounts IM rules");
+
+function acceptReplayBlock(source: string): string {
+  const helper = source.indexOf("function acceptImActivationHandler");
+  if (helper >= 0) {
+    const end = source.indexOf("export const acceptImActivation", helper);
+    return source.slice(helper, end === -1 ? helper + 5000 : end);
+  }
+  const start = source.indexOf("export const acceptImActivation");
+  const next = source.indexOf("\nexport const ", start + 20);
+  return source.slice(start, next === -1 ? source.length : next);
+}
+
+function metaPassedByAccept(source: string, country: "US" | "ZA"): { country?: "US" | "ZA" } {
+  const block = acceptReplayBlock(source);
+  const replayAt = block.indexOf("replayImplementationPlan");
+  const call = replayAt >= 0 ? block.slice(replayAt, replayAt + 220) : "";
+  if (/meta:\s*\{\s*country:\s*data\.country\s*\}/.test(call) && !/meta:\s*\{\s*\}/.test(call)) {
+    return { country };
+  }
+  return {};
+}
+
+const acceptSchemaBlock = activationSource.slice(
+  activationSource.lastIndexOf("const acceptSchema"),
+  activationSource.indexOf("function acceptImActivationHandler") === -1
+    ? activationSource.indexOf("export const acceptImActivation")
+    : activationSource.indexOf("function acceptImActivationHandler"),
+);
+assert(/country:\s*z\.enum\(\["US", "ZA"\]\)/.test(acceptSchemaBlock), "accept schema takes the firm country");
+const countryReplay = replayImplementationPlan({
+  confirmRules: [
+    {
+      rule_text: "Practice: Month-end close pack [|covered]",
+      status: "active",
+      source_event: "setup_partner_confirm",
+    },
+  ],
+  meta: metaPassedByAccept(activationSource, "ZA"),
+});
+assert(countryReplay.status === "ready", "accept replay keeps the firm country");
+
+const planRows = buildIntegrationPlanTable({
+  steps: [
+    { step: "Practice: Who signs the pack — Partner reviews it", bucket: "client_setup" },
+    { step: "Build the missing tax form", bucket: "product_gap" },
+  ],
+  coverage: [{ agent: "Tax Specialist", owns: "ZA tax prep for accountant review (no filing)." }],
+  country: "US",
+});
+const planBlob = JSON.stringify(planRows);
+assert(!planBlob.includes("Practice:"), "plan table drops Practice prefixes");
+assert(!planBlob.includes("product_gap") && !planBlob.includes("Product gap"), "classifications stay off the table");
+assert(!planBlob.includes("Build the missing tax form"), "a gap is not a workflow row");
+assert(planBlob.includes("Sales-tax prep"), "a US plan says sales-tax prep");
+assert(!/\bSARS\b|\bZA\b/.test(planBlob), "a US plan table does not say ZA or SARS");
+assert(!planBlob.includes("Live"), "the plan table does not say Live");
+const fitRows = buildIntegrationPlanTable({
+  steps: [
+    {
+      step: "Practice: Prepare the books in Xero — Two juniors; Xero; Monthly — Firm setting for the practice. Saved as a private rule.",
+      bucket: "client_setup",
+    },
+  ],
+  country: "ZA",
+});
+const fitBlob = JSON.stringify(fitRows);
+assert(fitBlob.includes("Prepare the books in Xero"), "the workflow stays");
+assert(!fitBlob.includes("Firm setting"), "plan table drops fit notes");
+assert(!fitBlob.includes("Practice:"), "fit-note rows still drop the Practice prefix");
+assert(integrationPlanOpusBody(planRows).model === "claude-opus-5-5", "the plan table is drafted by Opus 5.5");
 
 const enqueueBlock = activationSource.slice(
   activationSource.indexOf("async function enqueueDraftRun"),

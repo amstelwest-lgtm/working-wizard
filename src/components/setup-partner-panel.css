@@ -427,8 +427,8 @@
 
 .im-stepper {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0;
   list-style: none;
   margin: 16px 0 0;
@@ -439,10 +439,21 @@
 .im-stepper li {
   display: flex;
   align-items: center;
+  gap: 10px;
   color: #627d98;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.01em;
+  padding: 6px 0;
+}
+
+.im-stepper li::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  background: #dbeafe;
+  flex: none;
 }
 
 .im-stepper li[data-step="current"],
@@ -454,16 +465,8 @@
   font-weight: 800;
 }
 
-.im-stepper li + li::before {
-  content: "";
-  width: 28px;
-  height: 2px;
-  margin: 0 10px;
-  border-radius: 99px;
-  background: #dbeafe;
-}
-
-.im-stepper li[data-step="done"] + li::before {
+.im-stepper li[data-step="current"]::before,
+.im-stepper li[data-step="done"]::before {
   background: #0b5fff;
 }
 
@@ -665,4 +668,52 @@
   margin: 0 0 8px;
   color: #102a43;
   font-size: 0.95rem;
+}
+
+.im-plan-scroll {
+  overflow-x: auto;
+  margin: 8px 0 12px;
+  background: #ffffff;
+}
+
+.im-plan-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+  color: #102a43;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.im-plan-table th,
+.im-plan-table td {
+  border: 1px solid #dbeafe;
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.im-plan-table th {
+  font-weight: 700;
+  background: #ffffff;
+}
+
+.im-plan-start {
+  background: #0b5fff;
+  color: #ffffff;
+}
+
+.im-folded {
+  margin-top: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #102a43;
+  padding: 0.55rem 0.8rem;
+}
+
+.im-folded summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
 }
