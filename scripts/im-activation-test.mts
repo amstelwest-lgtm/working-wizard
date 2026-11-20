@@ -272,8 +272,27 @@ assert(
 assert(!spokenBlob.includes("Firm; Monthly") && !/; Monthly/.test(spokenBlob), "stored fields stay off the table");
 assert(new Set(spoken.map((row) => row.milon)).size === spoken.length, "each workflow says what Milōn will do");
 assert(spoken.some((row) => row.bot === "Financial Manager"), "document collection stays with Financial Manager");
-assert(spoken.some((row) => row.bot === "Tax Specialist"), "VAT work stays with Tax Specialist");
+assert(
+  spoken.find((row) => /bookkeeping/i.test(row.workflow))?.bot === "Analyst",
+  "bookkeeping that mentions VAT stays with the Analyst",
+);
 assert(spoken.some((row) => row.bot === "Accountant"), "sign-off stays with the accountant");
+const roster = buildIntegrationPlanTable({
+  steps: [
+    { step: "Draft the monthly bookkeeping pack", bucket: "covered" },
+    { step: "Prepare the books and VAT workings in Xero", bucket: "client_setup" },
+    { step: "Prepare the month-end pack", bucket: "covered" },
+    { step: "Prepare the VAT201 for review", bucket: "client_setup" },
+    { step: "Prepare the ITR14 company return", bucket: "client_setup" },
+  ],
+  country: "ZA",
+});
+const botFor = (fragment: string) => roster.find((row) => row.workflow.includes(fragment))?.bot;
+assert(botFor("bookkeeping pack") === "Analyst", "a bookkeeping pack goes to the Analyst");
+assert(botFor("month-end pack") === "Analyst", "a month-end pack goes to the Analyst");
+assert(botFor("VAT workings") === "Analyst", "books and VAT workings are books prep");
+assert(botFor("VAT201") === "Tax Specialist", "a VAT201 row goes to the Tax Specialist");
+assert(botFor("ITR14") === "Tax Specialist", "an ITR row goes to the Tax Specialist");
 assert(spoken.filter((row) => row.bot === "Financial Manager").length < spoken.length, "bots are not all Financial Manager");
 assert(integrationPlanOpusBody(planRows).model === "claude-opus-5-5", "the plan table is drafted by Opus 5.5");
 

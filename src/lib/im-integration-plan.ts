@@ -55,13 +55,24 @@ function splitDash(text: string): [string, string] {
   return [head, rest];
 }
 
+/** A return or filing. VAT workings and bookkeeping that mention VAT are not this. */
+function isTaxFilingRow(text: string): boolean {
+  if (/\b(vat201|emp201|irp6|itr12|itr14)\b/i.test(text)) return true;
+  return /\bprovisional\b/i.test(text) && /\b(tax|return|filing|irp6)\b/i.test(text);
+}
+
+/** Bookkeeping, month-end pack, and books prep. Analyst already owns that work. */
+function isBooksPrep(text: string): boolean {
+  return /\b(bookkeeping|books|month-?end|management pack|vat workings)\b/i.test(text);
+}
+
 function botForWorkflow(text: string): string {
   if (/\b(sign off|signs off|sign-off)\b/i.test(text)) return "Accountant";
+  if (isTaxFilingRow(text)) return "Tax Specialist";
   if (/\b(pdf|email attachment|bank statement|invoices?|receipts?)\b/i.test(text)) return "Financial Manager";
-  if (/\b(vat|tax|payroll|emp201|provisional)\b/i.test(text)) return "Tax Specialist";
-  if (/\b(report|ratio|variance|management pack|month-?end pack)\b/i.test(text)) return "Analyst";
+  if (isBooksPrep(text)) return "Analyst";
+  if (/\b(report|ratio|variance)\b/i.test(text)) return "Analyst";
   if (/\b(deadline|narrative|advice|owner question)\b/i.test(text)) return "Advisor";
-  if (/\b(bookkeeping|books|xero|quickbooks|sage)\b/i.test(text)) return "Financial Manager";
   return "Financial Manager";
 }
 
