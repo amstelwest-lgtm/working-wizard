@@ -123,7 +123,9 @@ function routineSteps(
 ): ImRoutineMapStep[] {
   const picked =
     routine === "document_chase"
-      ? steps.filter((step) => /\b(chase|documents?|receipts?|invoices?|missing)\b/i.test(step.step))
+      ? steps.filter((step) =>
+          /\b(chase|documents?|receipts?|invoices?|missing)\b/i.test(step.step),
+        )
       : steps.filter((step) =>
           /\b(month-?end|management report|close pack|monthly pack|bookkeeping)\b/i.test(step.step),
         );
@@ -312,14 +314,23 @@ export function buildFirstValueMilestone(
   };
 }
 
+/** Start integration chooses the clients. The checklist states that count. */
+export function partnerPilotChecklistLine(count: number): string {
+  if (count <= 0) return "Add a client, then start integration.";
+  if (count === 1) return "Milōn starts the first drafts on one client.";
+  return `Milōn starts the first drafts on ${Math.min(3, count)} clients.`;
+}
+
 export function buildPartnerChecklist(
   pilots: readonly ImPilotClient[],
   meta?: ImReplayFixtureMeta | null,
 ): string[] {
   const lines = [
     "Confirm Implementation Manager plan is saved.",
-    "Pick 2–3 pilot clients for the first Milōn drafts.",
-    ...pilots.map((row) => `Pilot: ${row.name}${row.hasLedger || row.hasUpload ? " (books on file)" : ""}`),
+    partnerPilotChecklistLine(pilots.length),
+    ...pilots.map(
+      (row) => `Pilot: ${row.name}${row.hasLedger || row.hasUpload ? " (books on file)" : ""}`,
+    ),
     "Review first monthly pack or document-chase draft before anything is sent.",
     "Log who approves any ledger posting on pilot clients.",
   ];
@@ -351,9 +362,13 @@ export function buildActivationPlan(input: {
 
 export function activationPlanSendsNothing(plan: ImActivationPlan): boolean {
   if (plan.firstValueMilestone.sent) return false;
-  return plan.routineMaps.every((map) => map.steps.every((step) => step.sends === false && step.approvalGate.sends === false));
+  return plan.routineMaps.every((map) =>
+    map.steps.every((step) => step.sends === false && step.approvalGate.sends === false),
+  );
 }
 
 export function activationStepsHaveOwners(plan: ImActivationPlan): boolean {
-  return plan.routineMaps.every((map) => map.steps.length > 0 && map.steps.every((step) => step.botOwner.trim().length > 0));
+  return plan.routineMaps.every(
+    (map) => map.steps.length > 0 && map.steps.every((step) => step.botOwner.trim().length > 0),
+  );
 }

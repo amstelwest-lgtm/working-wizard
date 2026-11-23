@@ -96,6 +96,8 @@ assert(!panel.includes("Connect Xero") && !panel.includes("ConnectBooks"), "no c
 assert(!panel.includes("QuickBooks") && !panel.includes("ledger snapshot"), "no client books");
 assert(!panel.includes("client picker") && !panel.includes("Select a client"), "no client picker");
 assert(panel.includes("buildSetupPartnerFirmMap"), "panel uses the firm API");
+assert(panel.includes("<ImCloudAccessPanel firmId="), "setup shows one documents card for the firm");
+assert(!panel.includes("pilotIds.map"), "setup does not draw one cloud panel per pilot");
 const clientPanel = read("src/components/setup-partner-panel.tsx");
 assert(!clientPanel.includes("PracticeSetupPanel"), "client panel is not this route");
 assert(

@@ -15,8 +15,12 @@ import {
   mimeAllowed,
   deviceTokenCanRead,
   hashDeviceToken,
+  pairingCodeFailureReason,
 } from "../src/lib/desktop-sync.ts";
-import { desktopSyncFirmAllowed, DESKTOP_SYNC_FIRM_ALLOWLIST } from "../src/lib/desktop-sync-allowlist.ts";
+import {
+  desktopSyncFirmAllowed,
+  DESKTOP_SYNC_FIRM_ALLOWLIST,
+} from "../src/lib/desktop-sync-allowlist.ts";
 import { desktopSyncDeviceScopes } from "../src/lib/desktop-sync-device.functions.ts";
 import { desktopSyncSqlReady } from "../src/lib/desktop-sync-ready.ts";
 
@@ -72,6 +76,37 @@ assert(device.includes('reason: "folder"'), "unmapped folder rejected");
 assert(device.includes("upload_skipped"), "unsupported types logged as skipped");
 assert(device.includes("desktopSyncUnsupportedType"), "type gate before caps");
 assert(device.includes('.is("used_at", null)'), "atomic pairing redeem");
+const pairStart = device.indexOf("export async function pairDesktopSyncDeviceImpl");
+const pairEnd = device.indexOf("export const pairDesktopSyncDevice");
+const pairBody = device.slice(pairStart, pairEnd);
+const offAt = pairBody.indexOf('reason: "off"');
+const burnAt = pairBody.indexOf(".update({ used_at:");
+assert(
+  offAt !== -1 && burnAt !== -1 && offAt < burnAt,
+  "an off firm does not burn the pairing code",
+);
+assert(pairingCodeFailureReason(null) === "code", "an unknown pairing code stays code");
+assert(
+  pairingCodeFailureReason(
+    { usedAt: "2026-01-01T00:00:00.000Z", expiresAt: "2099-01-01T00:00:00.000Z" },
+    Date.parse("2026-06-01T00:00:00.000Z"),
+  ) === "used",
+  "an already-used pairing code is used",
+);
+assert(
+  pairingCodeFailureReason(
+    { usedAt: null, expiresAt: "2020-01-01T00:00:00.000Z" },
+    Date.parse("2026-06-01T00:00:00.000Z"),
+  ) === "expired",
+  "an expired pairing code is expired",
+);
+assert(
+  pairingCodeFailureReason(
+    { usedAt: null, expiresAt: "2099-01-01T00:00:00.000Z" },
+    Date.parse("2026-06-01T00:00:00.000Z"),
+  ) === null,
+  "a live unused code is not a failure",
+);
 assert(device.includes('blocked: "disabled"'), "probe disabled in production");
 assert(!device.includes("writeFile"), "agent server must not write local files");
 

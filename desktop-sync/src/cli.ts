@@ -24,12 +24,16 @@ async function cmdPair(args: string[]) {
   await assertKeychainAvailable();
   const body = (await pairDevice(api, code, label)) as {
     ok?: boolean;
+    reason?: string;
     accessToken?: string;
     refreshToken?: string;
     folderMaps?: Array<{ folderLabel: string; clientId: string }>;
     apiBase?: string;
   };
   if (!body.ok || !body.accessToken || !body.refreshToken) {
+    if (body.reason === "expired") throw new Error("That pairing code has expired.");
+    if (body.reason === "used") throw new Error("That pairing code was already used.");
+    if (body.reason === "off") throw new Error("Desktop sync is off for this practice.");
     throw new Error("Pairing failed");
   }
   const maps = parseFolders(folderArgs);

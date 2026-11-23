@@ -6,18 +6,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertClientScope } from "@/lib/assert-client-scope";
-import {
-  forwardingAddress,
-  INBOUND_FORWARD_DOMAIN_ENV,
-} from "@/lib/im-inbound-forward";
-import {
-  loadImAccessSettings,
-  saveImAccessSettings,
-} from "@/lib/im-access-settings.server";
-import {
-  buildGoogleDriveAuthUrl,
-  googleDriveCredentialsConfigured,
-} from "@/lib/google-drive-read";
+import { forwardingAddress, INBOUND_FORWARD_DOMAIN_ENV } from "@/lib/im-inbound-forward";
+import { loadImAccessSettings, saveImAccessSettings } from "@/lib/im-access-settings.server";
+import { buildGoogleDriveAuthUrl, googleDriveCredentialsConfigured } from "@/lib/google-drive-read";
 import {
   buildMicrosoftGraphAuthUrl,
   microsoftGraphCredentialsConfigured,
@@ -29,7 +20,7 @@ import {
   revokeImCloudProvider,
   syncImCloudFolderIds,
 } from "@/lib/im-cloud-connection.server";
-import { imCloudOauthSqlReady } from "@/lib/im-cloud-token";
+import { imCloudOauthSqlReady, imCloudTokenKeyConfigured } from "@/lib/im-cloud-token";
 
 const pickSchema = z.object({
   provider: z.enum(["google", "microsoft"]),
@@ -46,6 +37,7 @@ export const getImCloudConfig = createServerFn({ method: "POST" })
       microsoft: microsoftGraphCredentialsConfigured(),
       inboundDomain: (process.env[INBOUND_FORWARD_DOMAIN_ENV] ?? "").trim() || null,
       oauthSqlReady,
+      tokenKeyReady: imCloudTokenKeyConfigured(),
       tokensNeedSql: !oauthSqlReady,
     };
   });
@@ -117,7 +109,9 @@ export const saveImCloudAllowedSenders = createServerFn({ method: "POST" })
 export const disconnectImCloud = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
-    z.object({ clientId: z.string().uuid(), provider: z.enum(["google", "microsoft", "all"]) }).parse(input),
+    z
+      .object({ clientId: z.string().uuid(), provider: z.enum(["google", "microsoft", "all"]) })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     assertClientScope(context.actingAsClientId, data.clientId);
@@ -153,24 +147,21 @@ export const getImCloudAuthUrl = createServerFn({ method: "POST" })
     if (!imCloudOauthSqlReady()) {
       throw new Error("Cloud OAuth needs an approved database migration");
     }
-    const settings = await loadImAccessSettings(data.clientId);
     const { state } = await insertImCloudOAuthState({
       clientId: data.clientId,
       provider: data.provider,
       returnPath: data.returnPath,
     });
     if (data.provider === "google") {
-      if (!googleDriveCredentialsConfigured()) throw new Error("Google Drive OAuth is not configured");
+      if (!googleDriveCredentialsConfigured())
+        throw new Error("Google Drive OAuth is not configured");
       const redirectUri = `${process.env.PUBLIC_APP_URL ?? ""}/api/google-drive/callback`;
       return {
-        authUrl: buildGoogleDriveAuthUrl({
-          state,
-          redirectUri,
-          pickedFolderIds: settings?.picks.filter((p) => p.provider === "google").map((p) => p.folderId) ?? [],
-        }),
+        authUrl: buildGoogleDriveAuthUrl({ state, redirectUri }),
       };
     }
-    if (!microsoftGraphCredentialsConfigured()) throw new Error("Microsoft Graph OAuth is not configured");
+    if (!microsoftGraphCredentialsConfigured())
+      throw new Error("Microsoft Graph OAuth is not configured");
     const redirectUri = `${process.env.PUBLIC_APP_URL ?? ""}/api/microsoft-drive/callback`;
     return { authUrl: buildMicrosoftGraphAuthUrl({ state, redirectUri }) };
   });
