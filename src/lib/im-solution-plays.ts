@@ -113,7 +113,7 @@ const PLAY_SEEDS: readonly PlaySeed[] = [
     bot: "Analyst",
     source: "src/lib/advisory-pack-pdf.ts",
     signals:
-      /\b(management packs?|month-?end|bookkeeping|books|management reports?|client reporting|sign-?off|signs off)\b/i,
+      /\b(management packs?|month-?end|bookkeeping|books|management reports?|client reporting|sign-?off|signs off|who signs|signs the pack)\b/i,
     present: (manifest) =>
       hasTool(manifest, "Analyst", "Management report") && hasStep(manifest, "client_reporting"),
   },

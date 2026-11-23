@@ -107,6 +107,14 @@ const whatsapp = JSON.stringify(
 );
 assert(!whatsapp.includes("WhatsApp"), "accountant copy does not say WhatsApp");
 assert(/a message/i.test(whatsapp), "a WhatsApp chase is described as a message");
+const signOff = buildIntegrationPlanTable({
+  steps: [{ step: "Who signs the pack", bucket: "client_setup" }],
+  country: "ZA",
+});
+const signOffBlob = JSON.stringify(signOff);
+assert(signOffBlob.includes("Who signs the pack"), "a sign-off step stays in the plan");
+assert(signOff.find((row) => row.playId === "management-pack")?.bot === "Analyst", "sign-off stays on the management pack");
+assert(!/Product gap|Client setup|Already covered|Bespoke/.test(signOffBlob), "triage labels stay off a sign-off plan");
 
 const tax = buildIntegrationPlanTable({
   steps: [{ step: "Prepare the VAT201 for review — Firm; Monthly", bucket: "client_setup" }],
