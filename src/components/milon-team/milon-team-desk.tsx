@@ -40,6 +40,7 @@ import {
 } from "@/lib/milon-team-activity";
 import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
 import { draftFindingLabel, ownerRunPhase, ownerRunPhaseLabel, ownerRunPhaseMuted } from "@/hooks/owner-agent-ui";
+import { AgentSendDraftCard } from "@/components/agent-send-draft-card";
 import { OwnerDraftCard, type ApprovedDraftTarget } from "@/components/owner-draft-card";
 import { AppliedBrainRulesLine } from "@/components/applied-brain-rules-line";
 import { SourceCheckChip } from "@/components/source-check-chip";
@@ -353,6 +354,13 @@ export function MilonTeamDesk({
         ) : null}
       </div>
     );
+    if (row.kind === "agent_send_draft" && row.status !== "approved") {
+      return (
+        <li key={row.id}>
+          <AgentSendDraftCard row={row} onRefresh={onRefreshDrafts} />
+        </li>
+      );
+    }
     if (draft || row.status === "approved") {
       return (
         <OwnerDraftCard

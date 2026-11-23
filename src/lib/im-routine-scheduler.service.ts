@@ -17,6 +17,8 @@ import {
   type RoutineActionRow,
   type RoutineRunRow,
 } from "@/lib/client-routines";
+import { agentSendFindingRow, planAgentSendRoutine } from "@/lib/agent-send-draft";
+import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import {
   imBudgetVarianceThresholdBreached,
   imRoutinePeriodKey,
@@ -217,6 +219,73 @@ export async function countFirmRoutineInvokesToday(firmId: string, now: Date): P
   }).length;
 }
 
+/**
+ * One unsent agent_send_draft for an accepted agent_send routine.
+ * Does not invoke a runner and does not mint a link.
+ */
+async function queueAgentSendDraft(input: {
+  firmId: string;
+  clientId: string;
+  plan: NonNullable<ReturnType<typeof planAgentSendRoutine>>;
+}): Promise<"created" | "exists"> {
+  if (input.plan.invokeRunner || input.plan.sent || input.plan.minted) return "exists";
+  const db = admin();
+  const idempotencyKey = await agentIdempotencyKey({
+    agent: "financial_manager",
+    clientId: input.clientId,
+    trigger: "on_demand",
+    inputs: input.plan.idempotencyInputs,
+  });
+  const existing = await db
+    .from("agent_runs")
+    .select("id")
+    .eq("agent", "financial_manager")
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle();
+  if (existing.error) throw new Error(existing.error.message);
+  let runId = typeof existing.data?.id === "string" ? existing.data.id : "";
+  if (!runId) {
+    const inserted = await db
+      .from("agent_runs")
+      .insert({
+        agent: "financial_manager",
+        client_id: input.clientId,
+        firm_id: input.firmId,
+        trigger: "on_demand",
+        audience: "accountant",
+        idempotency_key: idempotencyKey,
+        input_hash: await agentInputHash(input.plan.idempotencyInputs),
+        status: "skipped",
+        stop_reason: "agent_send_draft",
+        summary: "Implementation Manager routine — agent_send_draft, unsent draft.",
+        finished_at: new Date().toISOString(),
+      })
+      .select("id")
+      .maybeSingle();
+    if (inserted.error) {
+      if (inserted.error.code === "23505") return "exists";
+      throw new Error(inserted.error.message);
+    }
+    runId = typeof inserted.data?.id === "string" ? inserted.data.id : "";
+  }
+  if (!runId) return "exists";
+  const finding = await db
+    .from("agent_findings")
+    .select("id")
+    .eq("run_id", runId)
+    .eq("kind", "agent_send_draft")
+    .maybeSingle();
+  if (finding.error) throw new Error(finding.error.message);
+  if (finding.data?.id) return "exists";
+  const stored = await db
+    .from("agent_findings")
+    .insert(agentSendFindingRow(input.plan.draft, runId))
+    .select("id")
+    .maybeSingle();
+  if (stored.error) throw new Error(stored.error.message);
+  return stored.data?.id ? "created" : "exists";
+}
+
 async function enqueueScheduledDraftRun(input: {
   agent: "financial_manager" | "analyst" | "advisor";
   clientId: string;
@@ -354,6 +423,25 @@ export async function runImRoutineSchedulerCore(
       .or(imRoutineMapArtifactFilter())
       .limit(12) as unknown as Promise<{ data: Row[] | null; error: DbError }>);
     if (artifacts.error) continue;
+    if (sendAgentFirmAllowed(input.firmId)) {
+      const nameRow = await db.from("clients").select("name").eq("id", clientId).maybeSingle();
+      const clientName = typeof nameRow.data?.name === "string" ? nameRow.data.name : "";
+      for (const artifact of artifacts.data ?? []) {
+        const agentSend = planAgentSendRoutine(artifact.meta, {
+          clientId,
+          clientName: clientName || "the client",
+          periodKey,
+        });
+        if (!agentSend) continue;
+        const queued = await queueAgentSendDraft({
+          firmId: input.firmId,
+          clientId,
+          plan: agentSend,
+        });
+        if (queued === "created") enqueued += 1;
+      }
+    }
+
     const metas = (artifacts.data ?? [])
       .map((artifact) => parseRoutineMapMeta(artifact.meta))
       .filter((meta): meta is NonNullable<typeof meta> => Boolean(meta));

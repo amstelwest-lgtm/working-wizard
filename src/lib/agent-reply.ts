@@ -86,6 +86,7 @@ const TOOL_LABELS: Record<string, string> = {
   record_draft: "Draft",
   send_agent_message: "Message",
   propose_figure_adjustment: "Figure proposal",
+  propose_agent_send: "Send an agent draft",
   prepare_client_report: "Client report",
   get_health: "Health",
   get_variance: "Variance",

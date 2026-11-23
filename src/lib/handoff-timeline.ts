@@ -79,6 +79,7 @@ const TOOL_LABELS: Record<string, string> = {
   record_draft: "Wrote a draft for review",
   send_agent_message: "Messaged another bot",
   propose_figure_adjustment: "Proposed a figure change",
+  propose_agent_send: "Drafted a Send an agent list",
   prepare_client_report: "Prepared a client report for download",
   list_client_library: "Read the client library",
   get_client_library_doc: "Opened a library file",

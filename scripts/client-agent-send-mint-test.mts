@@ -82,9 +82,12 @@ assert(/address you confirm/i.test(copy), "copy says the accountant confirms the
 assert(!/Nothing is emailed/i.test(copy), "copy no longer says nothing is emailed");
 
 const myPractice = "fca0f102-a597-4ec6-8f45-825c57f78797";
-assert(SEND_AGENT_FIRM_ALLOWLIST.length === 1, "only one firm is allowlisted");
-assert(SEND_AGENT_FIRM_ALLOWLIST[0] === myPractice, "the allowlist is My practice");
+const benAccountants = "e8f7a440-a541-422c-8e4f-82ba33dd0604";
+assert(SEND_AGENT_FIRM_ALLOWLIST.length === 2, "locked defaults are the current firm and Ben Accountants");
+assert(SEND_AGENT_FIRM_ALLOWLIST[0] === myPractice, "the current firm stays first");
+assert(SEND_AGENT_FIRM_ALLOWLIST.includes(benAccountants), "Ben Accountants is a locked default");
 assert(sendAgentFirmAllowed(myPractice), "My practice may send an agent");
+assert(sendAgentFirmAllowed(benAccountants), "Ben Accountants may send an agent");
 assert(!sendAgentFirmAllowed("fca0f102"), "a prefix is not the firm id");
 assert(!sendAgentFirmAllowed("00000000-0000-4000-8000-000000000001"), "another firm is refused");
 assert(

@@ -13,6 +13,11 @@ import {
 } from "../../../src/lib/agent-financial-manager.ts";
 import { buildPrepareClientReportResult } from "../../../src/lib/client-report-prepare.ts";
 import {
+  AGENT_SEND_DRAFT_KIND,
+  agentSendFindingRow,
+  draftFromProposeArgs,
+} from "../../../src/lib/agent-send-draft.ts";
+import {
   buildFigureProposal,
   figureBeforeValues,
   parseFigureProposalArgs,
@@ -61,8 +66,76 @@ export async function executeFinancialManagerTool(
   if (OWN.has(tool)) return { error: "That read is not wired." };
   if (tool === "send_agent_message") return sendAgentMessage(args, ctx, FM_PEERS);
   if (tool === "propose_figure_adjustment") return proposeFigureAdjustment(args, ctx);
+  if (tool === "propose_agent_send") return proposeAgentSend(args, ctx);
   if (tool === "prepare_client_report") return prepareClientReport(args, ctx);
   return recordAgentDraft(args, ctx, FM_PEERS as readonly AgentKey[], FM_DRAFT_KINDS);
+}
+
+/**
+ * Saves an agent_send_draft finding. Does not mint a link and does not send mail.
+ * A queue run stores the finding on that run. A chat call with no run id
+ * stores a skipped run so the finding has a parent, then stops.
+ */
+async function proposeAgentSend(args: Record<string, unknown>, ctx: AgentToolCtx): Promise<unknown> {
+  let clientName = cleanLinePresent(args.client_name) ? String(args.client_name) : "";
+  if (!clientName) {
+    const { data } = await ctx.db.from("clients").select("name").eq("id", ctx.clientId).maybeSingle();
+    clientName = typeof data?.name === "string" ? data.name.trim() : "";
+  }
+  const built = draftFromProposeArgs({ ...args, ...(clientName ? { client_name: clientName } : {}) }, ctx.clientId);
+  if (!built.ok) return { error: built.error, tool_blocked: true };
+  const draft = built.draft;
+  const runId = await draftRunId(ctx);
+  if (!runId) return { error: "The draft was not saved." };
+  const { data, error } = await ctx.db
+    .from("agent_findings")
+    .insert(agentSendFindingRow(draft, runId))
+    .select("id")
+    .maybeSingle();
+  if (error || !data?.id) return { error: error?.message || "The draft was not saved." };
+  ctx.recordedKeys.add(`${AGENT_SEND_DRAFT_KIND}:${draft.clientName}`);
+  return {
+    drafted: true,
+    finding_id: data.id,
+    kind: AGENT_SEND_DRAFT_KIND,
+    status: "pending",
+    minted: false,
+    sent: false,
+    applied: false,
+    requires_human_approval: true,
+    client_id: ctx.clientId,
+    client_name: draft.clientName,
+    checklist: draft.checklist,
+    message: draft.message,
+  };
+}
+
+function cleanLinePresent(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+async function draftRunId(ctx: AgentToolCtx): Promise<string | null> {
+  const existing = persistedRunId(ctx.runId);
+  if (existing) return existing;
+  const key = `agent-send-draft:${ctx.clientId}:${crypto.randomUUID()}`;
+  const inserted = await ctx.db
+    .from("agent_runs")
+    .insert({
+      agent: "financial_manager",
+      client_id: ctx.clientId,
+      firm_id: ctx.firmId,
+      trigger: "on_demand",
+      audience: "accountant",
+      idempotency_key: key,
+      input_hash: key,
+      status: "skipped",
+      stop_reason: "agent_send_draft",
+      summary: "Send an agent draft. Unsent. A named accountant approves before anything is minted.",
+      finished_at: new Date().toISOString(),
+    })
+    .select("id")
+    .maybeSingle();
+  return typeof inserted.data?.id === "string" ? inserted.data.id : null;
 }
 
 /** A queue run id is stored. A chat proposal has no agent_runs row, so the id stays null. */

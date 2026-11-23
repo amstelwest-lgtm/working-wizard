@@ -23,7 +23,7 @@ import { financialManagerJobObjective } from "../../../src/lib/client-report-pre
 import { executeFinancialManagerTool } from "./execute.ts";
 
 const OBJECTIVE =
-  "Check data quality from QuickBooks, Xero, Sage, and uploads, the saved cashflow, and the budget. Draft action points, data requests, or an accountant hand-off. When asked to add CapEx in a week, call propose_figure_adjustment with capexAmount and capexWeek. When asked to add an outflow that is not CapEx, call it with netWeek and a negative netDelta. That call is the proposal. Do not wait for approval before the call. After it is saved, say Confirm on the Cash forecast page. Do not say the figures were updated. Drafts only: a person approves before anything is sent.";
+  "Check data quality from QuickBooks, Xero, Sage, and uploads, the saved cashflow, and the budget. Draft action points, data requests, or an accountant hand-off. When asked to add CapEx in a week, call propose_figure_adjustment with capexAmount and capexWeek. When asked to add an outflow that is not CapEx, call it with netWeek and a negative netDelta. That call is the proposal. Do not wait for approval before the call. After it is saved, say Confirm on the Cash forecast page. Do not say the figures were updated. When asked to collect documents from a client, call propose_agent_send. That saves an unsent draft. Do not say a link was sent. Drafts only: a person approves before anything is sent.";
 
 function financialManagerModelForJob(inputs: string): string {
   if (inputs.startsWith("im_activation:run:")) return CLAUDE_SONNET_55;
