@@ -4,7 +4,11 @@
  * agent_send both stop here. Approval is the only path into mintClientAgentSend.
  * Nothing in this file inserts a send, sends mail, or posts a ledger.
  */
-import { FIRM_NOTE_MAX } from "./client-agent-missions";
+/**
+ * Same 500-character cap as the mission note. Kept here so the Financial
+ * Manager edge bundle does not import the mission catalog.
+ */
+const AGENT_SEND_NOTE_MAX = 500;
 
 export const AGENT_SEND_DRAFT_KIND = "agent_send_draft";
 export const PROPOSE_AGENT_SEND_TOOL = "propose_agent_send";
@@ -125,7 +129,7 @@ export function draftFromProposeArgs(
 
 export function agentSendFirmNote(draft: Pick<AgentSendDraft, "message" | "checklist">): string {
   const lines = [draft.message, ...draft.checklist.map((item) => `Please send: ${item}`)];
-  return lines.filter(Boolean).join("\n").trim().slice(0, FIRM_NOTE_MAX);
+  return lines.filter(Boolean).join("\n").trim().slice(0, AGENT_SEND_NOTE_MAX);
 }
 
 export function agentSendFindingRow(draft: AgentSendDraft, runId: string): Record<string, unknown> {
