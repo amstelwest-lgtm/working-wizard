@@ -9,15 +9,45 @@ export type OAuthTokenPair = {
   expires_in: number;
 };
 
+/**
+ * Google must return its own refresh token. Never keep the access token in that field.
+ * A refresh call may omit a new refresh token; the previous one is kept.
+ */
+export function googleRefreshFromTokenResponse(input: {
+  accessToken: string;
+  refreshToken: string | undefined;
+  previousRefreshToken?: string;
+}): string {
+  const refresh = input.refreshToken?.trim() ?? "";
+  const next = refresh || input.previousRefreshToken?.trim() || "";
+  if (!next || next === input.accessToken) {
+    throw new Error("google_refresh_token_missing");
+  }
+  return next;
+}
+
 function googleClientCreds(): { id: string; secret: string; redirectUri: string } {
-  const id = (process.env.GOOGLE_DRIVE_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID ?? "").trim();
-  const secret = (process.env.GOOGLE_DRIVE_CLIENT_SECRET ?? process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? "").trim();
+  const id = (
+    process.env.GOOGLE_DRIVE_CLIENT_ID ??
+    process.env.GOOGLE_OAUTH_CLIENT_ID ??
+    ""
+  ).trim();
+  const secret = (
+    process.env.GOOGLE_DRIVE_CLIENT_SECRET ??
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET ??
+    ""
+  ).trim();
   const origin = (process.env.PUBLIC_APP_URL ?? "").trim().replace(/\/$/, "");
   if (!id || !secret || !origin) throw new Error("google_oauth_not_configured");
   return { id, secret, redirectUri: `${origin}/api/google-drive/callback` };
 }
 
-function microsoftClientCreds(): { id: string; secret: string; redirectUri: string; tenant: string } {
+function microsoftClientCreds(): {
+  id: string;
+  secret: string;
+  redirectUri: string;
+  tenant: string;
+} {
   const id = (process.env.MICROSOFT_GRAPH_CLIENT_ID ?? "").trim();
   const secret = (process.env.MICROSOFT_GRAPH_CLIENT_SECRET ?? "").trim();
   const tenant = (process.env.MICROSOFT_GRAPH_TENANT_ID ?? "common").trim();
@@ -55,10 +85,13 @@ async function exchangeGoogleDriveCode(code: string): Promise<OAuthTokenPair> {
     expires_in?: number;
   };
   const access = json.access_token?.trim() ?? "";
-  const refresh = json.refresh_token?.trim() ?? "";
   const expires = typeof json.expires_in === "number" ? json.expires_in : 3600;
   if (!access) throw new Error("google_token_exchange_incomplete");
-  return { access_token: access, refresh_token: refresh || access, expires_in: expires };
+  const refresh = googleRefreshFromTokenResponse({
+    accessToken: access,
+    refreshToken: json.refresh_token,
+  });
+  return { access_token: access, refresh_token: refresh, expires_in: expires };
 }
 
 async function exchangeMicrosoftGraphCode(code: string): Promise<OAuthTokenPair> {
@@ -117,9 +150,13 @@ async function refreshGoogleDriveToken(refreshToken: string): Promise<OAuthToken
     expires_in?: number;
   };
   const access = json.access_token?.trim() ?? "";
-  const refresh = json.refresh_token?.trim() || refreshToken;
   const expires = typeof json.expires_in === "number" ? json.expires_in : 3600;
   if (!access) throw new Error("google_token_refresh_incomplete");
+  const refresh = googleRefreshFromTokenResponse({
+    accessToken: access,
+    refreshToken: json.refresh_token,
+    previousRefreshToken: refreshToken,
+  });
   return { access_token: access, refresh_token: refresh, expires_in: expires };
 }
 

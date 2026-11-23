@@ -21,6 +21,7 @@ import {
   hashDeviceToken,
   hashPairingCode,
   normalizeFolderLabel,
+  pairingCodeFailureReason,
   sanitizeUploadFileName,
   sastUsageDay,
 } from "@/lib/desktop-sync";
@@ -201,9 +202,28 @@ export async function pairDesktopSyncDeviceImpl(
       if (!isSupabaseAdminConfigured()) return { ok: false, reason: "unavailable" };
       const codeHash = await hashPairingCode(data.pairingCode);
       const nowIso = new Date().toISOString();
+      const found = await table("desktop_sync_pairing_codes")
+        .select("id, firm_id, device_label, created_by, used_at, expires_at")
+        .eq("code_hash", codeHash)
+        .maybeSingle();
+      if (found.error) {
+        if (missingDesktopTable(found.error)) return { ok: false, reason: "unavailable" };
+        throw new Error(found.error.message);
+      }
+      const early = pairingCodeFailureReason(
+        found.data
+          ? {
+              usedAt: found.data.used_at ? String(found.data.used_at) : null,
+              expiresAt: String(found.data.expires_at ?? ""),
+            }
+          : null,
+        Date.parse(nowIso),
+      );
+      if (early) return { ok: false, reason: early };
+      if (!(await firmSyncEnabled(String(found.data!.firm_id)))) return { ok: false, reason: "off" };
       const redeemed = await table("desktop_sync_pairing_codes")
         .update({ used_at: nowIso })
-        .eq("code_hash", codeHash)
+        .eq("id", found.data!.id)
         .is("used_at", null)
         .gt("expires_at", nowIso)
         .select("id, firm_id, device_label, created_by")
@@ -213,8 +233,21 @@ export async function pairDesktopSyncDeviceImpl(
         throw new Error(redeemed.error.message);
       }
       const row = redeemed.data;
-      if (!row) return { ok: false, reason: "code" };
-      if (!(await firmSyncEnabled(String(row.firm_id)))) return { ok: false, reason: "off" };
+      if (!row) {
+        const again = await table("desktop_sync_pairing_codes")
+          .select("used_at, expires_at")
+          .eq("code_hash", codeHash)
+          .maybeSingle();
+        const raced = pairingCodeFailureReason(
+          again.data
+            ? {
+                usedAt: again.data.used_at ? String(again.data.used_at) : null,
+                expiresAt: String(again.data.expires_at ?? ""),
+              }
+            : null,
+        );
+        return { ok: false, reason: raced ?? "used" };
+      }
 
       const access = newOpaqueToken();
       const refresh = newOpaqueToken();

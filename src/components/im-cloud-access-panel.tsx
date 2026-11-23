@@ -1,98 +1,198 @@
 /**
- * IM access ladder rungs 3–4: Google Drive / OneDrive picks + forwarding inbox.
- * Read-only cloud connect; OAuth token table pending SQL approval.
+ * Firm Documents card: one client picker, calm status, connect only when configured.
  */
 import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Mail, FolderOpen } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { DocumentsCardView, type DocumentClientOption } from "@/components/im-documents-card";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  imCloudConnectVisible,
+  imCloudStatusPill,
+  imDocumentsShowComingSoon,
+  type ImCloudPill,
+} from "@/lib/im-documents-status";
 import {
   disconnectImCloud,
+  getImCloudAuthUrl,
   getImCloudConfig,
   getImCloudStatus,
   saveImCloudAllowedSenders,
-  saveImCloudPicks,
 } from "@/lib/im-cloud.functions";
 
 type Props = {
-  clientId: string;
+  /** Books page: this client only, no picker. */
+  clientId?: string;
+  /** Setup page: one card for the firm, with a client picker. */
+  firmId?: string;
 };
 
-export function ImCloudAccessPanel({ clientId }: Props) {
+export function ImCloudAccessPanel({ clientId, firmId }: Props) {
   const loadConfig = useServerFn(getImCloudConfig);
   const loadStatus = useServerFn(getImCloudStatus);
-  const savePicks = useServerFn(saveImCloudPicks);
-  const saveSenders = useServerFn(saveImCloudAllowedSenders);
+  const startAuth = useServerFn(getImCloudAuthUrl);
+  const saveSendersFn = useServerFn(saveImCloudAllowedSenders);
   const disconnect = useServerFn(disconnectImCloud);
 
   const [loading, setLoading] = useState(true);
+  const [clients, setClients] = useState<DocumentClientOption[]>([]);
+  const [selectedId, setSelectedId] = useState(clientId ?? "");
   const [forwarding, setForwarding] = useState<string | null>(null);
   const [revoked, setRevoked] = useState(false);
-  const [googlePick, setGooglePick] = useState("");
-  const [microsoftPick, setMicrosoftPick] = useState("");
+  const [connected, setConnected] = useState({ google: false, microsoft: false });
   const [senders, setSenders] = useState("");
-  const [configured, setConfigured] = useState({ google: false, microsoft: false, inbound: false });
+  const [configured, setConfigured] = useState({
+    google: false,
+    microsoft: false,
+    oauthSqlReady: false,
+    tokenKeyReady: false,
+  });
   const [saving, setSaving] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!firmId) return;
+    let cancel = false;
+    void supabase
+      .from("clients")
+      .select("id, name")
+      .eq("firm_id", firmId)
+      .order("name", { ascending: true })
+      .limit(40)
+      .then(({ data }) => {
+        if (cancel) return;
+        const rows: DocumentClientOption[] = [];
+        for (const row of data ?? []) {
+          const id = typeof row.id === "string" ? row.id : "";
+          if (!id) continue;
+          const name = typeof row.name === "string" && row.name.trim() ? row.name.trim() : "Client";
+          rows.push({ id, name });
+        }
+        setClients(rows);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [firmId]);
+
+  useEffect(() => {
+    if (clientId && !firmId) {
+      setSelectedId(clientId);
+      return;
+    }
+    setSelectedId((current) => {
+      if (current && clients.some((row) => row.id === current)) return current;
+      return clients[0]?.id ?? "";
+    });
+  }, [clientId, clients, firmId]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [cfg, status] = await Promise.all([
-        loadConfig({ data: undefined as never }),
-        loadStatus({ data: { clientId } }),
-      ]);
+      const cfg = await loadConfig({ data: undefined as never });
       setConfigured({
         google: cfg.google,
         microsoft: cfg.microsoft,
-        inbound: Boolean(cfg.inboundDomain),
+        oauthSqlReady: cfg.oauthSqlReady,
+        tokenKeyReady: Boolean(cfg.tokenKeyReady),
       });
+      if (!selectedId) {
+        setForwarding(null);
+        setRevoked(false);
+        setConnected({ google: false, microsoft: false });
+        setSenders("");
+        return;
+      }
+      const status = await loadStatus({ data: { clientId: selectedId } });
       setForwarding(status.forwardingAddress);
       setRevoked(status.revoked);
-      const g = status.picks.find((p) => p.provider === "google");
-      const m = status.picks.find((p) => p.provider === "microsoft");
-      setGooglePick(g?.folderId ?? "");
-      setMicrosoftPick(m?.folderId ?? "");
+      setConnected({ google: status.googleConnected, microsoft: status.microsoftConnected });
       setSenders(status.allowedSenders.join(", "));
+    } catch {
+      setConfigured({
+        google: false,
+        microsoft: false,
+        oauthSqlReady: false,
+        tokenKeyReady: false,
+      });
+      setForwarding(null);
     } finally {
       setLoading(false);
     }
-  }, [clientId, loadConfig, loadStatus]);
+  }, [loadConfig, loadStatus, selectedId]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
-  const saveFolderPicks = async () => {
+  const googleConnect = imCloudConnectVisible({
+    credentials: configured.google,
+    oauthSqlReady: configured.oauthSqlReady,
+    tokenKeyReady: configured.tokenKeyReady,
+  });
+  const microsoftConnect = imCloudConnectVisible({
+    credentials: configured.microsoft,
+    oauthSqlReady: configured.oauthSqlReady,
+    tokenKeyReady: configured.tokenKeyReady,
+  });
+  const googlePill: ImCloudPill = imCloudStatusPill({
+    connectVisible: googleConnect,
+    connected: connected.google,
+    paused: revoked,
+  });
+  const microsoftPill: ImCloudPill = imCloudStatusPill({
+    connectVisible: microsoftConnect,
+    connected: connected.microsoft,
+    paused: revoked,
+  });
+
+  const startConnect = async (provider: "google" | "microsoft") => {
+    if (!selectedId) return;
     setSaving(true);
+    setNote(null);
     try {
-      const picks = [];
-      if (googlePick.trim()) picks.push({ provider: "google" as const, folderId: googlePick.trim() });
-      if (microsoftPick.trim()) picks.push({ provider: "microsoft" as const, folderId: microsoftPick.trim() });
-      await savePicks({ data: { clientId, picks } });
-      await refresh();
+      const result = await startAuth({
+        data: { clientId: selectedId, provider, returnPath: `/clients/${selectedId}` },
+      });
+      if (!result.authUrl) {
+        setNote("Could not start the connection.");
+        return;
+      }
+      window.location.assign(result.authUrl);
+    } catch {
+      setNote("Could not start the connection.");
     } finally {
       setSaving(false);
     }
   };
 
   const saveSenderList = async () => {
+    if (!selectedId) return;
     setSaving(true);
+    setNote(null);
     try {
       const allowedSenders = senders
         .split(",")
-        .map((s) => s.trim())
+        .map((item) => item.trim())
         .filter(Boolean);
-      await saveSenders({ data: { clientId, allowedSenders } });
+      await saveSendersFn({ data: { clientId: selectedId, allowedSenders } });
       await refresh();
+    } catch {
+      setNote("Could not save allowed senders.");
     } finally {
       setSaving(false);
     }
   };
 
   const revokeAll = async () => {
+    if (!selectedId) return;
     setSaving(true);
+    setNote(null);
     try {
-      await disconnect({ data: { clientId, provider: "all" } });
+      await disconnect({ data: { clientId: selectedId, provider: "all" } });
       await refresh();
+    } catch {
+      setNote("Could not pause ingest.");
     } finally {
       setSaving(false);
     }
@@ -100,127 +200,44 @@ export function ImCloudAccessPanel({ clientId }: Props) {
 
   if (loading) {
     return (
-      <div className="im-cloud-access" data-im-cloud="loading">
+      <div className="im-cloud-access" data-im-cloud="loading" data-im-documents="loading">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-        <span className="sr-only">Loading document connections</span>
+        <span className="sr-only">Loading documents</span>
       </div>
     );
   }
 
   return (
-    <section className="im-cloud-access" aria-label="Document folders and inbox" data-im-cloud="">
-      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Folders and inbox</h3>
-      <p className="text-xs text-slate-600 dark:text-slate-400">
-        Pick read-only folders for Google Drive or OneDrive. New files land in Review — nothing posts to a ledger.
-      </p>
-      {revoked ? (
-        <p className="text-xs text-amber-800 dark:text-amber-200" role="status">
-          Ingest is paused after disconnect. Save picks again when OAuth is enabled.
-        </p>
-      ) : null}
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-xs">
-          <span className="flex items-center gap-1 font-medium">
-            <FolderOpen className="h-3.5 w-3.5" aria-hidden />
-            Google Drive folder id
-          </span>
-          <input
-            type="text"
-            className="rounded border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-900"
-            value={googlePick}
-            onChange={(e) => setGooglePick(e.target.value)}
-            disabled={!configured.google}
-            placeholder={configured.google ? "From the Google Picker" : "OAuth not configured"}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-xs">
-          <span className="flex items-center gap-1 font-medium">
-            <FolderOpen className="h-3.5 w-3.5" aria-hidden />
-            OneDrive folder id
-          </span>
-          <input
-            type="text"
-            className="rounded border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-900"
-            value={microsoftPick}
-            onChange={(e) => setMicrosoftPick(e.target.value)}
-            disabled={!configured.microsoft}
-            placeholder={configured.microsoft ? "From the Microsoft picker" : "OAuth not configured"}
-          />
-        </label>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <button
-          type="button"
-          className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white dark:bg-slate-100 dark:text-slate-900"
-          disabled={saving}
-          onClick={() => void saveFolderPicks()}
-        >
-          Save folder picks
-        </button>
-        <button
-          type="button"
-          className="text-xs text-slate-600 underline dark:text-slate-400"
-          disabled={saving}
-          onClick={() => void revokeAll()}
-        >
-          Disconnect and pause ingest
-        </button>
-      </div>
-      <motionMail
-        forwarding={forwarding}
-        configured={configured.inbound}
-        senders={senders}
-        onSendersChange={setSenders}
-        onSaveSenders={() => void saveSenderList()}
-        saving={saving}
-      />
-    </section>
-  );
-}
-
-function motionMail({
-  forwarding,
-  configured,
-  senders,
-  onSendersChange,
-  onSaveSenders,
-  saving,
-}: {
-  forwarding: string | null;
-  configured: boolean;
-  senders: string;
-  onSendersChange: (v: string) => void;
-  onSaveSenders: () => void;
-  saving: boolean;
-}) {
-  return (
-    <div className="mt-4 border-t border-slate-200 pt-3 dark:border-slate-700">
-      <p className="flex items-center gap-1 text-xs font-medium text-slate-800 dark:text-slate-200">
-        <Mail className="h-3.5 w-3.5" aria-hidden />
-        Forwarding inbox
-      </p>
-      {configured && forwarding ? (
-        <p className="mt-1 font-mono text-xs text-slate-700 dark:text-slate-300">{forwarding}</p>
-      ) : (
-        <p className="mt-1 text-xs text-slate-500">Set MILON_SOURCE_INBOUND_DOMAIN to enable addresses.</p>
-      )}
-      <label className="mt-2 flex flex-col gap-1 text-xs">
-        Allowed senders (comma-separated, empty = any)
-        <input
-          type="text"
-          className="rounded border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-900"
-          value={senders}
-          onChange={(e) => onSendersChange(e.target.value)}
-        />
-      </label>
-      <button
-        type="button"
-        className="mt-2 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white dark:bg-slate-100 dark:text-slate-900"
-        disabled={saving}
-        onClick={onSaveSenders}
-      >
-        Save allowed senders
-      </button>
-    </div>
+    <DocumentsCardView
+      clients={firmId ? clients : []}
+      clientId={selectedId}
+      showClientPicker={Boolean(firmId)}
+      comingSoon={imDocumentsShowComingSoon([googlePill, microsoftPill])}
+      providers={[
+        {
+          provider: "google",
+          label: "Google Drive",
+          pill: googlePill,
+          connectLabel: googleConnect && selectedId ? "Connect Google Drive" : null,
+        },
+        {
+          provider: "microsoft",
+          label: "OneDrive",
+          pill: microsoftPill,
+          connectLabel: microsoftConnect && selectedId ? "Connect OneDrive" : null,
+        },
+      ]}
+      paused={revoked}
+      forwarding={forwarding}
+      senders={senders}
+      saving={saving}
+      showDisconnect={connected.google || connected.microsoft}
+      note={note}
+      onClientId={setSelectedId}
+      onConnect={(provider) => void startConnect(provider)}
+      onDisconnect={() => void revokeAll()}
+      onSendersChange={setSenders}
+      onSaveSenders={() => void saveSenderList()}
+    />
   );
 }

@@ -736,3 +736,100 @@
   font-size: 0.82rem;
   font-weight: 600;
 }
+
+.im-cloud-access__rows {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.im-cloud-access__rows li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  color: #102a43;
+  font-size: 0.92rem;
+}
+
+.im-cloud-access__client {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px;
+  color: #334e68;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.im-cloud-access__client select,
+.im-cloud-access__client input {
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #fff;
+  color: #102a43;
+  font: inherit;
+  font-weight: 500;
+  padding: 8px 10px;
+}
+
+.im-cloud-access__connect {
+  border: 0;
+  border-radius: 8px;
+  background: #0b5fff;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.im-cloud-access__connect:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.im-cloud-access__text {
+  margin-top: 12px;
+  border: 0;
+  background: transparent;
+  color: #627d98;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.im-cloud-access__inbox {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.im-cloud-access__inbox-label {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #102a43;
+}
+
+.im-cloud-access__address {
+  margin: 6px 0 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  color: #334e68;
+}
+
+[data-im-documents] + [data-im-desktop-sync] {
+  margin-top: 12px;
+}
+
+.im-cloud-access [data-im-pill-state="Not set up"],
+.im-cloud-access [data-im-pill-state="Paused"] {
+  background: #f8fafc;
+  color: #627d98;
+  border-color: #e2e8f0;
+}

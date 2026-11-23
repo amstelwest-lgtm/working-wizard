@@ -6,11 +6,7 @@
 export const IM_ACCESS_RUNG_GOOGLE = 3;
 export const IM_ACCESS_RUNG_MICROSOFT = 4;
 
-export const GOOGLE_DRIVE_READONLY_SCOPES = [
-  "https://www.googleapis.com/auth/drive.readonly",
-] as const;
-
-/** Prefer drive.file when the Picker returns explicit folder ids (supplemental). */
+/** drive.file only. drive.readonly is a restricted scope and is not requested. */
 export const GOOGLE_DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file" as const;
 
 export const MICROSOFT_GRAPH_FILES_READ_SCOPE = "Files.Read" as const;
@@ -41,7 +37,7 @@ export function assertCloudReadOnlyMethod(method: string): void {
 }
 
 export function googleDriveScopesForPickedFolders(): string[] {
-  return [GOOGLE_DRIVE_FILE_SCOPE, ...GOOGLE_DRIVE_READONLY_SCOPES];
+  return [GOOGLE_DRIVE_FILE_SCOPE];
 }
 
 export function microsoftGraphScopesForPickedFolders(): string[] {

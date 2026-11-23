@@ -36,7 +36,8 @@ const MIME_SET = new Set(DESKTOP_SYNC_MIMES);
 const SECRET_NAME =
   /(?:^|\/)(?:\.env(?:\..*)?|id_rsa|id_dsa|id_ed25519|.*\.pem|.*\.p12|.*\.pfx|.*\.key|credentials|\.ssh\/|chrome|firefox|edge|safari|outlook|thunderbird|1password|lastpass|bitwarden|login data|cookies)(?:\/|$)/i;
 
-const HIDDEN_OR_SYSTEM = /(?:^|\/)\.|(?:^|\/)(?:\$recycle\.bin|system volume information|pagefile\.sys|hiberfil\.sys)(?:\/|$)/i;
+const HIDDEN_OR_SYSTEM =
+  /(?:^|\/)\.|(?:^|\/)(?:\$recycle\.bin|system volume information|pagefile\.sys|hiberfil\.sys)(?:\/|$)/i;
 
 export const DESKTOP_SYNC_TOKEN_TTL_MS = 60 * 60 * 1000;
 export const DESKTOP_SYNC_REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -161,6 +162,23 @@ export type DesktopSyncActivityKind =
   | "upload"
   | "upload_rejected"
   | "upload_skipped";
+
+export type PairingCodeSnapshot = {
+  usedAt: string | null;
+  expiresAt: string;
+};
+
+/** Unknown, already used, and expired are different failures. A live code returns null. */
+export function pairingCodeFailureReason(
+  row: PairingCodeSnapshot | null,
+  nowMs = Date.now(),
+): "code" | "used" | "expired" | null {
+  if (!row) return "code";
+  if (row.usedAt) return "used";
+  const expires = Date.parse(row.expiresAt);
+  if (!Number.isFinite(expires) || expires <= nowMs) return "expired";
+  return null;
+}
 
 export function deviceTokenCanRead(): false {
   return false;

@@ -8,7 +8,7 @@ import {
   buildCapabilityManifest,
   matchManifestClassifier,
 } from "../src/lib/im-capability-manifest.ts";
-import { pickPilotClients, buildActivationPlan } from "../src/lib/im-activation-planner.ts";
+import { pickPilotClients, buildActivationPlan, partnerPilotChecklistLine } from "../src/lib/im-activation-planner.ts";
 import { classifyPracticeStep } from "../src/lib/setup-partner-plan.ts";
 import { activationAcceptWritesNothing, planActivationAccept } from "../src/lib/im-activation-accept.ts";
 import { imRoutineTriggerMet } from "../src/lib/im-routine-schedule.ts";
@@ -216,8 +216,12 @@ const ownerShell = readFileSync("src/components/owner-door/owner-shell.tsx", "ut
 assert(ownerShell.includes('"routines"'), "owner shell vertical nav lists routines");
 
 const setup = readFileSync("src/routes/_authenticated/practice_.setup.tsx", "utf8");
-assert(setup.includes("ImActivationStep"), "practice setup mounts activation");
+assert(!setup.includes("ImActivationStep"), "practice setup does not mount the folded activation step");
+assert(!setup.includes("Accept selected routines"), "practice setup has no Accept controls");
 assert(setup.includes("implementation_manager"), "practice setup mounts IM rules");
+assert(partnerPilotChecklistLine(1) === "Milōn starts the first drafts on one client.", "one client is enough");
+assert(partnerPilotChecklistLine(3) === "Milōn starts the first drafts on 3 clients.", "three clients are named as a count");
+assert(!partnerPilotChecklistLine(2).includes("Pick 2"), "the checklist does not ask the firm to pick 2–3");
 
 function acceptReplayBlock(source: string): string {
   const helper = source.indexOf("function acceptImActivationHandler");
@@ -272,7 +276,31 @@ assert(!planBlob.includes("Practice:"), "plan table drops Practice prefixes");
 assert(!planBlob.includes("product_gap") && !planBlob.includes("Product gap"), "classifications stay off the table");
 assert(!planBlob.includes("Build the missing tax form"), "a gap is not a workflow row");
 assert(planBlob.includes("Sales-tax prep"), "a US plan says sales-tax prep");
-assert(!/\bSARS\b|\bZA\b/.test(planBlob), "a US plan table does not say ZA or SARS");
+assert(!/\bSARS\b|\bZA\b|\bHMRC\b/.test(planBlob), "a US plan table does not say ZA, SARS, or HMRC");
+const zaAuthority = JSON.stringify(
+  buildIntegrationPlanTable({
+    steps: [{ step: "File the VAT return with HMRC — Firm; Monthly", bucket: "covered" }],
+    country: "ZA",
+  }),
+);
+assert(zaAuthority.includes("SARS"), "a ZA plan says SARS");
+assert(!/\bHMRC\b|\bIRS\b/.test(zaAuthority), "a ZA plan does not say HMRC or IRS");
+const usAuthority = JSON.stringify(
+  buildIntegrationPlanTable({
+    steps: [{ step: "File the return with HMRC — Firm; Monthly", bucket: "covered" }],
+    country: "US",
+  }),
+);
+assert(usAuthority.includes("IRS"), "a US plan says IRS");
+assert(!/\bHMRC\b|\bSARS\b/.test(usAuthority), "a US plan does not say HMRC or SARS");
+const ukAuthority = JSON.stringify(
+  buildIntegrationPlanTable({
+    steps: [{ step: "File the return with SARS — Firm; Monthly", bucket: "covered" }],
+    country: "UK",
+  }),
+);
+assert(ukAuthority.includes("HMRC"), "a UK plan says HMRC");
+assert(!/\bSARS\b|\bIRS\b/.test(ukAuthority), "HMRC appears only for a UK plan");
 assert(!planBlob.includes("Live"), "the plan table does not say Live");
 const fitRows = buildIntegrationPlanTable({
   steps: [

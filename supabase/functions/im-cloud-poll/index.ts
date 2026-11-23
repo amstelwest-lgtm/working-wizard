@@ -9,7 +9,11 @@ import {
   edgeMicrosoftGraphListFolderByItemId,
 } from "../../../src/lib/im-cloud-edge-list.ts";
 import { edgeRefreshImCloudTokens } from "../../../src/lib/im-cloud-edge-oauth.ts";
-import { decryptImCloudSecret, encryptImCloudSecret } from "../../../src/lib/im-cloud-token.ts";
+import {
+  decryptImCloudSecret,
+  encryptImCloudSecret,
+  imCloudTokenKeyProblem,
+} from "../../../src/lib/im-cloud-token.ts";
 
 type ConnectionRow = {
   id: string;
@@ -50,8 +54,9 @@ serve(async (req) => {
   if (Deno.env.get("IM_CLOUD_OAUTH_SQL_READY") !== "1") {
     return Response.json({ ok: false, reason: "sql_migration_required" }, { status: 503 });
   }
-  if (!(Deno.env.get("IM_CLOUD_TOKEN_KEY") ?? "").trim()) {
-    return Response.json({ ok: false, reason: "token_key_missing" }, { status: 503 });
+  const keyProblem = imCloudTokenKeyProblem();
+  if (keyProblem) {
+    return Response.json({ ok: false, reason: keyProblem }, { status: 503 });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";

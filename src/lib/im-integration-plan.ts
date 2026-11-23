@@ -6,6 +6,9 @@ import { CLAUDE_OPUS_55, claudeRequestFields } from "./claude-request.ts";
 import { cleanFlowLine } from "./setup-partner-plan.ts";
 import type { SetupPartnerCountry } from "./setup-partner.ts";
 
+/** UK is accepted here so HMRC is confined to UK rows. Firm markets in the product stay US and ZA. */
+export type IntegrationPlanCountry = SetupPartnerCountry | "UK";
+
 export type IntegrationPlanStatus = "Waiting" | "Draft queued" | "Running";
 
 export type IntegrationPlanRow = {
@@ -26,7 +29,8 @@ const BUCKET_LABELS = /\b(Product gap|Client setup|Already covered|Bespoke)\b/;
 
 const STATUSES = new Set<IntegrationPlanStatus>(["Waiting", "Draft queued", "Running"]);
 
-const FIT_NOTE = /(?:Firm setting for the practice|Fits the universal finance function|Outside the universal finance function|Already in Milōn:).*/i;
+const FIT_NOTE =
+  /(?:Firm setting for the practice|Fits the universal finance function|Outside the universal finance function|Already in Milōn:).*/i;
 
 /** Drop stored prefixes, fit notes, and classifier words before a row is shown. */
 export function plainWorkflowText(step: string): string {
@@ -40,11 +44,17 @@ export function plainWorkflowText(step: string): string {
     kept.push(piece);
   }
   text = kept.join(" — ");
-  text = text.replace(/\b(client_setup|product_gap|fit_note|step_type|dedupe_key|classifier)\b/gi, "");
+  text = text.replace(
+    /\b(client_setup|product_gap|fit_note|step_type|dedupe_key|classifier)\b/gi,
+    "",
+  );
   text = text.replace(/\b(Product gap|Client setup|Already covered|Bespoke)\b/g, "");
   text = text.replace(/[{}`]/g, "");
   text = text.replace(/\bWhatsApp\b/gi, "a message");
-  text = text.replace(/\s{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
+  text = text
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;])/g, "$1")
+    .trim();
   return text.slice(0, 280);
 }
 
@@ -69,7 +79,8 @@ function isBooksPrep(text: string): boolean {
 function botForWorkflow(text: string): string {
   if (/\b(sign off|signs off|sign-off)\b/i.test(text)) return "Accountant";
   if (isTaxFilingRow(text)) return "Tax Specialist";
-  if (/\b(pdf|email attachment|bank statement|invoices?|receipts?)\b/i.test(text)) return "Financial Manager";
+  if (/\b(pdf|email attachment|bank statement|invoices?|receipts?)\b/i.test(text))
+    return "Financial Manager";
   if (isBooksPrep(text)) return "Analyst";
   if (/\b(report|ratio|variance)\b/i.test(text)) return "Analyst";
   if (/\b(deadline|narrative|advice|owner question)\b/i.test(text)) return "Advisor";
@@ -89,7 +100,10 @@ function cadencePhrase(raw: string): string | null {
 
 function isStoredFieldList(detail: string): boolean {
   if (!detail.includes(";")) return false;
-  const parts = detail.split(";").map((part) => part.trim()).filter(Boolean);
+  const parts = detail
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean);
   return parts.length >= 2 && parts.every((part) => part.length < 64);
 }
 
@@ -98,7 +112,10 @@ export function accountantToday(workflow: string, detail: string): string {
   const rest = detail.trim();
   if (!rest || rest === workflow) return workflow;
   if (!isStoredFieldList(rest)) return rest;
-  const parts = rest.split(";").map((part) => part.trim()).filter(Boolean);
+  const parts = rest
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean);
   let cadence = "as part of the close";
   let channel: string | null = null;
   const who: string[] = [];
@@ -171,18 +188,36 @@ function grantForWorkflow(text: string): string {
   return "You approve the draft before anything is sent.";
 }
 
-function scrubMarket(text: string, country?: SetupPartnerCountry | null): string {
-  if (country !== "US") return text;
-  return text
-    .replace(/\bZA tax prep\b/gi, "Sales-tax prep")
-    .replace(/\bSARS\b/g, "")
-    .replace(/\bZA\b/g, "US")
+function scrubMarket(text: string, country?: IntegrationPlanCountry | null): string {
+  let next = text;
+  if (country === "US") {
+    next = next
+      .replace(/\bZA tax prep\b/gi, "Sales-tax prep")
+      .replace(/\bHMRC\b/gi, "IRS")
+      .replace(/\bSARS\b/g, "IRS")
+      .replace(/\bZA\b/g, "US");
+  } else if (country === "ZA") {
+    next = next.replace(/\bHMRC\b/gi, "SARS").replace(/\bIRS\b/g, "SARS");
+  } else if (country === "UK") {
+    next = next.replace(/\bSARS\b/g, "HMRC").replace(/\bIRS\b/g, "HMRC");
+  }
+  return next
     .replace(/\s{2,}/g, " ")
     .replace(/\s+([,.;])/g, "$1")
     .trim();
 }
 
-function finishRow(row: IntegrationPlanRow, country?: SetupPartnerCountry | null): IntegrationPlanRow | null {
+function marketLeak(blob: string, country?: IntegrationPlanCountry | null): boolean {
+  if (country === "US") return /\bSARS\b|\bHMRC\b|\bZA\b/i.test(blob);
+  if (country === "ZA") return /\bHMRC\b|\bIRS\b/i.test(blob);
+  if (country === "UK") return /\bSARS\b|\bIRS\b/i.test(blob);
+  return false;
+}
+
+function finishRow(
+  row: IntegrationPlanRow,
+  country?: IntegrationPlanCountry | null,
+): IntegrationPlanRow | null {
   const next: IntegrationPlanRow = {
     workflow: scrubMarket(plainWorkflowText(row.workflow), country),
     today: scrubMarket(plainWorkflowText(row.today), country),
@@ -194,18 +229,22 @@ function finishRow(row: IntegrationPlanRow, country?: SetupPartnerCountry | null
   if (!next.workflow || !next.milon || !next.bot) return null;
   const blob = `${next.workflow} ${next.today} ${next.milon} ${next.bot} ${next.grant}`;
   if (JARGON.test(blob) || BUCKET_LABELS.test(blob)) return null;
-  if (country === "US" && /\bSARS\b|\bZA\b/.test(blob)) return null;
+  if (marketLeak(blob, country)) return null;
   return next;
 }
 
 export function buildIntegrationPlanTable(input: {
   steps: readonly { step: string; bucket?: string }[];
   coverage?: readonly { agent: string; owns: string }[];
-  country?: SetupPartnerCountry | null;
+  country?: IntegrationPlanCountry | null;
   started?: boolean;
   running?: boolean;
 }): IntegrationPlanRow[] {
-  const status: IntegrationPlanStatus = input.running ? "Running" : input.started ? "Draft queued" : "Waiting";
+  const status: IntegrationPlanStatus = input.running
+    ? "Running"
+    : input.started
+      ? "Draft queued"
+      : "Waiting";
   const rows: IntegrationPlanRow[] = [];
   for (const step of input.steps) {
     if (step.bucket && !SHOWN_BUCKETS.has(step.bucket)) continue;
@@ -242,7 +281,10 @@ export function buildIntegrationPlanTable(input: {
       },
       input.country,
     );
-    if (row && !rows.some((existing) => existing.workflow === row.workflow && existing.milon === row.milon)) {
+    if (
+      row &&
+      !rows.some((existing) => existing.workflow === row.workflow && existing.milon === row.milon)
+    ) {
       rows.push(row);
     }
   }
@@ -280,9 +322,12 @@ export function integrationPlanOpusBody(rows: readonly IntegrationPlanRow[]): {
 export function applyOpusIntegrationPlan(
   raw: string,
   fallback: readonly IntegrationPlanRow[],
-  country?: SetupPartnerCountry | null,
+  country?: IntegrationPlanCountry | null,
 ): IntegrationPlanRow[] {
-  const jsonText = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  const jsonText = raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
   let parsed: unknown;
   try {
     parsed = JSON.parse(jsonText);

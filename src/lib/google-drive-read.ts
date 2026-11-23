@@ -14,17 +14,25 @@ export type GoogleDriveListItem = {
 };
 
 export function googleDriveCredentialsConfigured(): boolean {
-  const id = (process.env.GOOGLE_DRIVE_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID ?? "").trim();
-  const secret = (process.env.GOOGLE_DRIVE_CLIENT_SECRET ?? process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? "").trim();
+  const id = (
+    process.env.GOOGLE_DRIVE_CLIENT_ID ??
+    process.env.GOOGLE_OAUTH_CLIENT_ID ??
+    ""
+  ).trim();
+  const secret = (
+    process.env.GOOGLE_DRIVE_CLIENT_SECRET ??
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET ??
+    ""
+  ).trim();
   return Boolean(id && secret);
 }
 
-export function buildGoogleDriveAuthUrl(input: {
-  state: string;
-  redirectUri: string;
-  pickedFolderIds: readonly string[];
-}): string {
-  const clientId = (process.env.GOOGLE_DRIVE_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID ?? "").trim();
+export function buildGoogleDriveAuthUrl(input: { state: string; redirectUri: string }): string {
+  const clientId = (
+    process.env.GOOGLE_DRIVE_CLIENT_ID ??
+    process.env.GOOGLE_OAUTH_CLIENT_ID ??
+    ""
+  ).trim();
   const scopes = googleDriveScopesForPickedFolders();
   const params = new URLSearchParams({
     client_id: clientId,
@@ -32,13 +40,9 @@ export function buildGoogleDriveAuthUrl(input: {
     response_type: "code",
     access_type: "offline",
     prompt: "consent",
-    include_granted_scopes: "true",
     state: input.state,
     scope: scopes.join(" "),
   });
-  if (input.pickedFolderIds.length > 0) {
-    params.set("folder_picker_hint", input.pickedFolderIds.join(","));
-  }
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 

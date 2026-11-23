@@ -263,7 +263,6 @@ export function PracticeSetupInterview({
   const [starting, setStarting] = useState(false);
   const startingRef = useRef(false);
   const [firmRunCount, setFirmRunCount] = useState(0);
-  const [pilotIds, setPilotIds] = useState<string[]>([]);
   const [runningLines, setRunningLines] = useState<RunningLine[]>([]);
   const [opusRows, setOpusRows] = useState<IntegrationPlanRow[] | null>(null);
   /** Rows already on screen when Start was clicked. Later Opus replies do not replace them. */
@@ -635,7 +634,6 @@ export function PracticeSetupInterview({
       const country = marketCountry === "US" ? "US" : "ZA";
       const result = await startIntegration({ firmId, country });
       setIntegrationStarted(true);
-      setPilotIds(result.pilotIds);
       setFirmRunCount(result.runCount);
       if (result.lines) setRunningLines(result.lines);
     } catch (err) {
@@ -827,29 +825,9 @@ export function PracticeSetupInterview({
       ) : null}
 
       {!booting && integrationStarted ? (
-        <section className="im-card" data-im-access="" aria-label="Checklist and access">
-          <h2 className="im-card__title">Checklist and access</h2>
-          <p className="im-muted">
-            Grant read-only Drive, OneDrive, or inbox access. Milōn drafts only. Nothing is posted to a ledger.
-          </p>
-          <ul className="im-checks">
-            <li>
-              <Check size={16} aria-hidden />
-              <span>Google Drive folder, read only</span>
-            </li>
-            <li>
-              <Check size={16} aria-hidden />
-              <span>OneDrive folder, read only</span>
-            </li>
-            <li>
-              <Check size={16} aria-hidden />
-              <span>Forwarding inbox for documents</span>
-            </li>
-          </ul>
-          {pilotIds.map((clientId) => (
-            <ImCloudAccessPanel key={clientId} clientId={clientId} />
-          ))}
-          <div data-im-desktop-sync="">
+        <section data-im-access="" aria-label="Checklist and access">
+          <ImCloudAccessPanel firmId={firmId ?? undefined} />
+          <div className="im-card mt-3" data-im-desktop-sync="">
             <h3>Desktop folder sync</h3>
             {desktopSyncClientReady() ? (
               <Link to="/settings/desktop-sync" className="setup-partner__ghost">
