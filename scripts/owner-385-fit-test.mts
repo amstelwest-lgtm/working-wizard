@@ -163,6 +163,27 @@ async function measure(page: Page) {
   });
 }
 
+function detached(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("not attached") || msg.includes("Execution context was destroyed");
+}
+
+/** A fresh locator each try. A node that detaches mid-scroll is not reused. */
+async function scrollFresh(locate: () => ReturnType<Page["locator"]>) {
+  let last: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await locate().scrollIntoViewIfNeeded({ timeout: 5000 });
+      return;
+    } catch (err) {
+      last = err;
+      if (attempt === 2 || !detached(err)) throw err;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  throw last;
+}
+
 async function openWide(page: Page, view: string) {
   if (view === "cash") {
     const week = page.locator("[aria-label='Cash forecast'] [role='tab']", { hasText: "13-week" });
@@ -197,7 +218,9 @@ async function main() {
       if (view === "rest") {
         const cards = page.locator("[data-agent-card]");
         const count = await cards.count();
-        for (let i = 0; i < count; i += 1) await cards.nth(i).scrollIntoViewIfNeeded();
+        for (let i = 0; i < count; i += 1) {
+          await scrollFresh(() => page.locator("[data-agent-card]").nth(i));
+        }
         const overlap = await page.evaluate(() => {
           const fab = document.querySelector("#wizard-notes-pin")?.getBoundingClientRect();
           if (!fab) return ["pencil missing"];
@@ -219,7 +242,7 @@ async function main() {
       if (view === "budget") {
         const table = page.locator(".budget-lens table").first();
         if ((await table.count()) === 0) failures.push("budget: table missing");
-        else await table.scrollIntoViewIfNeeded();
+        else await scrollFresh(() => page.locator(".budget-lens table").first());
         const overlap = await page.evaluate(() => {
           const fab = document.querySelector("#wizard-notes-pin")?.getBoundingClientRect();
           const el = document.querySelector(".budget-lens table");
@@ -238,7 +261,7 @@ async function main() {
       if (view === "cash") {
         const card = page.locator("[data-cash-view]").first();
         if ((await card.count()) === 0) failures.push("cash: card missing");
-        else await card.scrollIntoViewIfNeeded();
+        else await scrollFresh(() => page.locator("[data-cash-view]").first());
         const overlap = await page.evaluate(() => {
           const fab = document.querySelector("#wizard-notes-pin")?.getBoundingClientRect();
           const box = document.querySelector("[data-cash-view]")?.getBoundingClientRect();

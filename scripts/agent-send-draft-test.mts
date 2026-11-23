@@ -88,6 +88,12 @@ const generic = agentSendApproval({
   recipientEmail: "owner@karoo.example",
 });
 assert(!generic.ok, "a generic accountant label is not a name");
+const emailName = agentSendApproval({
+  draft: proposed.draft,
+  approverName: "nia@karoo.example",
+  recipientEmail: "owner@karoo.example",
+});
+assert(!emailName.ok && emailName.reason === "needs_named_accountant", "an email address is not an approver name");
 
 const named = agentSendApproval({
   draft: proposed.draft,
@@ -114,6 +120,11 @@ assert(fmToolAllowed(PROPOSE_AGENT_SEND_TOOL), "propose_agent_send is a Financia
 const execute = readFileSync("supabase/functions/agent-financial-manager/execute.ts", "utf8");
 assert(execute.includes('tool === "propose_agent_send"'), "the runner executes propose_agent_send");
 const proposeFn = execute.slice(execute.indexOf("async function proposeAgentSend"));
+assert(proposeFn.includes("sendAgentFirmAllowed"), "propose_agent_send checks the allowlist");
+assert(
+  proposeFn.indexOf("sendAgentFirmAllowed") < proposeFn.indexOf(".insert("),
+  "an off-allowlist firm does not get a draft",
+);
 assert(proposeFn.includes("agentSendFindingRow"), "the tool writes an agent_send_draft finding");
 assert(!proposeFn.includes("mintClientAgentSend"), "the tool does not mint");
 assert(proposeFn.includes("minted: false") && proposeFn.includes("sent: false"), "the tool result stays unsent");
@@ -156,6 +167,13 @@ assert(!/whatsapp/i.test(queueFn), "routine copy does not mention WhatsApp");
 
 const card = readFileSync("src/components/agent-send-draft-card.tsx", "utf8");
 assert(card.includes("approveAgentSendDraft"), "the card approves through the mint path");
+assert(card.includes("dismissAgentSendDraft") && card.includes("Dismiss"), "the card can dismiss");
 assert(!/whatsapp/i.test(card), "the card does not mention WhatsApp");
+const dismissFn = readFileSync("src/lib/agent-send-draft.functions.ts", "utf8");
+assert(dismissFn.includes('dismissed_reason: "dismissed"'), "dismiss records a dismissed reason");
+assert(
+  dismissFn.includes('if (row.status === "dismissed") return { ok: false as const, reason: "dismissed" as const };'),
+  "a dismissed draft is not reported as already sent",
+);
 
 console.log("agent-send-draft-test: ok");

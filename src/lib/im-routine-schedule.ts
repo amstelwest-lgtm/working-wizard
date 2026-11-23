@@ -58,6 +58,45 @@ function isWeekdayInTimeZone(instant: Date, timeZone: string): boolean {
   return day !== "Sat" && day !== "Sun";
 }
 
+/**
+ * South African public holidays for 2026 and 2027.
+ * A holiday that falls on Sunday is also observed on the Monday.
+ */
+const SA_PUBLIC_HOLIDAYS = new Set([
+  "2026-01-01",
+  "2026-03-21",
+  "2026-04-03",
+  "2026-04-06",
+  "2026-04-27",
+  "2026-05-01",
+  "2026-06-16",
+  "2026-08-09",
+  "2026-08-10",
+  "2026-09-24",
+  "2026-12-16",
+  "2026-12-25",
+  "2026-12-26",
+  "2027-01-01",
+  "2027-03-21",
+  "2027-03-22",
+  "2027-03-26",
+  "2027-03-29",
+  "2027-04-27",
+  "2027-05-01",
+  "2027-06-16",
+  "2027-08-09",
+  "2027-09-24",
+  "2027-12-16",
+  "2027-12-25",
+  "2027-12-26",
+  "2027-12-27",
+]);
+
+function isBusinessDayInTimeZone(instant: Date, timeZone: string): boolean {
+  if (!isWeekdayInTimeZone(instant, timeZone)) return false;
+  return !SA_PUBLIC_HOLIDAYS.has(ymdInTimeZone(instant, timeZone));
+}
+
 function parseScheduleTrigger(
   trigger: string,
 ): { kind: "n_bd_before_month_end"; n: number } | { kind: "after_month_end" } | null {
@@ -77,7 +116,7 @@ export function scheduleBusinessDaysBeforeMonthEndYmd(n: number, now: Date, time
   let counted = 0;
   while (counted < n) {
     cursor = new Date(cursor.getTime() - 86_400_000);
-    if (isWeekdayInTimeZone(cursor, timeZone)) counted += 1;
+    if (isBusinessDayInTimeZone(cursor, timeZone)) counted += 1;
   }
   return ymdInTimeZone(cursor, timeZone);
 }
@@ -121,11 +160,11 @@ function noonOnYmd(ymd: string): Date {
   return new Date(`${ymd}T12:00:00.000Z`);
 }
 
-/** Last weekday of the calendar month. Weekends only — same rule as the existing helper. */
+/** Last business day of the calendar month. Skips weekends and SA public holidays. */
 export function lastBusinessDayOfMonthYmd(now: Date, timeZone = IM_ROUTINE_TIME_ZONE): string {
   const { end } = realMonthSpanYmd(now, timeZone);
   let cursor = noonOnYmd(end);
-  while (!isWeekdayInTimeZone(cursor, timeZone)) {
+  while (!isBusinessDayInTimeZone(cursor, timeZone)) {
     cursor = new Date(cursor.getTime() - 86_400_000);
   }
   return ymdInTimeZone(cursor, timeZone);
@@ -142,19 +181,19 @@ export function scheduleBusinessDaysBeforeRealMonthEndYmd(
   let counted = 0;
   while (counted < n) {
     cursor = new Date(cursor.getTime() - 86_400_000);
-    if (isWeekdayInTimeZone(cursor, timeZone)) counted += 1;
+    if (isBusinessDayInTimeZone(cursor, timeZone)) counted += 1;
   }
   return ymdInTimeZone(cursor, timeZone);
 }
 
-/** Nth weekday of the current month (the Nth business day after the prior month ended). */
+/** Nth business day of the current month (the Nth business day after the prior month ended). */
 export function nthBusinessDayAfterMonthEndYmd(n: number, now: Date, timeZone = IM_ROUTINE_TIME_ZONE): string {
   const { start } = realMonthSpanYmd(now, timeZone);
   let cursor = new Date(noonOnYmd(start).getTime() - 86_400_000);
   let counted = 0;
   while (counted < n) {
     cursor = new Date(cursor.getTime() + 86_400_000);
-    if (isWeekdayInTimeZone(cursor, timeZone)) counted += 1;
+    if (isBusinessDayInTimeZone(cursor, timeZone)) counted += 1;
   }
   return ymdInTimeZone(cursor, timeZone);
 }

@@ -17,6 +17,7 @@ import {
   hoursSavedDisplay,
   type ImRoutineMapArtifactMeta,
 } from "./im-activation-persist.ts";
+import { readRoutineAutoSend, routineAutoSendBlocked, type RoutineAutoSendState } from "./routine-auto-send.ts";
 
 export type RoutineRunRow = {
   id: string;
@@ -87,6 +88,7 @@ export function parseRoutineSchedule(value: unknown): RoutineSchedule | null {
 export type ParsedRoutineMapMeta = ImRoutineMapArtifactMeta & {
   schedule: RoutineSchedule | null;
   action: RoutineActionKind | null;
+  autoSend: RoutineAutoSendState;
 };
 
 export function parseRoutineMapMeta(meta: unknown): ParsedRoutineMapMeta | null {
@@ -112,6 +114,7 @@ export function parseRoutineMapMeta(meta: unknown): ParsedRoutineMapMeta | null 
     const title = typeof s.title === "string" ? s.title : "";
     const botOwner = typeof s.botOwner === "string" ? s.botOwner : "";
     if (!id || !title) continue;
+    const gate = s.approvalGate as { kind?: string; description?: string } | undefined;
     parsedSteps.push({
       id,
       title,
@@ -119,11 +122,9 @@ export function parseRoutineMapMeta(meta: unknown): ParsedRoutineMapMeta | null 
       trigger: typeof s.trigger === "string" ? s.trigger : "",
       cadence: typeof s.cadence === "string" ? s.cadence : "",
       approvalGate: {
-        kind: "human_send",
+        kind: gate?.kind === "human_ledger_post" ? "human_ledger_post" : "human_send",
         description:
-          typeof (s.approvalGate as { description?: string } | undefined)?.description === "string"
-            ? ((s.approvalGate as { description: string }).description as string)
-            : "Draft only until you approve.",
+          typeof gate?.description === "string" ? gate.description : "Draft only until you approve.",
         sends: false,
       },
       sends: false,
@@ -145,6 +146,7 @@ export function parseRoutineMapMeta(meta: unknown): ParsedRoutineMapMeta | null 
     execution_model: typeof row.execution_model === "string" ? row.execution_model : "",
     schedule: parseRoutineSchedule(row.schedule),
     action: parseRoutineAction(row.action),
+    autoSend: readRoutineAutoSend(row),
   };
 }
 
@@ -157,7 +159,9 @@ export function mergeRoutineSettingsMeta(
   const schedule = parseRoutineSchedule(settings.schedule);
   const action = parseRoutineAction(settings.action);
   if (!schedule || !action) return null;
-  return { ...(raw as Record<string, unknown>), schedule, action };
+  const next: Record<string, unknown> = { ...(raw as Record<string, unknown>), schedule, action };
+  if (routineAutoSendBlocked(next)) delete next.autoSend;
+  return next;
 }
 
 function moveKeyForStep(firmId: string, clientId: string, routine: string, stepId: string): string {

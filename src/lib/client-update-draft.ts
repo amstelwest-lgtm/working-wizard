@@ -217,6 +217,8 @@ function emailOf(value: string): string | null {
 export function planClientUpdateSend(input: {
   approval: { approverName: string; approvedAt: string } | null;
   requestedAutoSend?: boolean;
+  /** True only after the routine map flag was read and is on. The module constant stays off. */
+  routineOptIn?: boolean;
   practiceName: string;
   accountantEmail: string;
   to: string;
@@ -226,7 +228,8 @@ export function planClientUpdateSend(input: {
 }):
   | { send: true; payload: ClientUpdateSendPayload }
   | { send: false; reason: "auto_send_off" | "approval_required" | "practice_name" | "reply_to" | "recipient" | "branded" | "empty" } {
-  if (input.requestedAutoSend || CLIENT_UPDATE_AUTO_SEND) return { send: false, reason: "auto_send_off" };
+  if (CLIENT_UPDATE_AUTO_SEND) return { send: false, reason: "auto_send_off" };
+  if (input.requestedAutoSend && input.routineOptIn !== true) return { send: false, reason: "auto_send_off" };
   const approverName = input.approval?.approverName.trim() ?? "";
   if (!input.approval || !approverName || approverName.includes("@")) {
     return { send: false, reason: "approval_required" };
@@ -261,6 +264,7 @@ export function sentClientUpdatePatch(input: {
   resendMessageId: string;
   finalText: string;
   subject: string;
+  routineArtifactId?: string | null;
 }): Record<string, unknown> {
   const audit: ClientUpdateAudit = {
     approverName: input.approverName.trim(),
@@ -280,7 +284,9 @@ export function sentClientUpdatePatch(input: {
       requires_human_approval: true,
       autoSend: false,
       sent: true,
+      sending: false,
       decision: "sent",
+      ...(input.routineArtifactId ? { routineArtifactId: input.routineArtifactId } : {}),
       audit,
     },
   };
@@ -331,12 +337,19 @@ export function clientUpdateTimelineStep(audit: ClientUpdateAudit | null): {
   };
 }
 
-export function clientUpdateIdempotencyKey(findingId: string, finalText: string): string {
-  let hash = 5381;
-  const text = `${findingId}\n${finalText}`;
-  for (let i = 0; i < text.length; i += 1) hash = Math.imul(hash, 33) ^ text.charCodeAt(i);
-  const digest = (hash >>> 0).toString(16).padStart(8, "0");
-  return `client-update/${findingId}/${digest}`.slice(0, 256);
+/**
+ * One key per finding. An edited retry must not mint a second Resend send.
+ * The text argument is ignored and kept so older callers still compile.
+ */
+export function clientUpdateIdempotencyKey(findingId: string, _finalText?: string): string {
+  return `client-update/${findingId}`.slice(0, 256);
+}
+
+/** A send was reserved or finished. A later approve must not call Resend again. */
+export function clientUpdateSendLocked(evidence: unknown): boolean {
+  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return false;
+  const row = evidence as Record<string, unknown>;
+  return row.sent === true || row.sending === true || readClientUpdateAudit(evidence) != null;
 }
 
 /** Safe to show. Strips tokens and API keys from a provider body. */

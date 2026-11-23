@@ -272,12 +272,16 @@ assert(nthBusinessDayAfterMonthEndYmd(5, mar6) === "2026-03-06", "5th business d
 assert(!routineScheduleMet({ kind: "nth_bd_after_month_end", n: 5 }, { hasLedger: false, hasUpload: false, now: mar5 }), "before the 5th business day");
 assert(routineScheduleMet({ kind: "nth_bd_after_month_end", n: 5 }, { hasLedger: false, hasUpload: false, now: mar6 }), "on the 5th business day");
 assert(routineScheduleMet({ kind: "nth_bd_after_month_end", n: 5 }, { hasLedger: false, hasUpload: false, now: mar31 }), "5th business day stays due through the month");
-assert(nthBusinessDayAfterMonthEndYmd(1, new Date("2026-01-15T08:00:00.000Z")) === "2026-01-01", "New Year's Day is a weekday, so the helper counts it");
+assert(nthBusinessDayAfterMonthEndYmd(1, new Date("2026-01-15T08:00:00.000Z")) === "2026-01-02", "New Year's Day is a public holiday, so the first business day is 2 January");
 assert(
-  scheduleBusinessDaysBeforeRealMonthEndYmd(3, apr30) === "2026-04-27",
-  "Freedom Day 2026 is a Monday and is still counted as a business day",
+  scheduleBusinessDaysBeforeRealMonthEndYmd(3, apr30) === "2026-04-24",
+  "Freedom Day 2026 is skipped, so 3 business days before 30 April is 24 April",
 );
-assert(nthBusinessDayAfterMonthEndYmd(12, jun16) === "2026-06-16", "Youth Day 2026 is a Tuesday and is still counted");
+assert(nthBusinessDayAfterMonthEndYmd(12, jun16) === "2026-06-17", "Youth Day 2026 is skipped");
+assert(
+  nthBusinessDayAfterMonthEndYmd(1, new Date("2026-05-15T08:00:00.000Z")) === "2026-05-04",
+  "Workers' Day 2026 is a Friday, so the first business day is Monday 4 May",
+);
 
 assert(scheduleEveryMondayMet(mondayStart), "Monday starts at 00:00 SAST");
 assert(scheduleEveryMondayMet(mondayMorning) && scheduleEveryMondayMet(mondayLate), "Monday SAST stays Monday");
