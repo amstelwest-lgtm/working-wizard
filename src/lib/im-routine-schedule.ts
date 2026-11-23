@@ -48,9 +48,13 @@ function ymdInTimeZone(now: Date, timeZone: string): string {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function isWeekdayInTimeZone(instant: Date, timeZone: string): boolean {
+function weekdayShortInTimeZone(instant: Date, timeZone: string): string {
   // date-ok: weekday probe only for business-day math, not printed copy
-  const day = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(instant);
+  return new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(instant);
+}
+
+function isWeekdayInTimeZone(instant: Date, timeZone: string): boolean {
+  const day = weekdayShortInTimeZone(instant, timeZone);
   return day !== "Sat" && day !== "Sun";
 }
 
@@ -156,16 +160,14 @@ export function nthBusinessDayAfterMonthEndYmd(n: number, now: Date, timeZone = 
 }
 
 export function scheduleEveryMondayMet(now: Date, timeZone = IM_ROUTINE_TIME_ZONE): boolean {
-  const day = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(now);
-  return day === "Mon";
+  return weekdayShortInTimeZone(now, timeZone) === "Mon";
 }
 
 /** Monday of the SAST week containing `now`, including today when today is Monday. */
 export function recentMondayYmd(now: Date, timeZone = IM_ROUTINE_TIME_ZONE): string {
   let cursor = noonOnYmd(ymdInTimeZone(now, timeZone));
   for (let i = 0; i < 7; i += 1) {
-    const day = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(cursor);
-    if (day === "Mon") return ymdInTimeZone(cursor, timeZone);
+    if (weekdayShortInTimeZone(cursor, timeZone) === "Mon") return ymdInTimeZone(cursor, timeZone);
     cursor = new Date(cursor.getTime() - 86_400_000);
   }
   return ymdInTimeZone(now, timeZone);
