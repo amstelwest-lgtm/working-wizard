@@ -28,8 +28,10 @@ import { SETUP_PARTNER_SOURCE_EVENT, SETUP_PARTNER_TASK_WORKFLOW } from "@/lib/s
 import { CLAUDE_OPUS_55, CLAUDE_SONNET_55 } from "@/lib/claude-request";
 import {
   applyOpusIntegrationPlan,
+  buildIntegrationPlanTable,
   integrationPlanOpusBody,
-  type IntegrationPlanRow,
+  plainWorkflowText,
+  playsForPlan,
 } from "@/lib/im-integration-plan";
 
 const ACTIVATION_RUN_SUMMARY = "Implementation Manager activation — draft only.";
@@ -655,21 +657,28 @@ export const loadImRunningState = createServerFn({ method: "POST" })
 const draftSchema = z.object({
   firmId: z.string().uuid(),
   country: z.enum(["US", "ZA"]).optional(),
-  rows: z
+  interview: z.string().max(8000).optional(),
+  steps: z
     .array(
       z.object({
-        workflow: z.string().max(280),
-        today: z.string().max(280),
-        milon: z.string().max(280),
-        bot: z.string().max(80),
-        grant: z.string().max(280),
-        status: z.enum(["Waiting", "Draft queued", "Running"]),
+        step: z.string().max(500),
+        bucket: z.string().max(40).optional(),
       }),
     )
-    .max(12),
+    .max(40)
+    .optional(),
+  coverage: z
+    .array(
+      z.object({
+        agent: z.string().max(80),
+        owns: z.string().max(400),
+      }),
+    )
+    .max(12)
+    .optional(),
 });
 
-/** Rewrite the plan table with in-app Opus. Falls back to the rows already built. */
+/** Rank catalogue plays with in-app Opus. Unknown play ids are rejected. */
 export const draftImIntegrationPlan = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => draftSchema.parse(input))
@@ -677,10 +686,26 @@ export const draftImIntegrationPlan = createServerFn({ method: "POST" })
     const userId = context.userId;
     if (!userId) throw new Error("Not authenticated");
     await assertFirmAccess(userId, data.firmId);
-    const fallback = data.rows as IntegrationPlanRow[];
+    const country = data.country;
+    const interview = data.interview?.trim() ?? "";
+    const steps = data.steps ?? [];
+    const plays = playsForPlan(country);
+    const fallback = buildIntegrationPlanTable({
+      steps,
+      coverage: data.coverage ?? [],
+      interview,
+      country,
+    });
     const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
-    if (!apiKey || fallback.length === 0) return { rows: fallback, source: "fallback" as const };
-    const body = integrationPlanOpusBody(fallback);
+    if (!apiKey || fallback.length === 0 || !interview) {
+      return { rows: fallback, rejected: [] as string[], source: "fallback" as const };
+    }
+    const body = integrationPlanOpusBody({
+      plays,
+      interview,
+      steps: steps.map((row) => plainWorkflowText(row.step)).filter(Boolean),
+      country,
+    });
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 25_000);
     try {
@@ -694,20 +719,18 @@ export const draftImIntegrationPlan = createServerFn({ method: "POST" })
         },
         body: JSON.stringify(body),
       });
-      if (!res.ok) return { rows: fallback, source: "fallback" as const };
+      if (!res.ok) return { rows: fallback, rejected: [] as string[], source: "fallback" as const };
       const json = (await res.json()) as { content?: Array<{ type?: string; text?: string }> };
       const text = (json.content ?? [])
         .filter((block) => block.type === "text")
         .map((block) => block.text ?? "")
         .join("")
         .trim();
-      if (!text) return { rows: fallback, source: "fallback" as const };
-      return {
-        rows: applyOpusIntegrationPlan(text, fallback, data.country),
-        source: "opus" as const,
-      };
+      if (!text) return { rows: fallback, rejected: [] as string[], source: "fallback" as const };
+      const applied = applyOpusIntegrationPlan(text, fallback, { country, interview, plays });
+      return { rows: applied.rows, rejected: applied.rejected, source: "opus" as const };
     } catch {
-      return { rows: fallback, source: "fallback" as const };
+      return { rows: fallback, rejected: [] as string[], source: "fallback" as const };
     } finally {
       clearTimeout(timer);
     }

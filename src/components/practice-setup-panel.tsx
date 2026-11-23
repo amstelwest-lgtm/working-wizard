@@ -180,7 +180,9 @@ type StartIntegration = (input: {
 type LoadPlanTable = (input: {
   firmId: string;
   country?: "US" | "ZA";
-  rows: IntegrationPlanRow[];
+  interview?: string;
+  steps?: { step: string; bucket?: string }[];
+  coverage?: { agent: string; owns: string }[];
 }) => Promise<{ rows: IntegrationPlanRow[] }>;
 
 type LoadRunning = (firmId: string) => Promise<{ runCount: number; lines: RunningLine[] }>;
@@ -443,28 +445,33 @@ export function PracticeSetupInterview({
   );
   const planKey = planSteps.map((row) => `${row.bucket}:${row.step}`).join("\n");
   const coverageKey = (visibleMap?.milonCoverage ?? []).map((row) => `${row.agent}:${row.owns}`).join("\n");
+  const interviewKey = firmInterviewTranscript(messages);
   const localRows = useMemo(
     () =>
       buildIntegrationPlanTable({
         steps: planSteps,
         coverage: visibleMap?.milonCoverage ?? [],
+        interview: interviewKey,
         country: marketCountry,
         started: integrationStarted || firmRunCount > 0,
         running: runningLines.some((line) => line.status === "Running"),
       }),
-    // planKey and coverageKey are the stable contents of planSteps and visibleMap.
+    // planKey, coverageKey, and interviewKey are the stable contents.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [planKey, coverageKey, marketCountry, integrationStarted, firmRunCount, runningLines],
+    [planKey, coverageKey, interviewKey, marketCountry, integrationStarted, firmRunCount, runningLines],
   );
   const tableRows = useMemo(() => {
     const live =
-      !opusRows || opusRows.length !== localRows.length
+      !opusRows || opusRows.length === 0
         ? localRows
-        : localRows.map((row, index) => ({ ...opusRows[index]!, status: row.status }));
+        : opusRows.map((row) => {
+            const local = localRows.find((item) => item.playId === row.playId);
+            return local ? { ...row, status: local.status } : row;
+          });
     const held = heldPlanRef.current;
     if (!held) return live;
     return held.map((row) => {
-      const match = live.find((item) => item.workflow === row.workflow && item.bot === row.bot);
+      const match = live.find((item) => item.playId === row.playId);
       return match ? { ...row, status: match.status } : row;
     });
   }, [localRows, opusRows]);
@@ -474,7 +481,13 @@ export function PracticeSetupInterview({
     if (!firmId || !loadPlanTable || localRows.length === 0) return;
     let cancel = false;
     const country = marketCountry === "US" ? "US" : marketCountry === "ZA" ? "ZA" : undefined;
-    void loadPlanTable({ firmId, country, rows: localRows })
+    void loadPlanTable({
+      firmId,
+      country,
+      interview: interviewKey,
+      steps: planSteps.map((row) => ({ step: row.step, bucket: row.bucket })),
+      coverage: (visibleMap?.milonCoverage ?? []).map((row) => ({ agent: row.agent, owns: row.owns })),
+    })
       .then((res) => {
         if (!cancel && res.rows.length > 0) setOpusRows(res.rows);
       })
@@ -482,9 +495,9 @@ export function PracticeSetupInterview({
     return () => {
       cancel = true;
     };
-    // Reload Opus when the workflows change, not when a row's status flips.
+    // Reload Opus when the workflows or interview change, not when a row's status flips.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firmId, loadPlanTable, planKey, coverageKey, marketCountry]);
+  }, [firmId, loadPlanTable, planKey, coverageKey, interviewKey, marketCountry]);
 
   const redo = () => {
     heldPlanRef.current = null;
@@ -772,22 +785,29 @@ export function PracticeSetupInterview({
                 <table className="im-plan-table" data-im-plan-table="" aria-labelledby="im-plan-heading">
                   <thead>
                     <tr>
-                      <th scope="col">Workflow</th>
-                      <th scope="col">How it's done today</th>
-                      <th scope="col">What Milōn will do</th>
-                      <th scope="col">Which bot</th>
-                      <th scope="col">What you need to grant or approve</th>
+                      <th scope="col">The problem</th>
+                      <th scope="col">What Milōn does</th>
+                      <th scope="col">Routine</th>
+                      <th scope="col">What the client sees</th>
+                      <th scope="col">You approve</th>
+                      <th scope="col">Bot</th>
                       <th scope="col">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {tableRows.map((row) => (
-                      <tr key={`${row.workflow}-${row.bot}-${row.milon}`}>
-                        <td>{row.workflow}</td>
-                        <td>{row.today}</td>
+                      <tr key={row.playId} data-im-plan-section={row.section} data-im-plan-play={row.playId}>
+                        <td>
+                          {row.section === "already_covered" ? (
+                            <span className="im-plan-covered">Already covered</span>
+                          ) : null}
+                          {row.problem}
+                        </td>
                         <td>{row.milon}</td>
+                        <td>{row.routine}</td>
+                        <td>{row.clientSees}</td>
+                        <td>{row.approve}</td>
                         <td>{row.bot}</td>
-                        <td>{row.grant}</td>
                         <td>{row.status}</td>
                       </tr>
                     ))}

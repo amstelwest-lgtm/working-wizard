@@ -24,7 +24,7 @@ import {
 } from "../src/lib/im-activation-persist.ts";
 import { ownerRoutineMonthLines, accountantRoutineSteps, parseRoutineMapMeta } from "../src/lib/client-routines.ts";
 import { replayImplementationPlan } from "../src/lib/im-replay.ts";
-import { buildIntegrationPlanTable, integrationPlanOpusBody } from "../src/lib/im-integration-plan.ts";
+import { accountantToday, buildIntegrationPlanTable, integrationPlanOpusBody, playsForPlan } from "../src/lib/im-integration-plan.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -334,19 +334,29 @@ const spoken = buildIntegrationPlanTable({
   country: "ZA",
 });
 const spokenBlob = JSON.stringify(spoken);
-assert(spokenBlob.includes("Done in-house every month"), "a firm monthly habit is plain English");
+assert(
+  accountantToday("Provide monthly bookkeeping", "Firm; Monthly") === "Done in-house every month.",
+  "a firm monthly habit is plain English",
+);
 assert(
   spokenBlob.includes("Clients email PDF invoices and bank statements each month"),
   "a client email habit is plain English",
 );
-assert(!spokenBlob.includes("Firm; Monthly") && !/; Monthly/.test(spokenBlob), "stored fields stay off the table");
-assert(new Set(spoken.map((row) => row.milon)).size === spoken.length, "each workflow says what Milōn will do");
-assert(spoken.some((row) => row.bot === "Financial Manager"), "document collection stays with Financial Manager");
 assert(
-  spoken.find((row) => /bookkeeping/i.test(row.workflow))?.bot === "Analyst",
-  "bookkeeping that mentions VAT stays with the Analyst",
+  spokenBlob.includes("The manager reviews the work and the partner signs off every month"),
+  "a sign-off habit is plain English",
 );
-assert(spoken.some((row) => row.bot === "Accountant"), "sign-off stays with the accountant");
+assert(!spokenBlob.includes("Firm; Monthly") && !/; Monthly/.test(spokenBlob), "stored fields stay off the table");
+assert(new Set(spoken.map((row) => row.milon)).size === spoken.length, "each play names a different output");
+assert(
+  spoken.find((row) => row.playId === "document-collection")?.bot === "Financial Manager",
+  "document collection stays with Financial Manager",
+);
+assert(
+  spoken.find((row) => row.playId === "management-pack")?.bot === "Analyst",
+  "bookkeeping and the month-end pack stay with the Analyst",
+);
+assert(!spoken.some((row) => row.bot === "Accountant"), "the plan bot comes from the play");
 const roster = buildIntegrationPlanTable({
   steps: [
     { step: "Draft the monthly bookkeeping pack", bucket: "covered" },
@@ -357,14 +367,22 @@ const roster = buildIntegrationPlanTable({
   ],
   country: "ZA",
 });
-const botFor = (fragment: string) => roster.find((row) => row.workflow.includes(fragment))?.bot;
-assert(botFor("bookkeeping pack") === "Analyst", "a bookkeeping pack goes to the Analyst");
-assert(botFor("month-end pack") === "Analyst", "a month-end pack goes to the Analyst");
-assert(botFor("VAT workings") === "Analyst", "books and VAT workings are books prep");
-assert(botFor("VAT201") === "Tax Specialist", "a VAT201 row goes to the Tax Specialist");
-assert(botFor("ITR14") === "Tax Specialist", "an ITR row goes to the Tax Specialist");
+const playBot = (id: string) => roster.find((row) => row.playId === id)?.bot;
+assert(playBot("management-pack") === "Analyst", "books prep and the month-end pack go to the Analyst");
+assert(playBot("tax-deadlines") === "Tax Specialist", "VAT201 and ITR rows go to the Tax Specialist");
+assert(
+  !/vat workings/i.test(roster.find((row) => row.playId === "tax-deadlines")?.problem ?? ""),
+  "books and VAT workings are not a tax filing",
+);
 assert(spoken.filter((row) => row.bot === "Financial Manager").length < spoken.length, "bots are not all Financial Manager");
-assert(integrationPlanOpusBody(planRows).model === "claude-opus-5-5", "the plan table is drafted by Opus 5.5");
+const opusBody = integrationPlanOpusBody({
+  plays: playsForPlan("US"),
+  interview: "A: Clients never hear what we did.",
+  country: "US",
+});
+assert(opusBody.model === "claude-opus-5-5", "the plan table is drafted by Opus 5.5");
+assert(opusBody.messages[0]?.content.includes("monthly-client-update"), "Opus sees the catalogue");
+assert(!/rewrite this integration plan/i.test(opusBody.messages[0]?.content ?? ""), "Opus is not told to reword fixed sentences");
 
 const enqueueBlock = activationSource.slice(
   activationSource.indexOf("async function enqueueDraftRun"),

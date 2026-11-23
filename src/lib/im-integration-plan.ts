@@ -1,8 +1,17 @@
 /**
- * One-page integration plan table. Opus 5.5 rewrites the rows in accountant
- * English. Classifications stay in the caller; this module only prints the table.
+ * One-page integration plan. Each row is a catalogue play. Opus 5.5 ranks
+ * play ids from the interview. It does not invent a solution sentence.
+ * The server drops any id that is not on the catalogue.
  */
 import { CLAUDE_OPUS_55, claudeRequestFields } from "./claude-request.ts";
+import { buildCapabilityManifest } from "./im-capability-manifest.ts";
+import {
+  DEFAULT_LEAD_PLAY_IDS,
+  IM_PLAN_APPROVE,
+  playMarketCopy,
+  solutionPlays,
+  type SolutionPlay,
+} from "./im-solution-plays.ts";
 import { cleanFlowLine } from "./setup-partner-plan.ts";
 import type { SetupPartnerCountry } from "./setup-partner.ts";
 
@@ -11,16 +20,21 @@ export type IntegrationPlanCountry = SetupPartnerCountry | "UK";
 
 export type IntegrationPlanStatus = "Waiting" | "Draft queued" | "Running";
 
+export type IntegrationPlanSection = "lead" | "already_covered";
+
 export type IntegrationPlanRow = {
-  workflow: string;
-  today: string;
+  playId: string;
+  problem: string;
   milon: string;
+  routine: string;
+  clientSees: string;
+  approve: string;
   bot: string;
-  grant: string;
+  section: IntegrationPlanSection;
   status: IntegrationPlanStatus;
 };
 
-const SHOWN_BUCKETS = new Set(["client_setup", "covered"]);
+const PLAN_BOTS = new Set(["Financial Manager", "Analyst", "Advisor", "Tax Specialist"]);
 
 const JARGON =
   /\b(client_setup|product_gap|fit_note|step_type|dedupe_key|classifier|Practice:)\b|\[\|[a-z_]+\]/i;
@@ -63,28 +77,6 @@ function splitDash(text: string): [string, string] {
   const head = (parts[0] ?? "").trim();
   const rest = parts.slice(1).join(" — ").trim();
   return [head, rest];
-}
-
-/** A return or filing. VAT workings and bookkeeping that mention VAT are not this. */
-function isTaxFilingRow(text: string): boolean {
-  if (/\b(vat201|emp201|irp6|itr12|itr14)\b/i.test(text)) return true;
-  return /\bprovisional\b/i.test(text) && /\b(tax|return|filing|irp6)\b/i.test(text);
-}
-
-/** Bookkeeping, month-end pack, and books prep. Analyst already owns that work. */
-function isBooksPrep(text: string): boolean {
-  return /\b(bookkeeping|books|month-?end|management pack|vat workings)\b/i.test(text);
-}
-
-function botForWorkflow(text: string): string {
-  if (/\b(sign off|signs off|sign-off)\b/i.test(text)) return "Accountant";
-  if (isTaxFilingRow(text)) return "Tax Specialist";
-  if (/\b(pdf|email attachment|bank statement|invoices?|receipts?)\b/i.test(text))
-    return "Financial Manager";
-  if (isBooksPrep(text)) return "Analyst";
-  if (/\b(report|ratio|variance)\b/i.test(text)) return "Analyst";
-  if (/\b(deadline|narrative|advice|owner question)\b/i.test(text)) return "Advisor";
-  return "Financial Manager";
 }
 
 function cadencePhrase(raw: string): string | null {
@@ -155,39 +147,6 @@ export function accountantToday(workflow: string, detail: string): string {
   return `The practice does this ${cadence}.`;
 }
 
-function milonWillDo(workflow: string): string {
-  const text = workflow.toLowerCase();
-  if (/\b(pdf|email attachment|bank statement|invoices?)\b/.test(text)) {
-    return "Collects the PDFs and files them per client for review.";
-  }
-  if (/\b(sign off|signs off|sign-off)\b/.test(text)) {
-    return "Drafts the review pack and waits for the partner to sign off.";
-  }
-  if (/\bvat\b/.test(text) && /\b(xero|books|workings)\b/.test(text)) {
-    return "Drafts the VAT workings from the books for review. Nothing is filed.";
-  }
-  if (/\b(bookkeeping|payroll)\b/.test(text)) {
-    return "Drafts the monthly bookkeeping pack for review. Nothing is posted.";
-  }
-  if (/\b(xero|books)\b/.test(text)) {
-    return "Drafts the bookkeeping from the ledger for review. Nothing is posted.";
-  }
-  if (/\b(pack|report)\b/.test(text)) {
-    return "Drafts the management pack for review. Nothing is sent.";
-  }
-  if (/\bcash\b/.test(text)) {
-    return "Drafts the cash position for review. Nothing is sent.";
-  }
-  return "Drafts this step for your review. Nothing is sent.";
-}
-
-function grantForWorkflow(text: string): string {
-  if (/\b(ledger|books|xero|quickbooks|sage|qbo)\b/i.test(text)) {
-    return "You approve before anything is posted to the books.";
-  }
-  return "You approve the draft before anything is sent.";
-}
-
 function scrubMarket(text: string, country?: IntegrationPlanCountry | null): string {
   let next = text;
   if (country === "US") {
@@ -214,98 +173,300 @@ function marketLeak(blob: string, country?: IntegrationPlanCountry | null): bool
   return false;
 }
 
+function manifestCountry(country?: IntegrationPlanCountry | null): SetupPartnerCountry | null {
+  if (country === "US" || country === "ZA") return country;
+  return null;
+}
+
+export function playsForPlan(country?: IntegrationPlanCountry | null): SolutionPlay[] {
+  return solutionPlays(buildCapabilityManifest(manifestCountry(country)));
+}
+
 function finishRow(
   row: IntegrationPlanRow,
   country?: IntegrationPlanCountry | null,
 ): IntegrationPlanRow | null {
   const next: IntegrationPlanRow = {
-    workflow: scrubMarket(plainWorkflowText(row.workflow), country),
-    today: scrubMarket(plainWorkflowText(row.today), country),
+    playId: row.playId.trim(),
+    problem: scrubMarket(plainWorkflowText(row.problem), country),
     milon: scrubMarket(plainWorkflowText(row.milon), country),
+    routine: scrubMarket(plainWorkflowText(row.routine), country),
+    clientSees: scrubMarket(plainWorkflowText(row.clientSees), country),
+    approve: scrubMarket(plainWorkflowText(row.approve), country),
     bot: scrubMarket(plainWorkflowText(row.bot), country),
-    grant: scrubMarket(plainWorkflowText(row.grant), country),
+    section: row.section === "already_covered" ? "already_covered" : "lead",
     status: STATUSES.has(row.status) ? row.status : "Waiting",
   };
-  if (!next.workflow || !next.milon || !next.bot) return null;
-  const blob = `${next.workflow} ${next.today} ${next.milon} ${next.bot} ${next.grant}`;
+  if (!next.playId || !next.problem || !next.milon || !next.bot || !next.routine || !next.clientSees) {
+    return null;
+  }
+  if (!PLAN_BOTS.has(next.bot)) return null;
+  const blob = `${next.problem} ${next.milon} ${next.routine} ${next.clientSees} ${next.approve} ${next.bot}`;
   if (JARGON.test(blob) || BUCKET_LABELS.test(blob)) return null;
   if (marketLeak(blob, country)) return null;
   return next;
 }
 
-export function buildIntegrationPlanTable(input: {
-  steps: readonly { step: string; bucket?: string }[];
+function userAnswerLines(interview: string | undefined): string[] {
+  const text = interview?.trim() ?? "";
+  if (!text) return [];
+  const lines = text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const answers = lines
+    .filter((line) => /^A:/i.test(line))
+    .map((line) => line.replace(/^A:\s*/i, "").trim())
+    .filter(Boolean);
+  return answers.length ? answers : [text];
+}
+
+function shownKind(bucket?: string): "pain" | "covered" | null {
+  if (bucket === "covered") return "covered";
+  if (!bucket || bucket === "client_setup") return "pain";
+  return null;
+}
+
+function evidenceSentence(text: string): string {
+  const plain = plainWorkflowText(text.replace(/^(?:Q|A):\s*/i, ""));
+  if (!plain) return "";
+  const [head, rest] = splitDash(plain);
+  const workflow = head || plain;
+  const today = accountantToday(workflow, rest);
+  if (!today || today === workflow || today.includes(";")) return workflow;
+  return `${workflow}. ${today}`;
+}
+
+function specificProblem(question: string, detail: string): string {
+  const line = detail.trim();
+  if (!line) return question;
+  const norm = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (norm(line).includes(norm(question.replace(/\?$/, "")))) return question;
+  const clipped = line.length > 180 ? `${line.slice(0, 179).trim()}…` : line;
+  const sentence = /[.!?]$/.test(clipped) ? clipped : `${clipped}.`;
+  return `${question} You said: ${sentence}`;
+}
+
+type ScoredPlay = {
+  play: SolutionPlay;
+  pain: number;
+  covered: number;
+  evidence: string | null;
+  evidencePain: boolean;
+};
+
+function noteEvidence(hit: ScoredPlay, text: string, kind: "pain" | "covered") {
+  if (kind === "pain") {
+    if (!hit.evidencePain) {
+      hit.evidence = text;
+      hit.evidencePain = true;
+    }
+    return;
+  }
+  if (!hit.evidence) hit.evidence = text;
+}
+
+function scorePlays(
+  plays: readonly SolutionPlay[],
+  input: {
+    steps?: readonly { step: string; bucket?: string }[];
+    coverage?: readonly { agent: string; owns: string }[];
+    interview?: string;
+  },
+): ScoredPlay[] {
+  const scored: ScoredPlay[] = plays.map((play) => ({
+    play,
+    pain: 0,
+    covered: 0,
+    evidence: null,
+    evidencePain: false,
+  }));
+  for (const step of input.steps ?? []) {
+    const kind = shownKind(step.bucket);
+    if (!kind || !plainWorkflowText(step.step)) continue;
+    for (const hit of scored) {
+      if (!hit.play.signals.test(step.step)) continue;
+      if (kind === "pain") hit.pain += 3;
+      else hit.covered += 2;
+      noteEvidence(hit, step.step, kind);
+    }
+  }
+  for (const answer of userAnswerLines(input.interview)) {
+    for (const hit of scored) {
+      if (!hit.play.signals.test(answer)) continue;
+      hit.pain += 5;
+      noteEvidence(hit, answer, "pain");
+    }
+  }
+  for (const row of input.coverage ?? []) {
+    const blob = `${row.agent} ${row.owns}`.trim();
+    if (!blob) continue;
+    for (const hit of scored) {
+      if (!hit.play.signals.test(blob)) continue;
+      hit.covered += 2;
+      noteEvidence(hit, blob, "covered");
+    }
+  }
+  return scored;
+}
+
+function hasPlanSource(input: {
+  steps?: readonly { step: string; bucket?: string }[];
   coverage?: readonly { agent: string; owns: string }[];
+  interview?: string;
+}): boolean {
+  if ((input.coverage?.length ?? 0) > 0) return true;
+  if (userAnswerLines(input.interview).length > 0) return true;
+  return (input.steps ?? []).some((step) => shownKind(step.bucket) !== null && Boolean(plainWorkflowText(step.step)));
+}
+
+export function materializePlayRow(input: {
+  play: SolutionPlay;
+  section: IntegrationPlanSection;
+  evidence?: string | null;
+  country?: IntegrationPlanCountry | null;
+  status: IntegrationPlanStatus;
+}): IntegrationPlanRow | null {
+  const copy = playMarketCopy(input.play, input.country);
+  const detail = input.evidence ? evidenceSentence(input.evidence) : "";
+  return finishRow(
+    {
+      playId: input.play.id,
+      problem: specificProblem(input.play.question, detail),
+      milon: copy.output,
+      routine: input.play.routine,
+      clientSees: copy.clientSees,
+      approve: IM_PLAN_APPROVE,
+      bot: input.play.bot,
+      section: input.section,
+      status: input.status,
+    },
+    input.country,
+  );
+}
+
+export function buildIntegrationPlanTable(input: {
+  steps?: readonly { step: string; bucket?: string }[];
+  coverage?: readonly { agent: string; owns: string }[];
+  interview?: string;
   country?: IntegrationPlanCountry | null;
   started?: boolean;
   running?: boolean;
 }): IntegrationPlanRow[] {
+  if (!hasPlanSource(input)) return [];
+  const plays = playsForPlan(input.country);
   const status: IntegrationPlanStatus = input.running
     ? "Running"
     : input.started
       ? "Draft queued"
       : "Waiting";
+  const scored = scorePlays(plays, input);
+  const byId = new Map(scored.map((row) => [row.play.id, row]));
+  const pain = scored
+    .filter((row) => row.pain > 0)
+    .sort((a, b) => b.pain - a.pain || a.play.order - b.play.order);
+  const coveredOnly = new Set(
+    scored.filter((row) => row.pain === 0 && row.covered > 0).map((row) => row.play.id),
+  );
+  const lead: string[] = [];
+  for (const row of pain) {
+    if (lead.length >= 5) break;
+    lead.push(row.play.id);
+  }
+  for (const id of DEFAULT_LEAD_PLAY_IDS) {
+    if (lead.length >= 3) break;
+    if (lead.includes(id) || coveredOnly.has(id) || !byId.has(id)) continue;
+    lead.push(id);
+  }
+  if (lead.length < 3) {
+    for (const id of DEFAULT_LEAD_PLAY_IDS) {
+      if (lead.length >= 3) break;
+      if (lead.includes(id) || !byId.has(id)) continue;
+      lead.push(id);
+    }
+  }
+  const leadSet = new Set(lead);
+  const already = scored
+    .filter((row) => row.covered > 0 && !leadSet.has(row.play.id))
+    .sort((a, b) => a.play.order - b.play.order)
+    .map((row) => row.play.id);
   const rows: IntegrationPlanRow[] = [];
-  for (const step of input.steps) {
-    if (step.bucket && !SHOWN_BUCKETS.has(step.bucket)) continue;
-    const plain = plainWorkflowText(step.step);
-    if (!plain) continue;
-    const [head, rest] = splitDash(plain);
-    const workflow = head || plain;
-    const row = finishRow(
-      {
-        workflow,
-        today: accountantToday(workflow, rest),
-        milon: milonWillDo(workflow),
-        bot: botForWorkflow(`${workflow} ${rest}`),
-        grant: grantForWorkflow(`${workflow} ${rest}`),
-        status,
-      },
-      input.country,
-    );
+  for (const id of lead) {
+    const hit = byId.get(id);
+    if (!hit) continue;
+    const row = materializePlayRow({
+      play: hit.play,
+      section: "lead",
+      evidence: hit.evidence,
+      country: input.country,
+      status,
+    });
     if (row) rows.push(row);
   }
-  for (const coverage of input.coverage ?? []) {
-    const owns = plainWorkflowText(coverage.owns);
-    const agent = plainWorkflowText(coverage.agent);
-    if (!owns || !agent) continue;
-    const [head] = splitDash(owns);
-    const row = finishRow(
-      {
-        workflow: head || owns,
-        today: "The practice handles this before Milōn drafts it.",
-        milon: owns,
-        bot: agent,
-        grant: "You approve the draft before anything is sent.",
-        status,
-      },
-      input.country,
-    );
-    if (
-      row &&
-      !rows.some((existing) => existing.workflow === row.workflow && existing.milon === row.milon)
-    ) {
-      rows.push(row);
-    }
+  for (const id of already) {
+    const hit = byId.get(id);
+    if (!hit) continue;
+    const row = materializePlayRow({
+      play: hit.play,
+      section: "already_covered",
+      evidence: hit.evidence,
+      country: input.country,
+      status,
+    });
+    if (row) rows.push(row);
   }
   return rows;
 }
 
-export function integrationPlanPrompt(rows: readonly IntegrationPlanRow[]): string {
-  return [
-    "Rewrite this integration plan for an accountant.",
-    "Return a JSON array only, one object per input row, same order, no extra rows.",
-    "Keys: workflow, today, milon, bot, grant, status.",
-    "Keep each status value exactly as given.",
-    "Plain English. Short sentences.",
-    "Do not use stored prefixes, fit notes, or internal classification names.",
-    "Milōn prepares drafts only. Nothing is sent, filed, or posted to a ledger.",
-    JSON.stringify(rows),
-  ].join("\n");
+function catalogueForPrompt(plays: readonly SolutionPlay[], country?: IntegrationPlanCountry | null) {
+  return plays.map((play) => {
+    const copy = playMarketCopy(play, country);
+    return {
+      id: play.id,
+      question: play.question,
+      output: copy.output,
+      routine: play.routine,
+      clientSees: copy.clientSees,
+      bot: play.bot,
+    };
+  });
+}
+
+export function integrationPlanPrompt(input: {
+  plays: readonly SolutionPlay[];
+  interview: string;
+  steps?: readonly string[];
+  country?: IntegrationPlanCountry | null;
+}): string {
+  const steps = (input.steps ?? []).map((step) => plainWorkflowText(step)).filter(Boolean).slice(0, 12);
+  const interview = input.interview.trim().slice(0, 6000);
+  const prompt = [
+    "Choose plays for this accountant's integration plan.",
+    'Return JSON only: {"ranked":["play-id"],"alreadyCovered":["play-id"]}',
+    "ranked is 3 to 5 ids. Put the strongest pain in the interview first.",
+    "alreadyCovered is other catalogue ids for work the interview shows is already handled.",
+    "Use play ids from the catalogue only. Any other id is rejected.",
+    "Do not invent a play. Do not rewrite the catalogue sentences.",
+    "Milōn drafts only. Nothing is posted to Xero, QuickBooks, or Sage. Nothing is filed with the tax authority.",
+    "The tax-deadline play is a reminder and a document list. Auto-send is not on.",
+    "Catalogue:",
+    JSON.stringify(catalogueForPrompt(input.plays, input.country)),
+    "Interview answers:",
+    interview || "(none)",
+    steps.length ? `What the firm described:\n${steps.join("\n")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return scrubMarket(prompt, input.country);
 }
 
 /** Request body for in-app Opus. No thinking budget and no temperature. */
-export function integrationPlanOpusBody(rows: readonly IntegrationPlanRow[]): {
+export function integrationPlanOpusBody(input: {
+  plays: readonly SolutionPlay[];
+  interview: string;
+  steps?: readonly string[];
+  country?: IntegrationPlanCountry | null;
+}): {
   model: typeof CLAUDE_OPUS_55;
   max_tokens: number;
   messages: { role: "user"; content: string }[];
@@ -313,17 +474,29 @@ export function integrationPlanOpusBody(rows: readonly IntegrationPlanRow[]): {
   const model = CLAUDE_OPUS_55;
   return {
     model,
-    max_tokens: 1800,
-    messages: [{ role: "user", content: integrationPlanPrompt(rows) }],
+    max_tokens: 700,
+    messages: [{ role: "user", content: integrationPlanPrompt(input) }],
     ...claudeRequestFields({ model }),
   };
 }
 
-export function applyOpusIntegrationPlan(
-  raw: string,
-  fallback: readonly IntegrationPlanRow[],
-  country?: IntegrationPlanCountry | null,
-): IntegrationPlanRow[] {
+function idsFrom(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const ids: string[] = [];
+  for (const item of value) {
+    if (typeof item === "string") ids.push(item.trim());
+    else if (item && typeof item === "object" && typeof (item as { id?: unknown }).id === "string") {
+      ids.push((item as { id: string }).id.trim());
+    }
+  }
+  return ids.filter(Boolean);
+}
+
+export function readOpusPlayIds(raw: string): {
+  ranked: string[];
+  alreadyCovered: string[];
+  mentionedCovered: boolean;
+} {
   const jsonText = raw
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/i, "")
@@ -332,39 +505,97 @@ export function applyOpusIntegrationPlan(
   try {
     parsed = JSON.parse(jsonText);
   } catch {
-    const match = jsonText.match(/\[[\s\S]*\]/);
-    if (!match) return [...fallback];
+    const match = jsonText.match(/[\[{][\s\S]*[\]}]/);
+    if (!match) return { ranked: [], alreadyCovered: [], mentionedCovered: false };
     try {
       parsed = JSON.parse(match[0]);
     } catch {
-      return [...fallback];
+      return { ranked: [], alreadyCovered: [], mentionedCovered: false };
     }
   }
-  if (!Array.isArray(parsed) || parsed.length === 0) return [...fallback];
+  if (Array.isArray(parsed)) {
+    return { ranked: idsFrom(parsed), alreadyCovered: [], mentionedCovered: false };
+  }
+  if (!parsed || typeof parsed !== "object") {
+    return { ranked: [], alreadyCovered: [], mentionedCovered: false };
+  }
+  const record = parsed as Record<string, unknown>;
+  return {
+    ranked: idsFrom(record.ranked ?? record.plays ?? record.ids),
+    alreadyCovered: idsFrom(record.alreadyCovered ?? record.already_covered),
+    mentionedCovered: "alreadyCovered" in record || "already_covered" in record,
+  };
+}
+
+function unique(ids: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of ids) {
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+function interviewEvidence(play: SolutionPlay, interview: string | undefined): string | null {
+  for (const answer of userAnswerLines(interview)) {
+    if (play.signals.test(answer)) return answer;
+  }
+  return null;
+}
+
+export function applyOpusIntegrationPlan(
+  raw: string,
+  fallback: readonly IntegrationPlanRow[],
+  input: {
+    country?: IntegrationPlanCountry | null;
+    interview?: string;
+    plays: readonly SolutionPlay[];
+  },
+): { rows: IntegrationPlanRow[]; rejected: string[] } {
+  const allowed = new Set(input.plays.map((play) => play.id));
+  const parsed = readOpusPlayIds(raw);
+  const rejected = unique([...parsed.ranked, ...parsed.alreadyCovered].filter((id) => !allowed.has(id)));
+  const ranked = unique(parsed.ranked.filter((id) => allowed.has(id))).slice(0, 5);
+  if (ranked.length === 0) return { rows: [...fallback], rejected };
+  const lead = [...ranked];
+  for (const row of fallback) {
+    if (lead.length >= 3) break;
+    if (row.section !== "lead" || lead.includes(row.playId)) continue;
+    lead.push(row.playId);
+  }
+  const leadSet = new Set(lead);
+  const coveredFromOpus = unique(parsed.alreadyCovered.filter((id) => allowed.has(id) && !leadSet.has(id)));
+  const covered = parsed.mentionedCovered
+    ? coveredFromOpus
+    : unique([
+        ...coveredFromOpus,
+        ...fallback.filter((row) => row.section === "already_covered").map((row) => row.playId),
+      ]).filter((id) => !leadSet.has(id));
+  const status = fallback[0]?.status ?? "Waiting";
+  const byPlay = new Map(input.plays.map((play) => [play.id, play]));
   const rows: IntegrationPlanRow[] = [];
-  for (let index = 0; index < fallback.length; index += 1) {
-    const base = fallback[index]!;
-    const item = parsed[index];
-    if (!item || typeof item !== "object") {
-      rows.push(base);
-      continue;
+  const push = (id: string, section: IntegrationPlanSection) => {
+    const existing = fallback.find((row) => row.playId === id);
+    if (existing) {
+      const next = finishRow({ ...existing, section, status: existing.status }, input.country);
+      if (next) rows.push(next);
+      return;
     }
-    const record = item as Record<string, unknown>;
-    const status = STATUSES.has(record.status as IntegrationPlanStatus)
-      ? (record.status as IntegrationPlanStatus)
-      : base.status;
-    const next = finishRow(
-      {
-        workflow: typeof record.workflow === "string" ? record.workflow : base.workflow,
-        today: typeof record.today === "string" ? record.today : base.today,
-        milon: typeof record.milon === "string" ? record.milon : base.milon,
-        bot: typeof record.bot === "string" ? record.bot : base.bot,
-        grant: typeof record.grant === "string" ? record.grant : base.grant,
-        status,
-      },
-      country,
-    );
-    rows.push(next ?? base);
-  }
-  return rows;
+    const play = byPlay.get(id);
+    if (!play) return;
+    const next = materializePlayRow({
+      play,
+      section,
+      evidence: interviewEvidence(play, input.interview),
+      country: input.country,
+      status,
+    });
+    if (next) rows.push(next);
+  };
+  for (const id of lead) push(id, "lead");
+  for (const id of covered) push(id, "already_covered");
+  if (!rows.some((row) => row.section === "lead")) return { rows: [...fallback], rejected };
+  return { rows, rejected };
 }

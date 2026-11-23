@@ -698,6 +698,14 @@
   background: #ffffff;
 }
 
+.im-plan-covered {
+  display: block;
+  margin-bottom: 2px;
+  color: #486581;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 .im-plan-start {
   background: #0b5fff;
   color: #ffffff;
