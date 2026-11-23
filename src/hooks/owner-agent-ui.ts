@@ -22,6 +22,7 @@ const DRAFT_KINDS = new Set([
   "next_move_draft",
   "advisory_deliverable_draft",
   "client_update_draft",
+  "agent_send_draft",
 ]);
 
 const KIND_LABEL: Record<string, string> = {
@@ -31,12 +32,14 @@ const KIND_LABEL: Record<string, string> = {
   next_move_draft: "Next move",
   advisory_deliverable_draft: "Advisory",
   client_update_draft: "Client update",
+  agent_send_draft: "Send an agent",
 };
 
 const ACCOUNTANT_DRAFTS = new Set([
   "accountant_handoff_draft",
   "advisory_deliverable_draft",
   "client_update_draft",
+  "agent_send_draft",
 ]);
 
 export const DRAFT_NEEDS_OWNER = "Draft, needs your OK";

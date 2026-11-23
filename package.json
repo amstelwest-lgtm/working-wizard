@@ -164,6 +164,7 @@
     "test:source-documents-ledger": "vite-node --config scripts/vite-test.config.ts scripts/source-documents-ledger-test.mts",
     "test:client-agent-sends": "vite-node --config scripts/vite-test.config.ts scripts/client-agent-sends-migration-test.mts",
     "test:client-agent-send-mint": "vite-node --config scripts/vite-test.config.ts scripts/client-agent-send-mint-test.mts",
+    "test:agent-send-draft": "vite-node --config scripts/vite-test.config.ts scripts/agent-send-draft-test.mts",
     "test:client-agent-send-ux": "vite-node --config scripts/vite-test.config.ts scripts/client-agent-send-ux-test.mts",
     "test:client-agent-file-password": "vite-node --config scripts/vite-test.config.ts scripts/client-agent-file-password-test.mts",
     "test:client-agent-link": "vite-node --config scripts/vite-test.config.ts scripts/client-agent-link-test.mts",

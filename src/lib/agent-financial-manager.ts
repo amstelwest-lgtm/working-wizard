@@ -37,6 +37,7 @@ export const FM_WRITE_TOOLS = [
   "record_draft",
   "send_agent_message",
   "propose_figure_adjustment",
+  "propose_agent_send",
   "prepare_client_report",
 ] as const;
 
@@ -62,6 +63,7 @@ export const FM_TOOL_LABELS: Record<FmToolName, string> = {
   record_draft: "Draft",
   send_agent_message: "Message",
   propose_figure_adjustment: "Figure proposal",
+  propose_agent_send: "Send an agent draft",
   prepare_client_report: "Client report",
 };
 
@@ -94,6 +96,7 @@ export function fmRunOutcome(input: {
       tool:
         step.tool === "record_draft" ||
         step.tool === "propose_figure_adjustment" ||
+        step.tool === "propose_agent_send" ||
         step.tool === "prepare_client_report"
           ? "record_finding"
           : step.tool,

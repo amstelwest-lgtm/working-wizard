@@ -148,6 +148,11 @@ async function launch(): Promise<Browser> {
 type Hit = { path: string; prop: string; sample: string };
 
 /** Vite's dev server can full-reload once after the first paint. */
+function pageWentAway(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("Execution context was destroyed") || msg.includes("not attached");
+}
+
 async function withLivePage<T>(page: Page, fn: () => Promise<T>): Promise<T> {
   let last: unknown;
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -155,11 +160,32 @@ async function withLivePage<T>(page: Page, fn: () => Promise<T>): Promise<T> {
       return await fn();
     } catch (err) {
       last = err;
-      const msg = err instanceof Error ? err.message : String(err);
-      if (attempt === 3 || !msg.includes("Execution context was destroyed")) throw err;
+      if (attempt === 3 || !pageWentAway(err)) throw err;
+      await page.waitForTimeout(250);
     }
   }
   throw last;
+}
+
+/** A fresh locator each try. A node that detaches mid-scroll is not reused. */
+async function scrollIntoView(
+  page: Page,
+  selector: string,
+  requireVisible = true,
+): Promise<ReturnType<Page["locator"]> | null> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const loc = page.locator(selector).first();
+    try {
+      if ((await loc.count()) === 0) return null;
+      if (requireVisible && !(await loc.isVisible())) return null;
+      await loc.scrollIntoViewIfNeeded({ timeout: 5000 });
+      return page.locator(selector).first();
+    } catch (err) {
+      if (attempt === 2 || !pageWentAway(err)) throw err;
+      await page.waitForTimeout(250);
+    }
+  }
+  return null;
 }
 
 async function paintLandingTheme(page: Page, theme: "light" | "dark") {
@@ -330,9 +356,8 @@ async function scan(
 }
 
 async function focusButton(page: Page, selector: string) {
-  const loc = page.locator(selector).first();
-  if ((await loc.count()) === 0) return false;
-  await loc.scrollIntoViewIfNeeded();
+  const loc = await scrollIntoView(page, selector, false);
+  if (!loc) return false;
   await loc.evaluate((el) => {
     const probe = document.createElement("span");
     probe.tabIndex = 0;
@@ -389,9 +414,8 @@ async function main() {
           ".watch-cta",
         ];
         for (const sel of hoverSel) {
-          const loc = page.locator(sel).first();
-          if ((await loc.count()) === 0 || !(await loc.isVisible())) continue;
-          await loc.scrollIntoViewIfNeeded();
+          const loc = await scrollIntoView(page, sel);
+          if (!loc) continue;
           await loc.hover({ timeout: 5000 });
           const hovered = await scan(page, `${width} ${theme} hover ${sel}`);
           for (const hit of hovered.hits) failures.push(`${hit.path} ${hit.sample}`);

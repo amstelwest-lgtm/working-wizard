@@ -9,6 +9,7 @@ import {
   recordDraftToolSchema,
   sendMessageToolSchema,
 } from "../../../../src/lib/agent-draft.ts";
+import { proposeAgentSendToolSchema } from "../../../../src/lib/agent-send-draft.ts";
 import { proposeFigureToolSchema } from "../../../../src/lib/figure-proposal.ts";
 import { prepareClientReportToolSchema } from "../../../../src/lib/client-report-prepare.ts";
 import { FM_DRAFT_KINDS, FM_PEERS } from "../../../../src/lib/agent-financial-manager.ts";
@@ -19,7 +20,7 @@ export const FINANCIAL_MANAGER_SYSTEM = `You are the Milōn Financial Manager fo
 ${MILON_AGENT_MISSION}
 You check the books on file and draft what a person should approve. You coordinate the Analyst and the Advisor. You do not send anything yourself.
 
-Each turn you may call several read tools, or record_draft, or propose_figure_adjustment, or prepare_client_report, or send_agent_message, or finish. Milōn runs every tool and records whether it happened.
+Each turn you may call several read tools, or record_draft, or propose_figure_adjustment, or propose_agent_send, or prepare_client_report, or send_agent_message, or finish. Milōn runs every tool and records whether it happened.
 
 How to work:
 - Read first on a books check. When the accountant asked for one named client report, call prepare_client_report before the reads. Books quality (QuickBooks, Xero, Sage, and uploads), the saved cashflow, the budget, your inbox, findings already on file, and the shared deliverable reads come from the tools.
@@ -44,6 +45,7 @@ How to work:
 - waterfall patch keys are the period P&L the profitability waterfall reads: revenue, cogs, grossProfit, fixedCosts, ebit, interest, tax, netIncome. Read get_financial_snapshot first. Do not invent other keys.
 - There is no tool that applies the change. Do not try to apply it yourself. The Analyst does not have this tool.
 - prepare_client_report names one existing PDF: scorecard, forecast, waterfall, budget, or benchmark. When the accountant asked for one of those, call it before other tools. It does not build a new file, write books, send email, or sign anything off. applied is false. Put the download_path from the tool in the finish summary. Do not say the report was sent, emailed, or signed off.
+- When the accountant asks to collect documents from a client, call propose_agent_send with client_name, checklist, and message. Collect March statements from Karoo Woodwork is client_name Karoo Woodwork, checklist March statements, and that sentence as message. The tool saves an unsent draft. Do not say a link was sent, emailed, or minted. A named accountant approves it later.
 - If the sentence also changes a cash, budget, or waterfall number, propose_figure_adjustment is the only write. The PDF uses the saved books. The pending change is not in the file. Do not say those figures were updated.
 - Do not call prepare_client_report for a question. If they did not name one of those five reports, do not guess a report_key.
 - These are drafts only. A person approves a draft before it is sent to the owner, the accountant, or anyone else. Do not say the draft was sent, emailed, or signed off.
@@ -97,6 +99,7 @@ export function financialManagerToolSchemas() {
     ...sharedDeliverableToolSchemas(),
     recordDraftToolSchema(FM_DRAFT_KINDS, FM_PEERS),
     proposeFigureToolSchema(),
+    proposeAgentSendToolSchema(),
     prepareClientReportToolSchema(),
     sendMessageToolSchema(FM_PEERS),
     finishToolSchema(),

@@ -171,6 +171,7 @@ const DECISION_NOTICED_KINDS = new Set([
   ACTION_POINT_DRAFT_KIND,
   "data_request_draft",
   HANDOFF_DRAFT_KIND,
+  "agent_send_draft",
 ]);
 
 function noticedFindingKind(row: { kind?: string | null; evidence?: unknown }): string {

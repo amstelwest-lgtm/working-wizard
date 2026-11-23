@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { AgentSendDraftCard } from "@/components/agent-send-draft-card";
 import { OwnerDraftCard } from "@/components/owner-draft-card";
 import { draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { CLIENT_UPDATE_DRAFT_KIND } from "@/lib/client-update-draft";
@@ -42,18 +43,24 @@ export function AgentDraftShelf({
         </p>
       ) : (
         <ul className="space-y-2">
-          {rows.map((row, index) => (
-            <OwnerDraftCard
-              key={row.id}
-              layout="moves"
-              row={row}
-              canonicalRatios={canonicalRatios}
-              health={health}
-              primary={index === 0}
-              onRefresh={onRefresh}
-              decisionSeat={row.kind === CLIENT_UPDATE_DRAFT_KIND ? "firm" : "owner"}
-            />
-          ))}
+          {rows.map((row, index) =>
+            row.kind === "agent_send_draft" ? (
+              <li key={row.id}>
+                <AgentSendDraftCard row={row} onRefresh={onRefresh} />
+              </li>
+            ) : (
+              <OwnerDraftCard
+                key={row.id}
+                layout="moves"
+                row={row}
+                canonicalRatios={canonicalRatios}
+                health={health}
+                primary={index === 0}
+                onRefresh={onRefresh}
+                decisionSeat={row.kind === CLIENT_UPDATE_DRAFT_KIND ? "firm" : "owner"}
+              />
+            ),
+          )}
         </ul>
       )}
     </section>
