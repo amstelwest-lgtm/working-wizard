@@ -459,12 +459,17 @@ async function main() {
           await page.goto(`${HARNESS}${path}`, { waitUntil: "domcontentloaded" });
           const logo = page.locator(".gold-text:visible").first();
           await logo.waitFor({ timeout: 60000 });
-          await page.waitForTimeout(500);
           await page.evaluate((next) => {
             document.documentElement.dataset.theme = next;
             document.documentElement.classList.toggle("dark", next === "dark");
           }, theme);
-          const bg = await logo.evaluate((el) => getComputedStyle(el).backgroundImage);
+          let bg = "";
+          const deadline = Date.now() + 8000;
+          while (Date.now() < deadline) {
+            bg = await logo.evaluate((el) => getComputedStyle(el).backgroundImage);
+            if (bg.includes("212, 175, 55") || bg.includes("172, 132, 0")) break;
+            await page.waitForTimeout(200);
+          }
           if (!bg.includes("212, 175, 55") && !bg.includes("172, 132, 0")) {
             failures.push(`${path} ${width} ${theme}: practice wordmark is not gold`);
           }
