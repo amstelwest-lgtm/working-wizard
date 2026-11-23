@@ -7,6 +7,7 @@ import {
   routineStepLastRunAt,
   routineStepNextRunLabel,
   type ImRoutineEventContext,
+  type RoutineSchedule,
 } from "./im-routine-schedule.ts";
 import {
   IM_ACTIVATION_DOC_TYPE,
@@ -36,6 +37,24 @@ export type RoutineActionRow = {
   driver_key: string | null;
 };
 
+/** The five activation templates, Draft client update email, and Build a report (pack, cash, waterfall, budget). */
+export const ROUTINE_ACTION_KINDS = [
+  "document_chase",
+  "monthly_pack",
+  "cash_debtor_early_warning",
+  "budget_actual_drift",
+  "tax_deadline_watch",
+  "client_update_draft",
+  "report_pack",
+  "report_cash",
+  "report_waterfall",
+  "report_budget",
+] as const;
+
+export type RoutineActionKind = (typeof ROUTINE_ACTION_KINDS)[number];
+
+const REPORT_ACTIONS = ["report_pack", "report_cash", "report_waterfall", "report_budget"] as const;
+
 export type AccountantRoutineStep = {
   id: string;
   title: string;
@@ -46,7 +65,31 @@ export type AccountantRoutineStep = {
   nextRunLabel: string | null;
 };
 
-export function parseRoutineMapMeta(meta: unknown): ImRoutineMapArtifactMeta | null {
+export function parseRoutineAction(value: unknown): RoutineActionKind | null {
+  if (typeof value !== "string") return null;
+  return (ROUTINE_ACTION_KINDS as readonly string[]).includes(value) ? (value as RoutineActionKind) : null;
+}
+
+export function parseRoutineSchedule(value: unknown): RoutineSchedule | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (row.kind === "last_business_day" || row.kind === "every_monday" || row.kind === "books_close") {
+    return { kind: row.kind };
+  }
+  if (row.kind === "n_bd_before_month_end" || row.kind === "nth_bd_after_month_end") {
+    const n = row.n;
+    if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > 15) return null;
+    return { kind: row.kind, n };
+  }
+  return null;
+}
+
+export type ParsedRoutineMapMeta = ImRoutineMapArtifactMeta & {
+  schedule: RoutineSchedule | null;
+  action: RoutineActionKind | null;
+};
+
+export function parseRoutineMapMeta(meta: unknown): ParsedRoutineMapMeta | null {
   if (!meta || typeof meta !== "object" || Array.isArray(meta)) return null;
   const row = meta as Record<string, unknown>;
   if (row.doc_type !== IM_ACTIVATION_DOC_TYPE) return null;
@@ -100,7 +143,21 @@ export function parseRoutineMapMeta(meta: unknown): ImRoutineMapArtifactMeta | n
     accepted_at: typeof row.accepted_at === "string" ? row.accepted_at : "",
     design_model: typeof row.design_model === "string" ? row.design_model : "",
     execution_model: typeof row.execution_model === "string" ? row.execution_model : "",
+    schedule: parseRoutineSchedule(row.schedule),
+    action: parseRoutineAction(row.action),
   };
+}
+
+/** Write schedule and action onto an existing routine map. Does not change kind or the template id. */
+export function mergeRoutineSettingsMeta(
+  raw: unknown,
+  settings: { schedule: unknown; action: unknown },
+): Record<string, unknown> | null {
+  if (!parseRoutineMapMeta(raw) || !raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const schedule = parseRoutineSchedule(settings.schedule);
+  const action = parseRoutineAction(settings.action);
+  if (!schedule || !action) return null;
+  return { ...(raw as Record<string, unknown>), schedule, action };
 }
 
 function moveKeyForStep(firmId: string, clientId: string, routine: string, stepId: string): string {
@@ -125,7 +182,7 @@ function stepStatus(
 export function accountantRoutineSteps(input: {
   firmId: string;
   clientId: string;
-  meta: ImRoutineMapArtifactMeta;
+  meta: ImRoutineMapArtifactMeta & { schedule?: RoutineSchedule | null };
   actions: readonly RoutineActionRow[];
   runs: readonly RoutineRunRow[];
   scheduleContext?: ImRoutineEventContext;
@@ -157,6 +214,7 @@ export function accountantRoutineSteps(input: {
         context: scheduleContext,
         status,
         now,
+        schedule: input.meta.schedule,
       }),
     };
   });
@@ -169,6 +227,25 @@ export function routineTitle(routine: ImRoutineKind): string {
   if (routine === "budget_actual_drift") return "Budget-versus-actual drift check";
   if (routine === "tax_deadline_watch") return "Tax deadline watch (Tax Specialist)";
   return "Pilot routine";
+}
+
+export function routineActionTitle(action: RoutineActionKind): string {
+  if (action === "client_update_draft") return "Draft client update email";
+  if (action === "report_pack") return "Build a report: pack";
+  if (action === "report_cash") return "Build a report: cash";
+  if (action === "report_waterfall") return "Build a report: waterfall";
+  if (action === "report_budget") return "Build a report: budget";
+  return routineTitle(action);
+}
+
+/** Queued-run summary. Tax stays a review draft. Nothing here is sent. */
+export function routineDraftSummary(action: RoutineActionKind | null | undefined, botOwner: string): string {
+  if (botOwner.toLowerCase().includes("tax")) return "Implementation Manager routine — draft for review.";
+  if (action === "client_update_draft") return "Implementation Manager routine — client_update_draft, unsent draft.";
+  if (action && (REPORT_ACTIONS as readonly string[]).includes(action)) {
+    return `Implementation Manager routine — ${action}, unsent draft.`;
+  }
+  return "Implementation Manager routine — draft only.";
 }
 
 export { imRoutinePeriodKey };
