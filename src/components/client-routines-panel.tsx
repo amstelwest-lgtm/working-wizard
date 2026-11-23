@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   loadClientImRoutineScheduleContext,
   saveClientRoutineSettings,
+  setClientRoutineAutoSend,
 } from "@/lib/im-routine-runner.functions";
 import type { ImRoutineEventContext, RoutineSchedule } from "@/lib/im-routine-schedule";
 import {
@@ -20,6 +21,11 @@ import {
 } from "@/lib/client-routines";
 import { imRoutineMapArtifactFilter, IM_ACTIVATION_SOURCE } from "@/lib/im-activation-persist";
 import { formatLastRun } from "@/lib/milon-team";
+import {
+  ROUTINE_AUTO_SEND_UNLOCK,
+  routineAutoSendBlocked,
+  type RoutineAutoSendState,
+} from "@/lib/routine-auto-send";
 
 export function ClientRoutinesPanel({
   clientId,
@@ -196,6 +202,15 @@ export function ClientRoutinesPanel({
                   ),
                 );
               }}
+              onAutoSend={(autoSend) => {
+                setArtifacts((rows) =>
+                  rows.map((row) =>
+                    row.id === id && row.meta && typeof row.meta === "object"
+                      ? { ...row, meta: { ...(row.meta as Record<string, unknown>), autoSend } }
+                      : row,
+                  ),
+                );
+              }}
             />
           </article>
         );
@@ -239,14 +254,17 @@ function RoutineSettingsEditor({
   firmId,
   meta,
   onSaved,
+  onAutoSend,
 }: {
   artifactId: string;
   clientId: string;
   firmId: string;
   meta: ParsedRoutineMapMeta;
   onSaved: (schedule: RoutineSchedule, action: RoutineActionKind) => void;
+  onAutoSend: (autoSend: RoutineAutoSendState) => void;
 }) {
   const saveSettings = useServerFn(saveClientRoutineSettings);
+  const setAutoSend = useServerFn(setClientRoutineAutoSend);
   const savedAction = meta.action;
   const [scheduleKind, setScheduleKind] = useState<RoutineSchedule["kind"]>(meta.schedule?.kind ?? "last_business_day");
   const [dayCount, setDayCount] = useState(
@@ -261,6 +279,15 @@ function RoutineSettingsEditor({
   const [note, setNote] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const savedScheduleKind = meta.schedule?.kind ?? null;
+  const savedDayCount = meta.schedule && "n" in meta.schedule ? String(meta.schedule.n) : "";
+  const savedActionChoice = meta.action?.startsWith("report_") ? "build_report" : (meta.action ?? null);
+  const savedReport = meta.action?.startsWith("report_") ? meta.action : null;
+  const scheduleDirty =
+    savedScheduleKind !== scheduleKind ||
+    (needsBusinessDayCount(scheduleKind) && savedDayCount !== dayCount);
+  const actionDirty =
+    savedActionChoice !== action || (action === "build_report" && savedReport !== report);
 
   useEffect(() => {
     setScheduleKind(meta.schedule?.kind ?? "last_business_day");
@@ -302,6 +329,25 @@ function RoutineSettingsEditor({
     }
   }
 
+  async function onFlag(on: boolean) {
+    setProblem(null);
+    setNote(null);
+    setBusy(true);
+    try {
+      const saved = await setAutoSend({ data: { firmId, clientId, artifactId, on } });
+      if (!saved.ok) throw new Error("Could not save.");
+      onAutoSend(saved.autoSend);
+      setNote(on ? "Auto-send is on. The next client update can go out. This one was not sent." : "Auto-send is off.");
+    } catch (err) {
+      setProblem(err instanceof Error ? err.message : "Could not save.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const autoSendBlocked = routineAutoSendBlocked(meta);
+  const unlocked = meta.autoSend.clean >= ROUTINE_AUTO_SEND_UNLOCK;
+
   return (
     <form
       data-routine-settings=""
@@ -315,6 +361,7 @@ function RoutineSettingsEditor({
         Schedule
         <select
           value={scheduleKind}
+          data-routine-schedule-saved={scheduleDirty ? "no" : "yes"}
           onChange={(event) => setScheduleKind(event.target.value as RoutineSchedule["kind"])}
           style={{ display: "block", marginTop: 4, color: "#102A43" }}
         >
@@ -324,6 +371,11 @@ function RoutineSettingsEditor({
             </option>
           ))}
         </select>
+        {scheduleDirty ? (
+          <span data-routine-unsaved="schedule" style={{ display: "block", marginTop: 4 }}>
+            Not saved yet
+          </span>
+        ) : null}
       </label>
       {needsBusinessDayCount(scheduleKind) ? (
         <label style={{ color: "#102A43" }}>
@@ -342,6 +394,7 @@ function RoutineSettingsEditor({
         Action
         <select
           value={action}
+          data-routine-action-saved={actionDirty ? "no" : "yes"}
           onChange={(event) => setAction(event.target.value as RoutineActionKind | "build_report")}
           style={{ display: "block", marginTop: 4, color: "#102A43" }}
         >
@@ -351,6 +404,11 @@ function RoutineSettingsEditor({
             </option>
           ))}
         </select>
+        {actionDirty ? (
+          <span data-routine-unsaved="action" style={{ display: "block", marginTop: 4 }}>
+            Not saved yet
+          </span>
+        ) : null}
       </label>
       {action === "build_report" ? (
         <label style={{ color: "#102A43" }}>
@@ -368,6 +426,26 @@ function RoutineSettingsEditor({
           </select>
         </label>
       ) : null}
+      {autoSendBlocked ? null : (
+        <div data-routine-auto-send="" style={{ display: "grid", gap: 8 }}>
+          <p style={{ color: "#102A43", margin: 0 }}>
+            {meta.autoSend.on
+              ? "Auto-send is on for this client."
+              : unlocked
+                ? `${ROUTINE_AUTO_SEND_UNLOCK} clean approvals. Auto-send stays off until you turn it on.`
+                : `${meta.autoSend.clean} of ${ROUTINE_AUTO_SEND_UNLOCK} clean approvals. Auto-send stays off.`}
+          </p>
+          {meta.autoSend.on ? (
+            <button type="button" disabled={busy} onClick={() => void onFlag(false)} style={{ justifySelf: "start", color: "#102A43" }}>
+              Turn off auto-send
+            </button>
+          ) : unlocked ? (
+            <button type="button" disabled={busy} onClick={() => void onFlag(true)} style={{ justifySelf: "start", color: "#102A43" }}>
+              Turn on auto-send
+            </button>
+          ) : null}
+        </div>
+      )}
       <p style={{ color: "#102A43", margin: 0 }}>
         {meta.schedule
           ? "Milōn queues an unsent draft on this schedule. Nothing is sent."

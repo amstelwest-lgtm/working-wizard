@@ -12,11 +12,19 @@ import type { AgentFindingRow } from "../src/lib/milon-team-activity.ts";
 import { handoffTimeline, parseHandoffRunDetail } from "../src/lib/handoff-timeline.ts";
 import { STRIKE7_BEN_ID } from "./strike7-firms.ts";
 import {
+  nextRoutineAutoSend,
+  readRoutineAutoSend,
+  routineAutoSendBlocked,
+  routineAutoSendDue,
+  withRoutineAutoSend,
+} from "../src/lib/routine-auto-send.ts";
+import {
   CLIENT_UPDATE_AUTO_SEND,
   CLIENT_UPDATE_DRAFT_KIND,
   buildUnsentClientUpdateFinding,
   clientUpdateFromHeader,
   clientUpdateIdempotencyKey,
+  clientUpdateSendLocked,
   dismissClientUpdatePatch,
   parseClientUpdateDetail,
   planClientUpdateSend,
@@ -133,6 +141,22 @@ const auto = planClientUpdateSend({
   fromEmailRaw: fromRaw,
 });
 assert(auto.send === false && auto.reason === "auto_send_off", "auto-send is not a send path");
+const opted = planClientUpdateSend({
+  approval: { approverName: "Ada Ben", approvedAt: "2026-11-23T15:00:00.000Z" },
+  requestedAutoSend: true,
+  routineOptIn: true,
+  practiceName: practice,
+  accountantEmail,
+  to: clientEmail,
+  subject: "Cash update",
+  body: renderClientUpdateBody({ draft, basis }),
+  fromEmailRaw: fromRaw,
+});
+assert(opted.send, "a routine opt-in uses the same send plan");
+if (!opted.send) throw new Error("opt-in");
+assert(opted.payload.from.startsWith("Ben Accountants <"), "opt-in From is the practice");
+assert(opted.payload.reply_to === accountantEmail, "opt-in Reply-To is the accountant");
+assert(!/milon/i.test(opted.payload.from.split("<")[0] ?? ""), "opt-in display name is not the product");
 const unnamed = planClientUpdateSend({
   approval: { approverName: "   ", approvedAt: "2026-11-23T15:00:00.000Z" },
   practiceName: practice,
@@ -235,12 +259,17 @@ assert(!readClientUpdateAudit(dismissed.evidence), "dismiss does not invent a se
 
 const same = clientUpdateIdempotencyKey("finding-1", edited);
 assert(same === clientUpdateIdempotencyKey("finding-1", edited), "the same text reuses one send key");
-assert(same !== clientUpdateIdempotencyKey("finding-1", `${edited}\n`), "an edit is a different send");
+assert(same === clientUpdateIdempotencyKey("finding-1", `${edited}\nExtra.`), "an edit keeps the finding key so it cannot double-send");
+assert(clientUpdateSendLocked({ ...finding.evidence, sending: true }), "a reserved send is locked");
+assert(clientUpdateSendLocked(patch.evidence), "a sent update is locked");
+assert(!clientUpdateSendLocked(finding.evidence), "an unsent draft is not locked");
 assert(publicSendError(422, 'Bearer re_secret sk_live_abc {"message":"no"}').includes("[redacted]"), "provider errors are redacted");
 assert(!publicSendError(422, "re_secret").includes("re_secret"), "a Resend token is not shown");
 
 const fn = readFileSync("src/lib/client-update-draft.functions.ts", "utf8");
 assert(fn.indexOf("if (!planned.send)") < fn.indexOf("api.resend.com"), "approve plans the send before Resend is called");
+assert(fn.indexOf("reserveClientUpdateSend(") < fn.indexOf("api.resend.com"), "the send is reserved before Resend is called");
+assert(fn.includes("sending: true"), "the reserve writes a sending marker");
 assert(fn.includes("planClientUpdateSend"), "approve uses the send plan");
 assert(fn.includes("RESEND_API_KEY") && fn.includes("RESEND_FROM_EMAIL"), "the existing Resend env names are reused");
 assert(!fn.includes('status: "approved"'), "the handler does not mark a live-row approval");
@@ -259,6 +288,13 @@ assert(card.includes("reviewClientUpdateDraft"), "approve on the review card use
 assert(card.includes('action: "approve"') && card.includes('action: "dismiss"'), "edit-then-approve and dismiss are both wired");
 const shelf = readFileSync("src/components/agent-draft-shelf.tsx", "utf8");
 assert(shelf.includes("CLIENT_UPDATE_DRAFT_KIND") && shelf.includes('decisionSeat='), "the review queue can approve a client update");
+assert(shelf.includes('audience === "owner" ? "owner"'), "an owner shelf does not take the firm seat");
+const ownerPlan = readFileSync("src/components/action-plan.tsx", "utf8");
+const ownerDrafts = ownerPlan.slice(ownerPlan.indexOf("data-owner-drafts"));
+assert(ownerDrafts.includes('decisionSeat="owner"'), "the owner draft shelf stays on the owner seat");
+assert(!ownerDrafts.includes('decisionSeat="firm"'), "the owner draft shelf does not take the firm seat");
+const desk = readFileSync("src/components/milon-team/milon-team-desk.tsx", "utf8");
+assert(desk.includes('audience === "owner" ? "owner" : "firm"'), "the owner desk does not take the firm seat");
 
 function row(seat: "owner" | "firm") {
   const findingRow: AgentFindingRow = {
@@ -283,5 +319,75 @@ assert(firmCard.includes("September cash closing"), "the queue shows what the dr
 assert(!firmCard.includes("Remember this"), "this approval does not offer a private rule");
 const ownerCard = row("owner");
 assert(!ownerCard.includes("Approve"), "the client owner cannot approve the send");
+
+const sentEvidence = {
+  ...finding.evidence,
+  draft: false,
+  sent: true,
+  decision: "sent",
+  audit: {
+    approverName: "Ada Ben",
+    approvedAt: "2026-11-23T15:04:00.000Z",
+    resendMessageId: "re_test_123",
+    finalText: finding.detail,
+  },
+};
+const sentRow: AgentFindingRow = {
+  id: "draft-sent",
+  agent: "advisor",
+  client_id: "c",
+  kind: CLIENT_UPDATE_DRAFT_KIND,
+  title: "Cash update",
+  detail: finding.detail,
+  evidence: sentEvidence,
+  as_of: null,
+  created_at: "2026-11-23T15:00:00.000Z",
+};
+const sentCard = renderToStaticMarkup(
+  createElement(OwnerDraftCard, { layout: "moves", row: sentRow, decisionSeat: "firm" }),
+);
+assert(sentCard.includes("Sent"), "a sent update shows Sent");
+assert(sentCard.includes('data-draft-status="sent"'), "a refresh shows the sent state");
+assert(!sentCard.includes("Approve"), "a sent update does not offer Approve again");
+
+const routineMeta = {
+  doc_type: "im_routine_map",
+  routine: "monthly_pack",
+  action: "client_update_draft",
+  steps: [{ botOwner: "Advisor", approvalGate: { kind: "human_send" } }],
+};
+assert(!routineAutoSendBlocked(routineMeta), "a client-update routine can unlock auto-send");
+assert(routineAutoSendBlocked({ ...routineMeta, routine: "tax_deadline_watch" }), "a tax routine has no auto-send");
+assert(
+  routineAutoSendBlocked({
+    ...routineMeta,
+    steps: [{ botOwner: "Accountant", approvalGate: { kind: "human_ledger_post" } }],
+  }),
+  "a ledger routine has no auto-send",
+);
+let streak = readRoutineAutoSend({});
+streak = nextRoutineAutoSend(streak, "clean");
+streak = nextRoutineAutoSend(streak, "clean");
+assert(streak.clean === 2 && streak.on === false, "two clean approvals stay off");
+streak = nextRoutineAutoSend(streak, "edit");
+assert(streak.clean === 0 && streak.on === false, "an edit resets the streak");
+streak = nextRoutineAutoSend(nextRoutineAutoSend(nextRoutineAutoSend(streak, "clean"), "clean"), "clean");
+assert(streak.clean === 3 && streak.on === false, "three clean approvals unlock the opt-in and do not send");
+const optedMeta = withRoutineAutoSend(routineMeta, {
+  ...streak,
+  on: true,
+  byName: "Ada Ben",
+  byUserId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  at: "2026-11-23T16:00:00.000Z",
+});
+assert(readRoutineAutoSend(optedMeta).on === true, "the accountant can turn the flag on");
+assert(
+  routineAutoSendDue(optedMeta, "2026-11-23T16:05:00.000Z"),
+  "a later draft can auto-send once the flag is on",
+);
+assert(!routineAutoSendDue(optedMeta, "2026-11-23T15:00:00.000Z"), "a draft from before the opt-in is not sent");
+const bounced = withRoutineAutoSend(optedMeta, nextRoutineAutoSend(readRoutineAutoSend(optedMeta), "bounce"));
+assert(readRoutineAutoSend(bounced).clean === 0 && readRoutineAutoSend(bounced).on === false, "a bounce resets the flag");
+assert(!("autoSend" in withRoutineAutoSend({ ...routineMeta, routine: "tax_deadline_watch" }, streak)), "a tax routine stores no flag");
 
 console.log("client-update-draft ok");

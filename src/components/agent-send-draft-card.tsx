@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { approveAgentSendDraft } from "@/lib/agent-send-draft.functions";
+import { approveAgentSendDraft, dismissAgentSendDraft } from "@/lib/agent-send-draft.functions";
 import type { AgentFindingRow } from "@/lib/milon-team-activity";
 
 function evidence(row: AgentFindingRow): Record<string, unknown> {
@@ -25,6 +25,7 @@ export function AgentSendDraftCard({
   onRefresh?: () => void;
 }) {
   const approve = useServerFn(approveAgentSendDraft);
+  const dismiss = useServerFn(dismissAgentSendDraft);
   const stored = evidence(row);
   const checklist = lines(stored.checklist);
   const clientName = typeof stored.client_name === "string" ? stored.client_name : "";
@@ -54,11 +55,31 @@ export function AgentSendDraftCard({
             ? "Approval needs a named accountant. Nothing was sent."
             : result.reason === "address"
               ? "Enter the email address to send to. Nothing was sent."
-              : "Nothing was sent.",
+              : result.reason === "dismissed"
+                ? "Dismissed. Nothing was sent."
+                : "Nothing was sent.",
         );
         return;
       }
       setNote(result.already ? "This draft was already approved." : "Approved. The document list was sent.");
+      onRefresh?.();
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : "Nothing was sent.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDismiss() {
+    setNote(null);
+    setBusy(true);
+    try {
+      const result = await dismiss({ data: { findingId: row.id } });
+      if (!result.ok) {
+        setNote(result.reason === "already_sent" ? "This draft was already sent." : "Nothing was sent.");
+        return;
+      }
+      setNote("Dismissed. Nothing was sent.");
       onRefresh?.();
     } catch (err) {
       setNote(err instanceof Error ? err.message : "Nothing was sent.");
@@ -107,6 +128,9 @@ export function AgentSendDraftCard({
           </label>
           <button type="submit" disabled={busy} style={{ justifySelf: "start", color: "#102A43" }}>
             {busy ? "Approving…" : "Approve and send"}
+          </button>
+          <button type="button" disabled={busy} onClick={() => void onDismiss()} style={{ justifySelf: "start", color: "#102A43" }}>
+            Dismiss
           </button>
         </form>
       )}

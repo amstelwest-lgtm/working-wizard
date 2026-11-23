@@ -21,6 +21,7 @@ import {
   applyLighthouseInbound,
   extractEmail,
 } from "@/lib/lighthouse-delivery.server";
+import { resetClientUpdateOnBounce } from "@/lib/client-update-draft.functions";
 
 type ResendEvent = {
   type?: string;
@@ -142,6 +143,14 @@ export const Route = createFileRoute("/api/resend/webhook")({
 
         if (!reason) {
           return Response.json({ ok: true, ignored: type });
+        }
+
+        if (reason === "bounce" && messageId) {
+          try {
+            await resetClientUpdateOnBounce(messageId);
+          } catch {
+            /* the lighthouse event still records */
+          }
         }
 
         const result = await applyLighthouseDeliveryEvent({

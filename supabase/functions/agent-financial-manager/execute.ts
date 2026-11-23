@@ -17,6 +17,7 @@ import {
   agentSendFindingRow,
   draftFromProposeArgs,
 } from "../../../src/lib/agent-send-draft.ts";
+import { sendAgentFirmAllowed } from "../../../src/lib/client-agent-send-allowlist.ts";
 import {
   buildFigureProposal,
   figureBeforeValues,
@@ -77,6 +78,13 @@ export async function executeFinancialManagerTool(
  * stores a skipped run so the finding has a parent, then stops.
  */
 async function proposeAgentSend(args: Record<string, unknown>, ctx: AgentToolCtx): Promise<unknown> {
+  if (!sendAgentFirmAllowed(ctx.firmId)) {
+    return {
+      error: "Send an agent is not available for this practice. Nothing was saved.",
+      tool_blocked: true,
+      drafted: false,
+    };
+  }
   let clientName = cleanLinePresent(args.client_name) ? String(args.client_name) : "";
   if (!clientName) {
     const { data } = await ctx.db.from("clients").select("name").eq("id", ctx.clientId).maybeSingle();

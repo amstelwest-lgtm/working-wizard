@@ -5760,6 +5760,7 @@ function ClientView() {
                           canonicalRatios={canonicalRatios}
                           health={liveScoreSnapshot}
                           onRefresh={homeActivity.refresh}
+                          audience="accountant"
                         />
                         <RecommendationsPanel
                           className="mb-5"

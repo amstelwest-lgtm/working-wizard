@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { AgentSendDraftCard } from "@/components/agent-send-draft-card";
 import { OwnerDraftCard } from "@/components/owner-draft-card";
 import { draftFindingLabel } from "@/hooks/owner-agent-ui";
-import { CLIENT_UPDATE_DRAFT_KIND } from "@/lib/client-update-draft";
+import { CLIENT_UPDATE_DRAFT_KIND, clientUpdateSendLocked } from "@/lib/client-update-draft";
 import { isVisibleAgentFinding, type AgentFindingRow } from "@/lib/milon-team-activity";
 import type { HealthScoreSnapshot } from "@/lib/health-snapshot";
 
@@ -16,16 +16,20 @@ export function AgentDraftShelf({
   canonicalRatios = null,
   health = null,
   onRefresh,
+  audience = "accountant",
 }: {
   findings: readonly AgentFindingRow[];
   focusId?: string | null;
   canonicalRatios?: Record<string, number> | null;
   health?: HealthScoreSnapshot | null;
   onRefresh?: () => void;
+  /** Owner shelves never receive the firm seat. */
+  audience?: "owner" | "accountant";
 }) {
   const rows = findings.filter((row) => {
     if (!isVisibleAgentFinding(row)) return false;
     if (focusId && row.id === focusId) return true;
+    if (row.kind === CLIENT_UPDATE_DRAFT_KIND && clientUpdateSendLocked(row.evidence)) return true;
     return draftFindingLabel(row) != null;
   });
   useEffect(() => {
@@ -57,7 +61,9 @@ export function AgentDraftShelf({
                 health={health}
                 primary={index === 0}
                 onRefresh={onRefresh}
-                decisionSeat={row.kind === CLIENT_UPDATE_DRAFT_KIND ? "firm" : "owner"}
+                decisionSeat={
+                  audience === "owner" ? "owner" : row.kind === CLIENT_UPDATE_DRAFT_KIND ? "firm" : "owner"
+                }
               />
             ),
           )}

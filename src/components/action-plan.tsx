@@ -2216,6 +2216,7 @@ export default function ActionPlanPanel({
                 onOpen={onOpenApproved}
                 onInvite={onInviteAccountant}
                 onRefresh={draftActivity.refresh}
+                decisionSeat="owner"
               />
             ))}
           </ul>

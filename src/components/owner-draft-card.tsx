@@ -41,7 +41,7 @@ import {
   draftFindingLabel,
 } from "@/hooks/owner-agent-ui";
 import { reviewClientUpdateDraft } from "@/lib/client-update-draft.functions";
-import { CLIENT_UPDATE_DRAFT_KIND } from "@/lib/client-update-draft";
+import { CLIENT_UPDATE_DRAFT_KIND, clientUpdateSendLocked } from "@/lib/client-update-draft";
 
 export type ApprovedDraftTarget = ApprovedLiveLink & {
   table: string;
@@ -109,8 +109,13 @@ export function OwnerDraftCard({
   const copy = findingCardCopy(row, market, canonicalRatios);
   const formattedTitle = formatFindingProse(row.title, figures, market, canonicalRatios);
   const formattedDetail = formatFindingProse(row.detail ?? "", figures, market, canonicalRatios);
-  const seedTitle = copy.lead || formattedTitle;
-  const seedDetail = copy.lead === formattedTitle || formattedDetail !== copy.lead ? formattedDetail : "";
+  const clientUpdate = row.kind === CLIENT_UPDATE_DRAFT_KIND;
+  const seedTitle = clientUpdate ? row.title : copy.lead || formattedTitle;
+  const seedDetail = clientUpdate
+    ? (row.detail ?? "")
+    : copy.lead === formattedTitle || formattedDetail !== copy.lead
+      ? formattedDetail
+      : "";
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(seedTitle);
   const [detail, setDetail] = useState(seedDetail);
@@ -121,13 +126,13 @@ export function OwnerDraftCard({
   const [busy, setBusy] = useState(false);
   const [rememberThis, setRememberThis] = useState(false);
   const reviewUpdate = useServerFn(reviewClientUpdateDraft);
-  const clientUpdate = row.kind === CLIENT_UPDATE_DRAFT_KIND;
+  const sendLocked = clientUpdate && clientUpdateSendLocked(row.evidence);
 
   useEffect(() => subscribeDraftDecisionButtons(() => setBlocked(true)), []);
 
   if (optimistic?.phase === "dismissed") return null;
 
-  const approved = row.status === "approved" || optimistic?.phase === "approved";
+  const approved = sendLocked || row.status === "approved" || optimistic?.phase === "approved";
   const table =
     (optimistic?.phase === "approved" ? optimistic.table : null) ??
     row.approved_table ??
@@ -271,7 +276,10 @@ export function OwnerDraftCard({
   }
 
   const status = approved ? (
-    <p className={layout === "desk" ? "milon-desk-hint" : "mt-1 text-sm text-slate-600 dark:text-slate-300"} data-draft-status="approved">
+    <p
+      className={layout === "desk" ? "milon-desk-hint" : "mt-1 text-sm text-slate-600 dark:text-slate-300"}
+      data-draft-status={clientUpdate ? "sent" : "approved"}
+    >
       {kindLabel ? `${kindLabel} · ` : ""}
       {clientUpdate ? "Sent" : "Approved"}
       {link ? (

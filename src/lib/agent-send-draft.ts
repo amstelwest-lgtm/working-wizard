@@ -194,7 +194,9 @@ export function agentSendApproval(input: {
   | { ok: false; reason: "needs_named_accountant" | "address" | "already_sent" } {
   if (input.draft.sent || input.draft.minted) return { ok: false, reason: "already_sent" };
   const approverName = (input.approverName ?? "").replace(/\s+/g, " ").trim();
-  if (!approverName || UNNAMED.test(approverName)) return { ok: false, reason: "needs_named_accountant" };
+  if (!approverName || UNNAMED.test(approverName) || approverName.includes("@")) {
+    return { ok: false, reason: "needs_named_accountant" };
+  }
   const recipientEmail = input.recipientEmail.replace(/\s+/g, "").trim().toLowerCase();
   if (!recipientEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) {
     return { ok: false, reason: "address" };

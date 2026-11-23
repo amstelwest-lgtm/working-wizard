@@ -62,7 +62,7 @@ export const approveAgentSendDraft = createServerFn({ method: "POST" })
     if (!row || !clientId || row.kind !== "agent_send_draft") {
       return { ok: false as const, reason: "not_found" as const };
     }
-    if (row.status === "dismissed") return { ok: false as const, reason: "already_sent" as const };
+    if (row.status === "dismissed") return { ok: false as const, reason: "dismissed" as const };
 
     const draft = readAgentSendDraft({ clientId, evidence: row.evidence });
     if (!draft) {
@@ -121,4 +121,54 @@ export const approveAgentSendDraft = createServerFn({ method: "POST" })
       .maybeSingle();
     if (updated.error) throw new Error(updated.error.message);
     return { ok: true as const, already: !minted.ok, sendId, approverName: plan.approverName };
+  });
+
+export const dismissAgentSendDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ findingId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const userId = context.userId;
+    if (!userId) return { ok: false as const, reason: "needs_named_accountant" as const };
+    const db = admin();
+    const found = await db
+      .from("agent_findings")
+      .select("id, client_id, kind, evidence, status")
+      .eq("id", data.findingId)
+      .maybeSingle();
+    if (found.error) throw new Error(found.error.message);
+    const row = found.data;
+    const clientId = typeof row?.client_id === "string" ? row.client_id : "";
+    if (!row || !clientId || row.kind !== "agent_send_draft") {
+      return { ok: false as const, reason: "not_found" as const };
+    }
+    if (row.status === "dismissed") return { ok: true as const, already: true, reason: "dismissed" as const };
+    const evidence =
+      row.evidence && typeof row.evidence === "object" && !Array.isArray(row.evidence)
+        ? (row.evidence as Record<string, unknown>)
+        : {};
+    if (evidence.sent === true || evidence.minted === true) {
+      return { ok: false as const, reason: "already_sent" as const };
+    }
+    const updated = await db
+      .from("agent_findings")
+      .update({
+        status: "dismissed",
+        dismissed_reason: "dismissed",
+        evidence: {
+          ...evidence,
+          figures:
+            evidence.figures && typeof evidence.figures === "object" && !Array.isArray(evidence.figures)
+              ? evidence.figures
+              : { checklistCount: 1 },
+          draft: false,
+          sent: false,
+          minted: false,
+          decision: "dismissed",
+        },
+      })
+      .eq("id", data.findingId)
+      .select("id")
+      .maybeSingle();
+    if (updated.error) throw new Error(updated.error.message);
+    return { ok: true as const, already: false, reason: "dismissed" as const };
   });

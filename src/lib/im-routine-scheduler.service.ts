@@ -40,6 +40,7 @@ import {
 } from "@/lib/statement-period";
 import { imCashCollectionsRiskFromFinancials } from "@/lib/im-routine-signals";
 import { imTaxDeadlineApproaching } from "@/lib/im-routine-tax-deadlines";
+import { flushOptedInClientUpdates } from "@/lib/client-update-draft.functions";
 
 type Row = Record<string, unknown>;
 type DbError = { message: string; code?: string } | null;
@@ -414,6 +415,11 @@ export async function runImRoutineSchedulerCore(
   for (const row of clients) {
     const clientId = typeof row.id === "string" ? row.id : "";
     if (!clientId) continue;
+    try {
+      await flushOptedInClientUpdates(clientId);
+    } catch {
+      /* a send failure must not stop the routine pass */
+    }
     const scheduleContext = await loadImRoutineScheduleContext(clientId, now);
 
     const artifacts = await (db
