@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { OwnerDraftCard } from "@/components/owner-draft-card";
 import { draftFindingLabel } from "@/hooks/owner-agent-ui";
+import { CLIENT_UPDATE_DRAFT_KIND } from "@/lib/client-update-draft";
 import { isVisibleAgentFinding, type AgentFindingRow } from "@/lib/milon-team-activity";
 import type { HealthScoreSnapshot } from "@/lib/health-snapshot";
 
@@ -50,6 +51,7 @@ export function AgentDraftShelf({
               health={health}
               primary={index === 0}
               onRefresh={onRefresh}
+              decisionSeat={row.kind === CLIENT_UPDATE_DRAFT_KIND ? "firm" : "owner"}
             />
           ))}
         </ul>

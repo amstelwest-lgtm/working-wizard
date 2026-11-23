@@ -614,7 +614,7 @@ export async function loadHandoffRunDetail(runId: string): Promise<HandoffRunDet
       )
       .eq("id", runId)
       .maybeSingle(),
-    db.from("agent_findings").select("id, title, detail, severity").eq("run_id", runId),
+    db.from("agent_findings").select("id, title, detail, severity, evidence").eq("run_id", runId),
   ]);
   if (runRes.error || !runRes.data) return null;
   return parseHandoffRunDetail(runRes.data, findingsRes.error ? [] : findingsRes.data);

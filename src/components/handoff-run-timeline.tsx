@@ -123,6 +123,14 @@ export function HandoffRunTimeline({
                         {finding.detail.slice(0, 280)}
                       </span>
                     ) : null}
+                    {finding.clientUpdateAudit ? (
+                      <span className="handoff-timeline__detail" data-client-update-audit={finding.id}>
+                        {finding.clientUpdateAudit.approverName} · {finding.clientUpdateAudit.approvedAt} ·{" "}
+                        {finding.clientUpdateAudit.resendMessageId}
+                        {"\n"}
+                        {finding.clientUpdateAudit.finalText}
+                      </span>
+                    ) : null}
                     {onOpenDraft ? (
                       <button
                         type="button"

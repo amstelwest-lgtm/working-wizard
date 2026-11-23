@@ -12,7 +12,11 @@ import {
 export const ADVISOR_MAX_ITERATIONS = 6;
 export const ADVISOR_COST_CEILING_USD = 0.06;
 
-export const ADVISOR_DRAFT_KINDS = ["next_move_draft", "advisory_deliverable_draft"] as const;
+export const ADVISOR_DRAFT_KINDS = [
+  "next_move_draft",
+  "advisory_deliverable_draft",
+  "client_update_draft",
+] as const;
 
 export type AdvisorDraftKind = (typeof ADVISOR_DRAFT_KINDS)[number];
 
