@@ -42,9 +42,12 @@ import { desktopSyncClientReady } from "@/lib/desktop-sync-ready";
 import { buildIntegrationPlanTable, type IntegrationPlanRow } from "@/lib/im-integration-plan";
 import {
   buildPracticeImplementationPlan,
+  classifyMomTestAnswer,
   dedupePracticeSteps,
+  momTestFlowLine,
   type PracticeImplementationPlan,
 } from "@/lib/setup-partner-plan";
+import { nextMomTestQuestion } from "../../supabase/functions/setup-partner/firm-interview-prompt.ts";
 
 /** User-facing name. Internal ids stay setup_partner. */
 export const IMPLEMENTATION_MANAGER_LABEL = "Implementation Manager";
@@ -267,6 +270,8 @@ export function PracticeSetupInterview({
   const [firmRunCount, setFirmRunCount] = useState(0);
   const [runningLines, setRunningLines] = useState<RunningLine[]>([]);
   const [opusRows, setOpusRows] = useState<IntegrationPlanRow[] | null>(null);
+  const [momAnswered, setMomAnswered] = useState<string[]>([]);
+  const [momDraft, setMomDraft] = useState("");
   /** Rows already on screen when Start was clicked. Later Opus replies do not replace them. */
   const heldPlanRef = useRef<IntegrationPlanRow[] | null>(null);
   const country = parseMarketSelection(firmMarket)?.country ?? null;
@@ -297,6 +302,8 @@ export function PracticeSetupInterview({
         todaysFlow: nextMap.todaysFlow.filter((line) => !line.includes("{") && !line.includes("`")),
         checklist: nextMap.checklist.filter((line) => !line.includes("{") && !line.includes("`")),
       });
+      setMomAnswered([]);
+      setMomDraft("");
       if (!redoOpen) setPhase("map");
     } catch (err) {
       setError(
@@ -506,6 +513,8 @@ export function PracticeSetupInterview({
     setQuestion("");
     setDraft("");
     setMap(null);
+    setMomAnswered([]);
+    setMomDraft("");
     setError(null);
     setTurnError(null);
     setModelTurns(0);
@@ -535,6 +544,8 @@ export function PracticeSetupInterview({
       setQuestion("");
       setDraft("");
       setMap(null);
+      setMomAnswered([]);
+      setMomDraft("");
       setTurnError(null);
       setModelTurns(0);
       if (plan && plan.steps.length > 0) setPhase("done");
@@ -579,6 +590,26 @@ export function PracticeSetupInterview({
       </section>
     );
   }
+
+  const momQuestion =
+    phase === "map" && map
+      ? nextMomTestQuestion({
+          planReady: true,
+          firmAnswers: messages.map((row) => row.content).join("\n"),
+          askedIds: momAnswered,
+        })
+      : null;
+
+  const answerMom = () => {
+    if (!momQuestion) return;
+    const text = momDraft.trim();
+    if (!text) return;
+    const step = classifyMomTestAnswer({ questionId: momQuestion.id, answer: text });
+    const line = momTestFlowLine(step);
+    setMap((current) => (current ? { ...current, todaysFlow: [...current.todaysFlow, line] } : current));
+    setMomAnswered((ids) => [...ids, momQuestion.id]);
+    setMomDraft("");
+  };
 
   const advance = async () => {
     const text = draft.trim();
@@ -841,6 +872,32 @@ export function PracticeSetupInterview({
               </ul>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {momQuestion ? (
+        <div className="im-card" data-mom-test="">
+          <h2 className="im-card__title">What already happened</h2>
+          <p data-mom-test-question="">{momQuestion.prompt}</p>
+          <textarea
+            className="setup-partner__answer"
+            value={momDraft}
+            onChange={(event) => setMomDraft(event.target.value)}
+            placeholder="What happened"
+            style={{ fontFamily: "var(--font-sans), sans-serif" }}
+          />
+          <div className="setup-partner__actions">
+            <button
+              type="button"
+              className="setup-partner__primary"
+              data-mom-test-next=""
+              disabled={!momDraft.trim()}
+              onClick={answerMom}
+            >
+              <ArrowRight size={15} aria-hidden />
+              Next
+            </button>
+          </div>
         </div>
       ) : null}
 

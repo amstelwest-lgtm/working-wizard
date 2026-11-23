@@ -14,6 +14,10 @@ import {
 } from "./im-capability-manifest.ts";
 import { clipMilonBrainRuleText, type MilonBrainRuleRow } from "./milon-brain-rules.ts";
 import {
+  MOM_TEST_GAP_IDS,
+  MOM_TEST_SETUP_IDS,
+} from "../../supabase/functions/setup-partner/firm-interview-prompt.ts";
+import {
   SETUP_PARTNER_SOURCE_EVENT,
   SETUP_PARTNER_TASK_FEATURE,
   SETUP_PARTNER_TASK_WORKFLOW,
@@ -136,11 +140,34 @@ function planStepFromClassifier(
   });
 }
 
+const MOM_TEST_MARK = /\[\|(product_gap|client_setup)\]/;
+
+function stripMomTestMark(text: string): string {
+  return text.replace(/\s*\[\|(?:product_gap|client_setup)\]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 /** Deterministic bucket for one practice workflow step. */
 export function classifyPracticeStep(
   step: string,
   opts?: { manifest?: ImCapabilityManifest; country?: SetupPartnerCountry | null },
 ): PracticePlanStep {
+  const forced = step.match(MOM_TEST_MARK)?.[1] as "product_gap" | "client_setup" | undefined;
+  if (forced) {
+    const plain = stripMomTestMark(step);
+    const result = classifyPracticeStep(plain, opts);
+    if (result.bucket === forced) return { ...result, step: plain || result.step };
+    return stepOf(plain || step, {
+      stepType: forced === "client_setup" ? "firm_setting" : practiceGapSlug(plain || "gap"),
+      capability: forced === "client_setup" ? "practice-setup" : practiceGapSlug(plain || "gap"),
+      covers:
+        forced === "client_setup"
+          ? "Practice setup — who reviews, who signs off, and how the firm keeps its own habits"
+          : (plain || "Gap").slice(0, 120),
+      bucket: forced,
+      fitNote: forced === "product_gap" ? FIT_GAP : FIT_SETUP,
+      effort: forced === "client_setup" ? "S" : "M",
+    });
+  }
   const manifest = opts?.manifest ?? buildCapabilityManifest(opts?.country);
   const text = accountantFacingStep(step.replace(/\s+/g, " ").trim());
   if (!text) {
@@ -234,6 +261,32 @@ export function classifyPracticeStep(
     fitNote: FIT_BESPOKE,
     effort: "L",
   });
+}
+
+/**
+ * A Mom Test answer is only client_setup or product_gap.
+ * The practice classifier wins when it already chose one of those.
+ * Covered work is configuration. Anything else follows the question.
+ */
+export function classifyMomTestAnswer(input: { questionId: string; answer: string }): PracticePlanStep {
+  const answer = accountantFacingStep(input.answer);
+  const classified = classifyPracticeStep(answer);
+  const bucket: "product_gap" | "client_setup" =
+    classified.bucket === "product_gap" || classified.bucket === "client_setup"
+      ? classified.bucket
+      : classified.bucket === "covered"
+        ? "client_setup"
+        : MOM_TEST_GAP_IDS.has(input.questionId) && !MOM_TEST_SETUP_IDS.has(input.questionId)
+          ? "product_gap"
+          : "client_setup";
+  if (classified.bucket === bucket) return classified;
+  return classifyPracticeStep(`${answer} [|${bucket}]`);
+}
+
+/** One flow line the existing plan builder can classify again on confirm. */
+export function momTestFlowLine(step: Pick<PracticePlanStep, "step" | "bucket">): string {
+  const bucket = step.bucket === "product_gap" ? "product_gap" : "client_setup";
+  return `${accountantFacingStep(step.step)} [|${bucket}]`;
 }
 
 const BUCKET_LABEL: Record<PracticeGapBucket, string> = {

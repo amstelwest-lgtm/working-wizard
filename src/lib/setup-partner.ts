@@ -2,6 +2,7 @@
  * Setup Partner — onboarding interview, data summary shape, workflow map, and
  * private brain-rule rows. Pure helpers only; no ledger writes.
  */
+import { isMomTestQuestion } from "../../supabase/functions/setup-partner/firm-interview-prompt.ts";
 import { clipMilonBrainRuleText, type MilonBrainRuleRow } from "./milon-brain-rules.ts";
 
 export const SETUP_PARTNER_AGENT_KEY = "setup_partner" as const;
@@ -108,6 +109,7 @@ const INTERROGATIVE = /^(?:who|what|when|where|why|how|which|whom)\b/i;
 export function questionShouldRegenerate(value: string): boolean {
   const text = value.replace(/\s+/g, " ").trim();
   if (!text) return false;
+  if (isMomTestQuestion(text)) return false;
   if (questionHasMultipleAsks(text)) return true;
   if (SECOND_ASK.test(text)) return true;
   return !INTERROGATIVE.test(text);

@@ -1168,6 +1168,13 @@ async function runPanel() {
     releaseBuild({ map: zaMap, modelTurns: 1 });
   });
   await waitForPhase("map");
+  const momAsked = document.querySelectorAll("[data-mom-test-question]");
+  assert(momAsked.length === 1, "the Mom Test asks one question after the plan");
+  assert(
+    momAsked[0]?.textContent ===
+      "Think of the last client who was surprised by a tax bill or a cash crunch. When did you find out, and how?",
+    "the question on screen is the first bank question",
+  );
   assert(!marketLeak(coverageText()), "a US firm coverage list has no ZA or SARS");
   assert(coverageText().includes("Sales-tax prep"), "US coverage names sales-tax prep");
   const confirm = [...document.querySelectorAll("button")].find(
