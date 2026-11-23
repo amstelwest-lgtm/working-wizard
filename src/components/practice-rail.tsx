@@ -44,6 +44,11 @@ export function practiceSections(taxRail: boolean): NavSection[] {
           bot: true,
           items: homeItems,
         },
+        {
+          id: "implementation",
+          label: "Implementation Manager",
+          to: { to: "/practice/setup" },
+        },
       ],
     },
     {
@@ -70,7 +75,6 @@ export function practiceSections(taxRail: boolean): NavSection[] {
             { id: "insights", label: "Insights", to: { to: "/practice/insights" } },
             { id: "marketplace", label: "Marketplace", to: { to: "/practice/marketplace" } },
             { id: "playbooks", label: "Playbooks", to: { to: "/practice/playbooks" } },
-            { id: "implementation", label: "Implementation Manager", to: { to: "/practice/setup" } },
           ],
         },
       ],
@@ -89,7 +93,6 @@ const PRACTICE_PATH: Record<string, string> = {
   "/practice/insights": "insights",
   "/practice/marketplace": "marketplace",
   "/practice/playbooks": "playbooks",
-  "/practice/setup": "implementation",
 };
 
 function barePath(pathname: string): string {
@@ -109,6 +112,9 @@ export function practiceSelection(pathname: string, hash: string) {
   if (path === "/clients") {
     return { headingId: "clients", subId: CLIENT_HASH[bare] ?? "all", settings: false };
   }
+  if (path === "/practice/setup") {
+    return { headingId: "implementation", subId: null, settings: false };
+  }
   if (PRACTICE_PATH[path]) {
     return { headingId: "practice", subId: PRACTICE_PATH[path], settings: false };
   }
@@ -125,7 +131,7 @@ export function practiceSelection(pathname: string, hash: string) {
   return { headingId: null, subId: null, settings: false };
 }
 
-/** Practice nav: Team (Home) and Book (Clients, Practice), with Settings pinned. */
+/** Practice nav: Team (Home, Implementation Manager) and Book (Clients, Practice), with Settings pinned. */
 export function PracticeRail({ onNavigate }: { onNavigate?: () => void }) {
   const { firmMarket } = useAccountantProfile();
   const firmCountry = parseMarketSelection(firmMarket)?.country ?? null;

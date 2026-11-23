@@ -1269,6 +1269,15 @@ assert(ownerOutflow("R 1 200") === "−R 1 200", "a rand outflow keeps the space
 assert(ownerBotLayout("") === "row" && ownerBotLayout("?bots=row") === "row", "three across stays the default bot layout");
 assert(ownerBotLayout("?bots=stack") === "stack", "the stack flag is the wide-row trial");
 assert(css.includes('data-bots="stack"') && css.includes("grid-template-columns: 1fr"), "phone and the stack flag use one column");
+assert(
+  css.includes("repeat(5, minmax(0, 1fr))") &&
+    css.includes(':has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])'),
+  "five home tiles share one row when tax and implementation manager are both present",
+);
+assert(
+  css.includes("max-width: 1023px") && css.includes("grid-column: 1 / -1"),
+  "below 1024 the implementation manager spans the row under the four agents",
+);
 assert(css.includes("width: 172px") && css.includes("height: 172px"), "desktop avatars are the hero size");
 assert(css.includes("width: 96px") && css.includes("height: 96px"), "phone avatars are the hero size");
 assert(
