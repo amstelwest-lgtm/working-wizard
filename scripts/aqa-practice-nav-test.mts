@@ -158,9 +158,26 @@ const { AccountantNav } = await import("../src/components/accountant-nav.tsx");
 const { practiceSections, practiceSelection } = await import("../src/components/practice-rail.tsx");
 
 const onSetup = practiceSelection("/practice/setup", "");
-assert(onSetup.headingId === "practice" && onSetup.subId === "implementation", "the setup route selects Implementation Manager");
+assert(
+  onSetup.headingId === "implementation" && onSetup.subId === null,
+  "the setup route highlights the Implementation Manager heading",
+);
 assert(practiceSelection("/practice/playbooks", "").subId === "playbooks", "playbooks stays its own item");
 assert(practiceSelection("/practice", "").subId === null, "the practice home is the heading, not a sub-item");
+const team = practiceSections(true).find((section) => section.id === "team");
+assert(team?.headings[0]?.id === "home", "Home stays the first Team heading");
+assert(
+  team?.headings[1]?.id === "implementation" && team.headings[1]?.label === "Implementation Manager",
+  "Implementation Manager is the Team heading below Home",
+);
+assert(team?.headings[1]?.to.to === "/practice/setup", "the Team heading opens setup");
+const practiceHeading = practiceSections(true)
+  .find((section) => section.id === "book")
+  ?.headings.find((heading) => heading.id === "practice");
+assert(
+  !practiceHeading?.items?.some((item) => item.id === "implementation" || item.label === "Implementation Manager"),
+  "Implementation Manager is not under Practice",
+);
 
 const rootRoute = createRootRoute({
   component: () =>
@@ -196,9 +213,23 @@ const current = [...dom.document.querySelectorAll("[data-nav-current='page']")];
 assert(current.length === 1, "one nav row is the current page");
 assert(current[0]?.textContent?.trim() === "Implementation Manager", current[0]?.textContent ?? "");
 assert(current[0]?.getAttribute("href") === "/practice/setup", "the entry links to the Implementation Manager page");
-assert(current[0]?.className.includes("nav-sub-link"), "the entry uses the existing sub-item class");
+assert(current[0]?.className.includes("nav-label"), "the entry is a heading");
+assert(current[0]?.getAttribute("data-nav-kind") === "heading", "the entry highlights as a heading");
+assert(
+  current[0]?.closest(".rail-group")?.querySelector(".rail-kicker")?.textContent === "Team",
+  "the heading sits under Team",
+);
+assert(dom.document.querySelector("[data-sub-id='implementation']") == null, "setup is not a Practice sub-item");
+const practiceRows = [...dom.document.querySelectorAll("[data-heading-id='practice']")];
+assert(
+  practiceRows.length === 1 && practiceRows[0]?.getAttribute("data-nav-current") !== "page",
+  "practice is not active on the setup page",
+);
 const playbooks = [...dom.document.querySelectorAll("[data-sub-id='playbooks']")];
-assert(playbooks.length === 1 && playbooks[0]?.getAttribute("data-nav-current") !== "page", "playbooks is not active on the setup page");
+assert(
+  playbooks.every((row) => row.getAttribute("data-nav-current") !== "page"),
+  "playbooks is not active on the setup page",
+);
 await act(async () => {
   root.unmount();
 });

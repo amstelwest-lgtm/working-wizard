@@ -385,6 +385,219 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
   }
 }
 
+/* Five tiles (four agents + Implementation Manager).
+   1280+: one compact row. 1024–1279: a smaller compact row.
+   761–1023: four agents, then the manager as a full-width strip.
+   Phone stays one tile per row. The manager follows the agents from 761px up. */
+@media (min-width: 761px) {
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent[data-agent="setup_partner"] {
+    order: 1;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1023px) {
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"]) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent:not([data-agent="setup_partner"]) {
+    padding: 10px 8px 12px;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent:not([data-agent="setup_partner"])
+    .owner-portrait {
+    padding: 8px 6px 6px;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent:not([data-agent="setup_partner"])
+    .owner-presence.is-lg {
+    width: 72px;
+    height: 72px;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent:not([data-agent="setup_partner"])
+    .owner-lines[data-status-update] {
+    max-height: calc(13.5px * 1.45 * 2 + 4px);
+    overflow: hidden;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent[data-agent="setup_partner"] {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent[data-agent="setup_partner"]
+    .owner-agent-open {
+    display: grid;
+    flex: 1 1 auto;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 12px;
+    row-gap: 2px;
+    width: auto;
+    min-width: 0;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent[data-agent="setup_partner"]
+    .owner-portrait {
+    grid-column: 1;
+    grid-row: 1 / span 3;
+    width: auto;
+    padding: 4px;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent[data-agent="setup_partner"]
+    .owner-agent-open
+    > :not(.owner-portrait) {
+    grid-column: 2;
+    justify-self: start;
+    min-width: 0;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent[data-agent="setup_partner"]
+    .owner-presence.is-lg {
+    width: 56px;
+    height: 56px;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent[data-agent="setup_partner"]
+    .owner-lines {
+    flex: none;
+    min-height: 0;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent[data-agent="setup_partner"]
+    .owner-ask {
+    width: auto;
+    min-width: 11rem;
+    margin-top: 0;
+    flex: none;
+    align-self: center;
+  }
+}
+
+@media (min-width: 1024px) {
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"]) {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent {
+    padding: 10px 8px 12px;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent
+    .owner-name {
+    font-size: 14px;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent
+    .owner-lines[data-status-update] {
+    max-height: calc(13.5px * 1.45 * 2 + 4px);
+    overflow: hidden;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent
+    .owner-ask {
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent
+    .owner-portrait {
+    padding: 8px 4px 6px;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent
+    .owner-presence.is-lg {
+    width: 72px;
+    height: 72px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent
+    .owner-portrait {
+    padding: 10px 8px 8px;
+  }
+
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]):has([data-agent="setup_partner"])
+    > .owner-agent
+    .owner-presence.is-lg {
+    width: 112px;
+    height: 112px;
+  }
+}
+
 .owner-door .tax-preview-actions {
   display: flex;
   width: 100%;
