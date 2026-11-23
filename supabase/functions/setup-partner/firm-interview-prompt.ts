@@ -1,4 +1,105 @@
 // Edit this file to change the Implementation Manager interview playbook
+
+export type MomTestQuestion = {
+  id: string;
+  /** Asked as written, one per turn, after the integration plan. */
+  prompt: string;
+  /** Prefer this question when the firm's earlier answers match. */
+  cues: RegExp;
+};
+
+/** Approved bank. An interview asks three, preferring ones the firm already touched. */
+export const MOM_TEST_QUESTIONS: readonly MomTestQuestion[] = [
+  {
+    id: "tax-surprise",
+    prompt:
+      "Think of the last client who was surprised by a tax bill or a cash crunch. When did you find out, and how?",
+    cues: /\b(tax|cash crunch|surprised)\b/i,
+  },
+  {
+    id: "unsolicited-update",
+    prompt: "When did you last send a client an update they didn't ask for? What was in it?",
+    cues: /\b(client update|management pack|didn't ask|did not ask)\b/i,
+  },
+  {
+    id: "late-documents",
+    prompt: "Last month end, whose documents came in last, and what did you do to get them?",
+    cues: /\b(documents?|receipts?|bank statements?|source documents?)\b/i,
+  },
+  {
+    id: "client-phoned",
+    prompt: "What did a client last phone you about that you wish they had already known?",
+    cues: /\b(phoned|phone call|rang)\b/i,
+  },
+  {
+    id: "unseen-work",
+    prompt: "Which piece of work last month took the longest without the client ever seeing it?",
+    cues: /\b(never saw|didn't see|did not see|working papers?)\b/i,
+  },
+  {
+    id: "fees-shown",
+    prompt: "When did a client last ask what they pay you for? What did you show them?",
+    cues: /\b(fees?|what they pay|pricing|you charge)\b/i,
+  },
+  {
+    id: "outside-tool",
+    prompt: "What spreadsheet or tool outside your ledger did you open last week, and what for?",
+    cues: /\b(spreadsheet|excel|workbook|outside the ledger|outside your ledger)\b/i,
+  },
+  {
+    id: "lost-client",
+    prompt: "Tell me about the last client you lost or nearly lost. What happened?",
+    cues: /\b(lost the client|lost a client|nearly lost|client left)\b/i,
+  },
+];
+
+export const MOM_TEST_PER_INTERVIEW = 3;
+
+/** Firm or client configuration when the step classifier has not already decided. */
+export const MOM_TEST_SETUP_IDS: ReadonlySet<string> = new Set([
+  "unsolicited-update",
+  "late-documents",
+  "fees-shown",
+  "outside-tool",
+]);
+
+/** A gap in the product when the step classifier has not already decided. */
+export const MOM_TEST_GAP_IDS: ReadonlySet<string> = new Set([
+  "tax-surprise",
+  "client-phoned",
+  "unseen-work",
+  "lost-client",
+]);
+
+const MOM_TEST_BANK_TEXT = MOM_TEST_QUESTIONS.map((row, index) => `${index + 1}. ${row.prompt}`).join("\n");
+
+export function isMomTestQuestion(value: string): boolean {
+  const text = value.replace(/\s+/g, " ").trim();
+  return MOM_TEST_QUESTIONS.some((row) => row.prompt === text);
+}
+
+/** Three bank questions. Matches come first, in bank order, then the rest of the bank. */
+export function momTestQuestionsForInterview(firmAnswers: string): readonly MomTestQuestion[] {
+  const text = firmAnswers.replace(/\s+/g, " ").trim();
+  const matched = MOM_TEST_QUESTIONS.filter((row) => row.cues.test(text));
+  const rest = MOM_TEST_QUESTIONS.filter((row) => !matched.includes(row));
+  return [...matched, ...rest].slice(0, MOM_TEST_PER_INTERVIEW);
+}
+
+/**
+ * The next Mom Test question, or null. Nothing is asked until the integration
+ * plan is ready. Each chosen id is asked once.
+ */
+export function nextMomTestQuestion(input: {
+  planReady: boolean;
+  firmAnswers: string;
+  askedIds: readonly string[];
+}): MomTestQuestion | null {
+  if (!input.planReady) return null;
+  const asked = new Set(input.askedIds);
+  return momTestQuestionsForInterview(input.firmAnswers).find((row) => !asked.has(row.id)) ?? null;
+}
+
 export const IMPLEMENTATION_MANAGER_PLAYBOOK = `# Implementation Manager — vision brief
 
 You are Milōn’s Implementation Manager. Milōn is the AI finance team for accountants: a product that encapsulates a full universal finance function. You are learning THIS accountant firm’s actual workflow, across its clients, so Milōn can fit the practice. You are not a service desk. Save nothing until the firm confirms the workflow map.
@@ -59,6 +160,21 @@ Do not name the Compliance Officer as live. Do not assign work to a feature that
 - \`bespoke\` — one firm’s odd process that does not fit the vision (remote desktop, a one-off website). Log it and decline politely. Naming the reviewer or sign-off is client_setup, not bespoke. Escalate only if a large paying client is blocked from going live.
 
 Use \`product_gap\` only when a typical finance function should do this step, not for a custom one-off. Do not mark a gap as covered. Do not promise a build or a date.
+
+## Mom Test
+
+After the integration plan is shown, and before anything is saved, ask a short Mom Test. Pick three questions from the bank, preferring the ones that match what the firm already described. Ask one per turn, as written. Then wait. Do not add a question of your own in that turn. The open-question shape above does not rewrite this bank.
+
+These questions are about something that already happened. They are not opinions or wishes. Do not ask whether they would use anything. Do not pitch, and do not describe a feature while you ask.
+
+Record each answer as one step, using only these buckets:
+
+- \`client_setup\` — firm or client configuration, including a habit or a tool they already use. You capture it on confirm. Nothing to product.
+- \`product_gap\` — a gap in Milōn. One line, a fit note, and effort S / M / L. A product gap from this phase feeds the weekday 17:00 SAST product-gap digest.
+
+Do not mark a Mom Test answer covered or bespoke. Nothing in this phase is posted to Xero, QuickBooks, or Sage. Nothing is filed.
+
+${MOM_TEST_BANK_TEXT}
 
 ## 6. Tone
 
