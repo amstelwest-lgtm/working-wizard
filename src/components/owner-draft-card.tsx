@@ -6,6 +6,7 @@
  * The card updates immediately and restores itself if the call fails.
  */
 import { useEffect, useState, type ReactNode } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { agentShortName } from "@/lib/milon-team";
 import { AgentReplyDecisionStrip } from "@/components/agent-reply/agent-reply-shell";
 import { HealthNarrativeLine } from "@/components/health-narrative-line";
@@ -39,6 +40,8 @@ import {
   draftFindingKindLabel,
   draftFindingLabel,
 } from "@/hooks/owner-agent-ui";
+import { reviewClientUpdateDraft } from "@/lib/client-update-draft.functions";
+import { CLIENT_UPDATE_DRAFT_KIND } from "@/lib/client-update-draft";
 
 export type ApprovedDraftTarget = ApprovedLiveLink & {
   table: string;
@@ -117,6 +120,8 @@ export function OwnerDraftCard({
   const [invite, setInvite] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rememberThis, setRememberThis] = useState(false);
+  const reviewUpdate = useServerFn(reviewClientUpdateDraft);
+  const clientUpdate = row.kind === CLIENT_UPDATE_DRAFT_KIND;
 
   useEffect(() => subscribeDraftDecisionButtons(() => setBlocked(true)), []);
 
@@ -188,6 +193,29 @@ export function OwnerDraftCard({
     setInvite(false);
     setOptimistic({ phase: "approved", table: liveTableForOwnerKind(row.kind), recordId: null });
     setEditing(false);
+    if (clientUpdate) {
+      try {
+        const sent = await reviewUpdate({
+          data: { findingId: row.id, action: "approve", subject: nextTitle, body: nextDetail },
+        });
+        setBusy(false);
+        if (sent.status === "dismissed") {
+          setOptimistic({ phase: "dismissed" });
+          return;
+        }
+        setOptimistic({ phase: "approved", table: null, recordId: null });
+      } catch (err) {
+        setBusy(false);
+        fail(
+          {
+            hideButtons: false,
+            message: err instanceof Error ? err.message : DRAFT_NOT_SAVED,
+          },
+          true,
+        );
+      }
+      return;
+    }
     const result = await submitAgentDraftDecision({
       findingId: row.id,
       decision: "approve",
@@ -216,6 +244,22 @@ export function OwnerDraftCard({
     setMessage(null);
     setInvite(false);
     setOptimistic({ phase: "dismissed" });
+    if (clientUpdate) {
+      try {
+        await reviewUpdate({ data: { findingId: row.id, action: "dismiss" } });
+        setBusy(false);
+      } catch (err) {
+        setBusy(false);
+        fail(
+          {
+            hideButtons: false,
+            message: err instanceof Error ? err.message : DRAFT_NOT_SAVED,
+          },
+          false,
+        );
+      }
+      return;
+    }
     const result = await submitAgentDraftDecision({ findingId: row.id, decision: "dismiss" });
     setBusy(false);
     if (!result.ok) fail(result, false);
@@ -229,7 +273,7 @@ export function OwnerDraftCard({
   const status = approved ? (
     <p className={layout === "desk" ? "milon-desk-hint" : "mt-1 text-sm text-slate-600 dark:text-slate-300"} data-draft-status="approved">
       {kindLabel ? `${kindLabel} · ` : ""}
-      Approved
+      {clientUpdate ? "Sent" : "Approved"}
       {link ? (
         <>
           {" "}
@@ -253,14 +297,14 @@ export function OwnerDraftCard({
   const editor = editing ? (
     <div className={layout === "desk" ? "milon-desk-draft-edit" : "owner-draft-edit"} data-draft-edit="open">
       <label>
-        Title
+        {clientUpdate ? "Subject" : "Title"}
         <input value={title} onChange={(event) => setTitle(event.target.value)} />
       </label>
       <label>
-        Detail
-        <textarea rows={3} value={detail} onChange={(event) => setDetail(event.target.value)} />
+        {clientUpdate ? "Message" : "Detail"}
+        <textarea rows={clientUpdate ? 12 : 3} value={detail} onChange={(event) => setDetail(event.target.value)} />
       </label>
-      {decisionSeat === "firm" ? (
+      {decisionSeat === "firm" && !clientUpdate ? (
         <label className="owner-draft-remember">
           <input
             type="checkbox"
@@ -317,6 +361,16 @@ export function OwnerDraftCard({
     </div>
   ) : null;
 
+  const clientUpdateBody =
+    clientUpdate && !editing && row.detail ? (
+      <p
+        className={layout === "desk" ? "milon-desk-hint" : "mt-1 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200"}
+        data-client-update-draft=""
+      >
+        {row.detail}
+      </p>
+    ) : null;
+
   const notice = message ? (
     <p className={layout === "desk" ? "milon-desk-hint" : "mt-2 text-sm text-slate-600 dark:text-slate-300"} role="alert" data-draft-message={message}>
       {message}
@@ -347,6 +401,7 @@ export function OwnerDraftCard({
               {shownContext}
             </p>
           ) : null}
+          {clientUpdateBody}
           {editor}
           {status}
           {when ? (
@@ -380,6 +435,7 @@ export function OwnerDraftCard({
           {shownContext}
         </p>
       ) : null}
+      {clientUpdateBody}
       {editor}
       {status}
       {when ? (

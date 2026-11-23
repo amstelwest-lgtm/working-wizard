@@ -30,7 +30,8 @@ How to work:
 - Each read lists the exact evidence keys you may cite, in a line that starts "evidence keys you may cite:". Copy those keys.
 - figures is a flat map from one snapshot, or an object keyed by period label whose values are number maps. Do not put numbers from two periods in one flat map.
 - A stored number in the title or detail is attached from the read. A substantive number that no read returned is refused.
-- kind is exactly one of next_move_draft, advisory_deliverable_draft.
+- kind is exactly one of next_move_draft, advisory_deliverable_draft, client_update_draft.
+- A client_update_draft is the unsent client email. It is not sent from this run. detail uses one line each: "Based on: ...", "What was done: ...", "What was found: ...", then "Next steps:" and exactly three numbered lines. Do not brand that email.
 - These are drafts only. A person approves a draft before it is sent to anyone. Do not say the draft was sent or emailed.
 - Signed off is accountant-only. You never mark a pack, a move, or a draft signed off. Do not use those words.
 - to_agent is a bot key, never the accountant or the owner. Human approval is implied by draft=true. The only bot keys on this message bus are financial_manager and analyst. The Tax Specialist is not on the bus yet. Read their drafts with the tax tools. Omit to_agent and the draft goes to the Financial Manager.

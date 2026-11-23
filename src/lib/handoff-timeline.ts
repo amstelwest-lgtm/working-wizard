@@ -1,3 +1,5 @@
+import { clientUpdateTimelineStep, readClientUpdateAudit, type ClientUpdateAudit } from "./client-update-draft.ts";
+
 /**
  * What a bot did after a hand-off, as an ordered list of steps.
  * Built from agent_runs (queued_at, started_at, finished_at, status,
@@ -18,6 +20,7 @@ export type HandoffRunFinding = {
   title: string;
   detail: string | null;
   severity: string | null;
+  clientUpdateAudit: ClientUpdateAudit | null;
 };
 
 export type HandoffRunDetail = {
@@ -156,6 +159,7 @@ export function parseHandoffRunDetail(row: unknown, findings: unknown): HandoffR
         title: str(fr.title) ?? "Finding",
         detail: str(fr.detail),
         severity: str(fr.severity),
+        clientUpdateAudit: readClientUpdateAudit(fr.evidence),
       });
     }
   }
@@ -216,7 +220,7 @@ export function handoffTimeline(input: {
       label: `Not started: ${agentName} skipped this run`,
       state: "skipped",
     });
-    return steps;
+    return withClientUpdateSend(steps, run);
   }
   const started = Boolean(run.startedAt) || run.status === "running" || finished;
   steps.push({
@@ -236,7 +240,7 @@ export function handoffTimeline(input: {
   });
   if (!finished) {
     if (started) steps.push({ key: "working", label: "Working", state: "active" });
-    return steps;
+    return withClientUpdateSend(steps, run);
   }
   if (failed) {
     steps.push({
@@ -246,7 +250,7 @@ export function handoffTimeline(input: {
       at: run.finishedAt,
       detail: run.error ? run.error.slice(0, 160) : null,
     });
-    return steps;
+    return withClientUpdateSend(steps, run);
   }
   const stop = run.stopReason ? STOP_LABELS[run.stopReason] : null;
   const stoppedEarly = Boolean(
@@ -261,7 +265,23 @@ export function handoffTimeline(input: {
     at: run.finishedAt,
     detail: run.summary ? run.summary.slice(0, 240) : null,
   });
-  return steps;
+  return withClientUpdateSend(steps, run);
+}
+
+function withClientUpdateSend(steps: TimelineStep[], run: HandoffRunDetail | null): TimelineStep[] {
+  const audit = run?.findings.find((finding) => finding.clientUpdateAudit)?.clientUpdateAudit ?? null;
+  const sent = clientUpdateTimelineStep(audit);
+  if (!sent) return steps;
+  return [
+    ...steps,
+    {
+      key: sent.key,
+      label: sent.label,
+      state: sent.state,
+      at: sent.at,
+      detail: sent.detail,
+    },
+  ];
 }
 
 const PAUSED_PREFIX = "milon.handoffPaused:";
