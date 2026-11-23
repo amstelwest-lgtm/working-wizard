@@ -17,7 +17,7 @@ import {
 import { activationActionMoveKey, activationRunInputs } from "./im-activation-persist.ts";
 import type { ImRoutineMapArtifactMeta } from "./im-activation-persist.ts";
 import { calendarDateInTimeZone, calendarMonthBounds } from "./statement-period.ts";
-import type { RoutineActionRow, RoutineRunRow } from "./client-routines.ts";
+import type { RoutineActionKind, RoutineActionRow, RoutineRunRow } from "./client-routines.ts";
 import { formatLastRun } from "./milon-team.ts";
 
 export const IM_ROUTINE_TIME_ZONE = "Africa/Johannesburg";
@@ -95,6 +95,134 @@ export function scheduleAfterMonthEndMet(now: Date, timeZone = IM_ROUTINE_TIME_Z
   return ymdInTimeZone(now, timeZone) > priorMonthEndYmd;
 }
 
+/**
+ * Accountant-set schedule. The two triggers above stay as they are.
+ * These options use the real calendar month, not the open-month clamp.
+ */
+export type RoutineSchedule =
+  | { kind: "last_business_day" }
+  | { kind: "n_bd_before_month_end"; n: number }
+  | { kind: "nth_bd_after_month_end"; n: number }
+  | { kind: "every_monday" }
+  | { kind: "books_close" };
+
+function realMonthSpanYmd(now: Date, timeZone: string): { start: string; end: string } {
+  const { year, month } = calendarDateInTimeZone(now, timeZone);
+  const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const mm = String(month).padStart(2, "0");
+  return { start: `${year}-${mm}-01`, end: `${year}-${mm}-${String(last).padStart(2, "0")}` };
+}
+
+function noonOnYmd(ymd: string): Date {
+  return new Date(`${ymd}T12:00:00.000Z`);
+}
+
+/** Last weekday of the calendar month. Weekends only — same rule as the existing helper. */
+export function lastBusinessDayOfMonthYmd(now: Date, timeZone = IM_ROUTINE_TIME_ZONE): string {
+  const { end } = realMonthSpanYmd(now, timeZone);
+  let cursor = noonOnYmd(end);
+  while (!isWeekdayInTimeZone(cursor, timeZone)) {
+    cursor = new Date(cursor.getTime() - 86_400_000);
+  }
+  return ymdInTimeZone(cursor, timeZone);
+}
+
+/** N weekdays before the real month-end date. Does not replace `scheduleBusinessDaysBeforeMonthEndYmd`. */
+export function scheduleBusinessDaysBeforeRealMonthEndYmd(
+  n: number,
+  now: Date,
+  timeZone = IM_ROUTINE_TIME_ZONE,
+): string {
+  const { end } = realMonthSpanYmd(now, timeZone);
+  let cursor = noonOnYmd(end);
+  let counted = 0;
+  while (counted < n) {
+    cursor = new Date(cursor.getTime() - 86_400_000);
+    if (isWeekdayInTimeZone(cursor, timeZone)) counted += 1;
+  }
+  return ymdInTimeZone(cursor, timeZone);
+}
+
+/** Nth weekday of the current month (the Nth business day after the prior month ended). */
+export function nthBusinessDayAfterMonthEndYmd(n: number, now: Date, timeZone = IM_ROUTINE_TIME_ZONE): string {
+  const { start } = realMonthSpanYmd(now, timeZone);
+  let cursor = new Date(noonOnYmd(start).getTime() - 86_400_000);
+  let counted = 0;
+  while (counted < n) {
+    cursor = new Date(cursor.getTime() + 86_400_000);
+    if (isWeekdayInTimeZone(cursor, timeZone)) counted += 1;
+  }
+  return ymdInTimeZone(cursor, timeZone);
+}
+
+export function scheduleEveryMondayMet(now: Date, timeZone = IM_ROUTINE_TIME_ZONE): boolean {
+  const day = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(now);
+  return day === "Mon";
+}
+
+/** Monday of the SAST week containing `now`, including today when today is Monday. */
+export function recentMondayYmd(now: Date, timeZone = IM_ROUTINE_TIME_ZONE): string {
+  let cursor = noonOnYmd(ymdInTimeZone(now, timeZone));
+  for (let i = 0; i < 7; i += 1) {
+    const day = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(cursor);
+    if (day === "Mon") return ymdInTimeZone(cursor, timeZone);
+    cursor = new Date(cursor.getTime() - 86_400_000);
+  }
+  return ymdInTimeZone(now, timeZone);
+}
+
+function scheduleWindowThroughMonthEnd(triggerYmd: string, now: Date, timeZone: string): boolean {
+  const today = ymdInTimeZone(now, timeZone);
+  const { end } = realMonthSpanYmd(now, timeZone);
+  return today >= triggerYmd && today <= end;
+}
+
+export function routineScheduleMet(
+  schedule: RoutineSchedule,
+  context: ImRoutineEventContext,
+  timeZone = IM_ROUTINE_TIME_ZONE,
+): boolean {
+  const now = context.now ?? new Date();
+  if (schedule.kind === "last_business_day") {
+    return scheduleWindowThroughMonthEnd(lastBusinessDayOfMonthYmd(now, timeZone), now, timeZone);
+  }
+  if (schedule.kind === "n_bd_before_month_end") {
+    return scheduleWindowThroughMonthEnd(
+      scheduleBusinessDaysBeforeRealMonthEndYmd(schedule.n, now, timeZone),
+      now,
+      timeZone,
+    );
+  }
+  if (schedule.kind === "nth_bd_after_month_end") {
+    return scheduleWindowThroughMonthEnd(nthBusinessDayAfterMonthEndYmd(schedule.n, now, timeZone), now, timeZone);
+  }
+  if (schedule.kind === "every_monday") return scheduleEveryMondayMet(now, timeZone);
+  return Boolean(context.actualsLanded);
+}
+
+export function routineScheduleTrigger(schedule: RoutineSchedule): string {
+  if (schedule.kind === "last_business_day") return "schedule_last_business_day";
+  if (schedule.kind === "n_bd_before_month_end") return `schedule_${schedule.n}bd_before_month_end`;
+  if (schedule.kind === "nth_bd_after_month_end") return `schedule_${schedule.n}bd_after_month_end`;
+  if (schedule.kind === "every_monday") return "schedule_every_monday";
+  return "schedule_books_close";
+}
+
+/** Agent for a new action. Existing routine kinds keep the step's bot. */
+export function draftingAgentForAction(
+  action: RoutineActionKind,
+): "financial_manager" | "analyst" | "advisor" | null {
+  if (action === "client_update_draft") return "advisor";
+  if (action === "report_cash") return "financial_manager";
+  if (action === "report_pack" || action === "report_waterfall" || action === "report_budget") return "analyst";
+  return null;
+}
+
+export function routineOccurrenceKey(schedule: RoutineSchedule | null | undefined, now: Date): string {
+  if (schedule?.kind === "every_monday") return recentMondayYmd(now);
+  return imRoutinePeriodKey(now);
+}
+
 /** Material drift — same threshold as the budget month engine (`isMaterialVariance`). */
 export function imBudgetVarianceThresholdBreached(
   budget: Pick<
@@ -146,6 +274,7 @@ export function runStampInRoutinePeriod(stamp: string | null | undefined, period
   if (!stamp) return false;
   const instant = new Date(stamp);
   if (Number.isNaN(instant.getTime())) return false;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(periodKey)) return ymdInTimeZone(instant, IM_ROUTINE_TIME_ZONE) === periodKey;
   return imRoutineInstantInPeriod(instant, periodKey);
 }
 
@@ -165,20 +294,42 @@ export function routineStepLastRunAt(runs: readonly RoutineRunRow[]): string | n
   return finished[0]?.finished_at ?? null;
 }
 
+function savedScheduleLabel(schedule: RoutineSchedule, now: Date, context: ImRoutineEventContext): string {
+  if (routineScheduleMet(schedule, { ...context, now })) return "Trigger met — draft queue pending";
+  if (schedule.kind === "every_monday") return `Every Monday (next ${nextMondayYmd(now)})`;
+  if (schedule.kind === "books_close") return "When the books close";
+  const ymd =
+    schedule.kind === "last_business_day"
+      ? lastBusinessDayOfMonthYmd(now)
+      : schedule.kind === "n_bd_before_month_end"
+        ? scheduleBusinessDaysBeforeRealMonthEndYmd(schedule.n, now)
+        : nthBusinessDayAfterMonthEndYmd(schedule.n, now);
+  return `Scheduled ${ymd} (SAST)`;
+}
+
+function nextMondayYmd(now: Date): string {
+  if (scheduleEveryMondayMet(now)) return ymdInTimeZone(now, IM_ROUTINE_TIME_ZONE);
+  const recent = recentMondayYmd(now);
+  return ymdInTimeZone(new Date(noonOnYmd(recent).getTime() + 7 * 86_400_000), IM_ROUTINE_TIME_ZONE);
+}
+
 export function routineStepNextRunLabel(input: {
   step: ImRoutineMapStep;
   runs: readonly RoutineRunRow[];
   context: ImRoutineEventContext;
   status: "waiting" | "running" | "done" | "needs_approval";
   now?: Date;
+  schedule?: RoutineSchedule | null;
 }): string | null {
   if (input.status === "running") return "Running now";
   if (input.status === "done") return "On cadence";
   const now = input.now ?? input.context.now ?? new Date();
-  const periodKey = imRoutinePeriodKey(now);
+  const periodKey = routineOccurrenceKey(input.schedule, now);
   const periodRuns = runsForStepInPeriod(input.runs, periodKey);
   const queued = periodRuns.find((run) => run.status === "queued");
   if (queued?.queued_at) return `Queued ${formatLastRun(queued.queued_at) ?? "soon"}`;
+
+  if (input.schedule) return savedScheduleLabel(input.schedule, now, input.context);
 
   const schedule = parseScheduleTrigger(input.step.trigger);
   if (schedule?.kind === "n_bd_before_month_end") {
@@ -207,11 +358,12 @@ export type ImRoutineEnqueuePlan = {
   botOwner: string;
   trigger: string;
   periodKey: string;
+  actionKind: RoutineActionKind | null;
 };
 
 /** Cash-collections stub: books on file but risk signal false — count before planning drops the step. */
 export function countImRoutineStubSkips(input: {
-  meta: ImRoutineMapArtifactMeta;
+  meta: ImRoutineMapArtifactMeta & { schedule?: RoutineSchedule | null };
   actions: readonly RoutineActionRow[];
   runs: readonly RoutineRunRow[];
   context: ImRoutineEventContext;
@@ -221,8 +373,9 @@ export function countImRoutineStubSkips(input: {
 }): number {
   if (!input.meta.accepted_at || input.meta.routine !== "cash_debtor_early_warning") return 0;
   const now = input.now ?? input.context.now ?? new Date();
-  const periodKey = imRoutinePeriodKey(now);
+  const periodKey = routineOccurrenceKey(input.meta.schedule, now);
   let priorSucceeded = true;
+  let schedulePending = Boolean(input.meta.schedule);
   for (const step of input.meta.steps) {
     const moveKey = activationActionMoveKey(input.firmId, input.clientId, input.meta.routine, step.id);
     const action = input.actions.find((row) => row.source_move_key === moveKey);
@@ -236,10 +389,12 @@ export function countImRoutineStubSkips(input: {
     const open = periodRuns.some((run) => run.status === "queued" || run.status === "running");
     if (succeeded) {
       priorSucceeded = true;
+      schedulePending = false;
       continue;
     }
     if (open) break;
     if (
+      !schedulePending &&
       step.trigger === "event_cash_collections_risk" &&
       priorSucceeded &&
       (input.context.hasLedger || input.context.hasUpload) &&
@@ -257,7 +412,10 @@ export function countImRoutineStubSkips(input: {
 export function planImRoutineEnqueues(input: {
   firmId: string;
   clientId: string;
-  meta: ImRoutineMapArtifactMeta;
+  meta: ImRoutineMapArtifactMeta & {
+    schedule?: RoutineSchedule | null;
+    action?: RoutineActionKind | null;
+  };
   actions: readonly RoutineActionRow[];
   runs: readonly RoutineRunRow[];
   context: ImRoutineEventContext;
@@ -265,9 +423,11 @@ export function planImRoutineEnqueues(input: {
 }): ImRoutineEnqueuePlan[] {
   if (!input.meta.accepted_at) return [];
   const now = input.now ?? input.context.now ?? new Date();
-  const periodKey = imRoutinePeriodKey(now);
+  const savedSchedule = input.meta.schedule ?? null;
+  const periodKey = routineOccurrenceKey(savedSchedule, now);
   const enqueues: ImRoutineEnqueuePlan[] = [];
   let priorSucceeded = true;
+  let schedulePending = Boolean(savedSchedule);
 
   for (const step of input.meta.steps) {
     const moveKey = activationActionMoveKey(input.firmId, input.clientId, input.meta.routine, step.id);
@@ -282,20 +442,30 @@ export function planImRoutineEnqueues(input: {
     const open = periodRuns.some((run) => run.status === "queued" || run.status === "running");
     if (succeeded) {
       priorSucceeded = true;
+      schedulePending = false;
       continue;
     }
     if (open) break;
 
-    const agent = imRoutineRunnerAgentForStep(step.botOwner);
+    let agent = imRoutineRunnerAgentForStep(step.botOwner);
     if (!agent) {
       priorSucceeded = false;
       continue;
     }
 
-    const triggerMet = imRoutineTriggerMet(step.trigger, { ...input.context, now }, priorSucceeded);
+    const schedule = schedulePending ? savedSchedule : null;
+    const triggerMet = schedule
+      ? routineScheduleMet(schedule, { ...input.context, now })
+      : imRoutineTriggerMet(step.trigger, { ...input.context, now }, priorSucceeded);
     if (!triggerMet) {
       priorSucceeded = false;
       break;
+    }
+
+    const actionKind = schedule ? input.meta.action ?? null : null;
+    if (actionKind) {
+      const override = draftingAgentForAction(actionKind);
+      if (override) agent = override;
     }
 
     if (enqueues.some((row) => row.stepId === step.id)) break;
@@ -305,8 +475,9 @@ export function planImRoutineEnqueues(input: {
       actionMoveKey: moveKey,
       agent,
       botOwner: step.botOwner,
-      trigger: step.trigger,
+      trigger: schedule ? routineScheduleTrigger(schedule) : step.trigger,
       periodKey,
+      actionKind,
     });
     break;
   }

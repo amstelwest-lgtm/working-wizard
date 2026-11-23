@@ -6,6 +6,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { mergeRoutineSettingsMeta, parseRoutineMapMeta } from "@/lib/client-routines";
 import {
   assertClientBelongsToFirm,
   loadImRoutineScheduleContext,
@@ -18,12 +19,14 @@ type DbResult<T> = { data: T; error: DbError };
 
 type Filter = {
   eq: (column: string, value: string) => Filter;
+  select: (columns: string) => Filter;
   maybeSingle: () => Promise<DbResult<Row | null>>;
 };
 
 type Admin = {
   from: (table: string) => {
     select: (columns: string) => Filter;
+    update: (row: Row) => Filter;
   };
 };
 
@@ -82,4 +85,49 @@ export const runImRoutineScheduler = createServerFn({ method: "POST" })
       clientId: data.clientId,
     });
     return { ok: result.ok, enqueued: result.enqueued, periodKey: result.periodKey };
+  });
+
+export const saveClientRoutineSettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        firmId: z.string().uuid(),
+        clientId: z.string().uuid(),
+        artifactId: z.string().uuid(),
+        schedule: z.unknown(),
+        action: z.unknown(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const userId = context.userId;
+    if (!userId) throw new Error("Not authenticated");
+    await assertFirmAccess(userId, data.firmId);
+    await assertClientBelongsToFirm(data.clientId, data.firmId);
+    const db = admin();
+    const existing = await db
+      .from("client_artifacts")
+      .select("id, meta")
+      .eq("id", data.artifactId)
+      .eq("client_id", data.clientId)
+      .maybeSingle();
+    if (existing.error) throw new Error(existing.error.message);
+    if (!existing.data) throw new Error("Routine map was not found");
+    const next = mergeRoutineSettingsMeta(existing.data.meta, {
+      schedule: data.schedule,
+      action: data.action,
+    });
+    if (!next) throw new Error("That schedule or action cannot be saved");
+    const updated = await db
+      .from("client_artifacts")
+      .update({ meta: next })
+      .eq("id", data.artifactId)
+      .eq("client_id", data.clientId)
+      .select("id, meta")
+      .maybeSingle();
+    if (updated.error) throw new Error(updated.error.message);
+    const parsed = parseRoutineMapMeta(updated.data?.meta ?? next);
+    if (!parsed?.schedule || !parsed.action) throw new Error("Saved routine settings could not be read back");
+    return { ok: true as const, schedule: parsed.schedule, action: parsed.action };
   });

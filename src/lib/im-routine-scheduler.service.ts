@@ -10,7 +10,13 @@ import {
   IM_ACTIVATION_SOURCE,
   type DraftRunEnqueue,
 } from "@/lib/im-activation-persist";
-import { parseRoutineMapMeta, type RoutineActionRow, type RoutineRunRow } from "@/lib/client-routines";
+import {
+  parseRoutineMapMeta,
+  routineDraftSummary,
+  type RoutineActionKind,
+  type RoutineActionRow,
+  type RoutineRunRow,
+} from "@/lib/client-routines";
 import {
   imBudgetVarianceThresholdBreached,
   imRoutinePeriodKey,
@@ -218,6 +224,7 @@ async function enqueueScheduledDraftRun(input: {
   actionItemId: string;
   periodKey: string;
   botOwner?: string;
+  actionKind?: RoutineActionKind | null;
 }): Promise<DraftRunEnqueue | null> {
   const decision = handoffDecision(input.agent);
   if (!decision.ok) return null;
@@ -251,15 +258,15 @@ async function enqueueScheduledDraftRun(input: {
       status: "queued",
       action_item_id: input.actionItemId,
       attempt: 1,
-      summary: input.botOwner?.toLowerCase().includes("tax")
-        ? "Implementation Manager routine — draft for review."
-        : "Implementation Manager routine — draft only.",
+      summary: routineDraftSummary(input.actionKind, input.botOwner ?? ""),
       trace: [
         {
           tool: "im_routine_scheduler",
           label: `Queued for period ${input.periodKey}`,
           status: "queued",
+          sends: false,
           im_execution_model: CLAUDE_SONNET_55,
+          ...(input.actionKind ? { routine_action: input.actionKind } : {}),
           ...(input.botOwner?.toLowerCase().includes("tax")
             ? { im_routine_owner: "Tax Specialist", no_sars: true }
             : {}),
@@ -421,6 +428,7 @@ export async function runImRoutineSchedulerCore(
           actionItemId: actionItem.id,
           periodKey: row.periodKey,
           botOwner: row.botOwner,
+          actionKind: row.actionKind,
         });
         const added = countNewlyEnqueuedRun(result);
         if (added > 0) {
