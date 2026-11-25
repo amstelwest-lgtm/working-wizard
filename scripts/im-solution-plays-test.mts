@@ -10,9 +10,11 @@ import {
   integrationPlanPrompt,
   type IntegrationPlanRow,
 } from "../src/lib/im-integration-plan.ts";
+import { planActionFor, rulesActionFromHref } from "../src/lib/im-plan-actions.ts";
 import {
   IM_PLAN_APPROVE,
   SOLUTION_PLAY_IDS,
+  playMarketCopy,
   solutionPlays,
 } from "../src/lib/im-solution-plays.ts";
 
@@ -90,6 +92,22 @@ assert(ranked[0]?.bot === "Financial Manager", "cash stays with Financial Manage
 assert(ranked[0]?.problem.startsWith("Will cash run short in the next 13 weeks?"), "the problem stays a question");
 assert(/you said/i.test(ranked[0]?.problem ?? ""), "the question is made specific with the interview");
 assert(ranked[0]?.approve === IM_PLAN_APPROVE, "approval copy is the fixed line");
+assert(ranked[0]?.actionLabel.includes("cash-flow report"), "the cash row names the report step");
+assert(ranked[0]?.actionHref === "/clients", "without a client the step opens the client list");
+assert(ranked[0]?.actionApprove.includes("Nothing is posted"), "the cash step says what to approve");
+const named = planActionFor("document-collection", {
+  id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  name: "North Co",
+});
+assert(named.actionHref.includes("section=send-agent"), "document collection opens Send an agent");
+assert(named.actionLabel.includes("North Co"), "the step names the client");
+assert(!/whatsapp/i.test(named.actionLabel + named.actionPrompt), "the step does not name a chat app");
+const rule = rulesActionFromHref(named.actionHref);
+assert(rule.href.includes("section=documents"), "add a rule opens the client library");
+assert(rulesActionFromHref("/clients").href === "/clients", "without a client, add a rule opens the list");
+const zaTax = playMarketCopy(plays.find((play) => play.id === "tax-deadlines")!, "ZA");
+assert(/IRP6/.test(zaTax.clientSees), "ZA tax copy names a ready form");
+assert(!/VAT201|EMP201|EMP501|IRP5/.test(`${zaTax.output} ${zaTax.clientSees}`), "ZA tax copy does not promise unready forms");
 assert(/asks the client/i.test(ranked[0]?.clientSees ?? ""), "the client sees an ask");
 assert(ranked.find((row) => row.playId === "budget")?.section === "already_covered", "covered work sits at the end");
 assert(
@@ -187,7 +205,11 @@ assert(activation.includes("rejected"), "the server reports rejected ids");
 assert(!activation.includes("milon: z.string()"), "the server does not accept a free-typed Milōn sentence");
 const panel = readFileSync("src/components/practice-setup-panel.tsx", "utf8");
 assert(panel.includes("The problem") && panel.includes("What Milōn does"), "the table uses the play columns");
-assert(panel.includes("What the client sees") && panel.includes("You approve"), "the client and approval columns are shown");
+assert(
+  panel.includes("What the client sees") && panel.includes("What you need to approve") && panel.includes("Which bot"),
+  "the client, approval, and bot columns are shown",
+);
+assert(panel.includes("data-im-plan-action"), "each plan row can link to the step");
 assert(panel.includes("Already covered"), "already covered rows are labelled");
 assert(!panel.includes("What Milōn will do"), "the generic column is gone");
 assert(!panel.includes("rows: localRows"), "the panel does not send prewritten solution sentences");

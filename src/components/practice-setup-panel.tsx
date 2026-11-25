@@ -38,8 +38,12 @@ import {
 } from "@/lib/setup-partner-client";
 import { InterviewExchange, PastInterviews } from "@/components/interview-exchange";
 import { ImCloudAccessPanel } from "@/components/im-cloud-access-panel";
+import { ImNextStepsList } from "@/components/im-next-steps-list";
+import { ImPlanLink } from "@/components/im-plan-link";
+import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import { desktopSyncClientReady } from "@/lib/desktop-sync-ready";
 import { buildIntegrationPlanTable, type IntegrationPlanRow } from "@/lib/im-integration-plan";
+import { rulesActionFromHref } from "@/lib/im-plan-actions";
 import {
   buildPracticeImplementationPlan,
   classifyMomTestAnswer,
@@ -482,6 +486,7 @@ export function PracticeSetupInterview({
       return match ? { ...row, status: match.status } : row;
     });
   }, [localRows, opusRows]);
+  const ruleAction = rulesActionFromHref(tableRows[0]?.actionHref);
 
   useEffect(() => {
     if (heldPlanRef.current) return;
@@ -820,8 +825,8 @@ export function PracticeSetupInterview({
                       <th scope="col">What Milōn does</th>
                       <th scope="col">Routine</th>
                       <th scope="col">What the client sees</th>
-                      <th scope="col">You approve</th>
-                      <th scope="col">Bot</th>
+                      <th scope="col">What you need to approve</th>
+                      <th scope="col">Which bot</th>
                       <th scope="col">Status</th>
                     </tr>
                   </thead>
@@ -834,10 +839,33 @@ export function PracticeSetupInterview({
                           ) : null}
                           {row.problem}
                         </td>
-                        <td>{row.milon}</td>
+                        <td>
+                          <div>{row.milon}</div>
+                          {row.actionHref ? (
+                            <ImPlanLink href={row.actionHref} className="im-plan-action" data-im-plan-action={row.playId}>
+                              {row.actionLabel}
+                            </ImPlanLink>
+                          ) : null}
+                          {row.actionPrompt ? (
+                            <p className="im-plan-prompt">
+                              {row.actionPrompt}{" "}
+                              <button
+                                type="button"
+                                className="im-plan-copy"
+                                onClick={() => {
+                                  const text = row.actionPrompt;
+                                  if (!text || typeof navigator === "undefined" || !navigator.clipboard) return;
+                                  void navigator.clipboard.writeText(text);
+                                }}
+                              >
+                                Copy prompt
+                              </button>
+                            </p>
+                          ) : null}
+                        </td>
                         <td>{row.routine}</td>
                         <td>{row.clientSees}</td>
-                        <td>{row.approve}</td>
+                        <td>{row.actionApprove || row.approve}</td>
                         <td>{row.bot}</td>
                         <td>{row.status}</td>
                       </tr>
@@ -846,6 +874,9 @@ export function PracticeSetupInterview({
                 </table>
               </div>
               <div className="setup-partner__actions">
+                <ImPlanLink href={ruleAction.href} className="im-plan-action" data-im-plan-action="add-rule">
+                  {ruleAction.label}
+                </ImPlanLink>
                 <button
                   type="button"
                   className="setup-partner__primary im-plan-start"
@@ -872,6 +903,18 @@ export function PracticeSetupInterview({
               </ul>
             </div>
           ) : null}
+          <ImNextStepsList
+            firmId={firmId}
+            rows={tableRows.map((row) => ({
+              playId: row.playId,
+              section: row.section,
+              actionHref: row.actionHref,
+            }))}
+            integrationStarted={integrationStarted || firmRunCount > 0}
+            sendAgentAllowed={sendAgentFirmAllowed(firmId)}
+            starting={starting}
+            onStart={() => void onStart()}
+          />
         </div>
       ) : null}
 

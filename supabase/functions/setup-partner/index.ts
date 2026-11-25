@@ -5,7 +5,6 @@
  */
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  SETUP_PARTNER_MAX_OUTPUT_TOKENS,
   SETUP_PARTNER_MODEL_TURN_CAP,
   SETUP_PARTNER_SOURCE_EVENT,
   SETUP_PARTNER_TASK_FEATURE,
@@ -54,9 +53,11 @@ import {
   createRedactionSession,
   rehydrateModelOutput,
 } from "../_shared/redact-identifiers.ts";
-import { callClaude } from "../ask-ai/anthropic.ts";
-import { CLAUDE_OPUS_55 } from "../../../src/lib/claude-request.ts";
+import { callClaude, type ClaudeResponse } from "../ask-ai/anthropic.ts";
+import type { AskAiClaudeTool } from "../../../src/lib/ask-ai-claude-body.ts";
+import { CLAUDE_OPUS_55, type ClaudeToolChoice } from "../../../src/lib/claude-request.ts";
 import { edgeModelForAgent } from "../_shared/claude-model.ts";
+import { imOpusAttemptModels, imOpusFallbackModel, readClaudeFailure } from "../../../src/lib/im-opus-model.ts";
 import {
   finishPrecardAttempt,
   readPrecardGate,
@@ -104,6 +105,47 @@ function isUuid(value: string): boolean {
 
 function coverageCountry(market: unknown): SetupPartnerCountry | null {
   return parseMarketSelection(market)?.country ?? null;
+}
+
+function interviewOpusId(): string {
+  return edgeModelForAgent("financial_manager") || CLAUDE_OPUS_55;
+}
+
+/** Opus 5.5 first. One retry when Anthropic says the model id is missing or invalid. */
+async function callInterviewClaude(
+  surface: string,
+  system: string,
+  user: string,
+  opts: {
+    maxTokens?: number;
+    temperature?: number;
+    tools?: AskAiClaudeTool[];
+    toolChoice?: ClaudeToolChoice;
+    timeoutMs?: number;
+  },
+): Promise<{ response: ClaudeResponse; model: string }> {
+  const current = interviewOpusId();
+  const order = imOpusAttemptModels(current);
+  let last: unknown;
+  for (let i = 0; i < order.length; i += 1) {
+    const model = order[i];
+    if (!model) break;
+    try {
+      const response = await callClaude(system, user, { ...opts, model });
+      console.info("im_opus_served", JSON.stringify({ surface, model }));
+      return { response, model };
+    } catch (err) {
+      last = err;
+      const failure = readClaudeFailure(err);
+      const retry =
+        i === 0 && failure
+          ? imOpusFallbackModel({ attempted: model, currentOpusId: current, status: failure.status, body: failure.body })
+          : null;
+      if (!retry) throw err;
+      console.info("im_opus_rejected", JSON.stringify({ surface, model, status: failure?.status }));
+    }
+  }
+  throw last instanceof Error ? last : new Error("The interview timed out. Retry.");
 }
 
 function coverageMarketNote(country: SetupPartnerCountry | null): string {
@@ -664,7 +706,11 @@ async function handleSetupPartner(req: Request): Promise<Response> {
         );
       }
     };
-    const replyTurn = async (parsed: { question: string; done: boolean }, turnsSoFar: number) => {
+    const replyTurn = async (
+      parsed: { question: string; done: boolean },
+      turnsSoFar: number,
+      servedModel: string,
+    ) => {
       const nextTurns = turnsSoFar + 1;
       const done = firmInterviewShouldStop(nextTurns, parsed.done);
       const question = done ? "" : parsed.question;
@@ -673,7 +719,7 @@ async function handleSetupPartner(req: Request): Promise<Response> {
         question,
         done,
         modelTurns: nextTurns,
-        model: interviewModel,
+        model: servedModel,
         sessionId,
       });
     };
@@ -704,22 +750,22 @@ async function handleSetupPartner(req: Request): Promise<Response> {
       "",
       "Call the ask_question tool. Start with who, what, when, where, why, or how. One sentence. One question mark. Do not join a second ask with and. Set done true and question to an empty string when you can map the workflow. Do not write JSON in the message.",
     ].join("\n");
-    const interviewModel = edgeModelForAgent("financial_manager") || CLAUDE_OPUS_55;
     let attempts = 0;
+    let servedModel = interviewOpusId();
     const ask = async (asIs: boolean) => {
       attempts += 1;
-      const res = await callClaude(SETUP_PARTNER_MAP_SYSTEM, userPrompt, {
+      const called = await callInterviewClaude("setup_partner_firm_turn", SETUP_PARTNER_MAP_SYSTEM, userPrompt, {
         maxTokens: 1024,
         temperature: 0.4,
-        model: interviewModel,
         timeoutMs: 25_000,
         tools: [ASK_QUESTION_TOOL],
         toolChoice: { type: "tool", name: ASK_QUESTION_TOOL.name },
       });
+      servedModel = called.model;
       return interviewTurnFromModel(
         {
-          text: rehydrateModelOutput(res.text, session),
-          toolUses: res.toolUses,
+          text: rehydrateModelOutput(called.response.text, session),
+          toolUses: called.response.toolUses,
         },
         { asIs },
       );
@@ -741,14 +787,14 @@ async function handleSetupPartner(req: Request): Promise<Response> {
           },
         });
       }
-      return replyTurn(parsed, modelTurns);
+      return replyTurn(parsed, modelTurns, servedModel);
     } catch (err) {
       console.error("setup_partner_turn_failed", err instanceof Error ? err.message : err);
       try {
         if (attempts >= 2) throw err;
         const parsed = await ask(false);
         if (parsed.question || parsed.done) {
-          return replyTurn(parsed, modelTurns);
+          return replyTurn(parsed, modelTurns, servedModel);
         }
       } catch (retryErr) {
         console.error("setup_partner_turn_retry_failed", retryErr instanceof Error ? retryErr.message : retryErr);
@@ -774,23 +820,24 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     const country = coverageCountry(market);
     const transcript = typeof answers.transcript === "string" ? answers.transcript.trim() : "";
     if (!clientId && transcript) {
-      const interviewModel = edgeModelForAgent("financial_manager") || CLAUDE_OPUS_55;
       let modelText: string | null = null;
       let toolUses: Array<{ name: string; input: Record<string, unknown> }> = [];
+      let servedModel = interviewOpusId();
       try {
-        const res = await callClaude(
+        const called = await callInterviewClaude(
+          "setup_partner_structure",
           "Call the extract_workflow tool. One step per distinct answer, with who, tool, cadence, and pain. Do not paste the transcript as one step, and do not write JSON in the message.",
           transcript,
           {
             maxTokens: 1200,
-            model: interviewModel,
             timeoutMs: 25_000,
             tools: [EXTRACT_WORKFLOW_TOOL],
             toolChoice: { type: "tool", name: EXTRACT_WORKFLOW_TOOL.name },
           },
         );
-        modelText = rehydrateModelOutput(res.text, session);
-        toolUses = res.toolUses;
+        servedModel = called.model;
+        modelText = rehydrateModelOutput(called.response.text, session);
+        toolUses = called.response.toolUses;
       } catch (err) {
         console.error("setup_partner_structure_failed", err instanceof Error ? err.message : err);
       }
@@ -800,17 +847,18 @@ async function handleSetupPartner(req: Request): Promise<Response> {
         toolUses,
         country,
       });
-      return respond({ map, modelTurns: modelTurns + 1, structured: Boolean(modelText) });
+      return respond({ map, modelTurns: modelTurns + 1, structured: Boolean(modelText), model: servedModel });
     }
     const userPrompt = applyRedaction(
       `${setupPartnerMapUserPrompt(summary, answers, setupPartnerScreenshotNotes(body.screenshots))}\n\n${coverageMarketNote(country)}`,
       session,
     );
     try {
-      const res = await callClaude(SETUP_PARTNER_MAP_SYSTEM, userPrompt, {
-        maxTokens: SETUP_PARTNER_MAX_OUTPUT_TOKENS,
+      const called = await callInterviewClaude("setup_partner_map", SETUP_PARTNER_MAP_SYSTEM, userPrompt, {
+        maxTokens: 1024,
         temperature: 0.2,
       });
+      const res = called.response;
       if (precard.firmId) {
         await finishPrecardAttempt({
           decision: precard,
@@ -822,7 +870,7 @@ async function handleSetupPartner(req: Request): Promise<Response> {
       }
       const text = rehydrateModelOutput(res.text, session);
       const map = parseWorkflowMapJson(text, answers, country);
-      return respond({ map, modelTurns: modelTurns + 1 });
+      return respond({ map, modelTurns: modelTurns + 1, model: called.model });
     } catch (err) {
       console.error("setup_partner_map_failed", err instanceof Error ? err.message : err);
       const map = parseWorkflowMapJson("", answers, country);

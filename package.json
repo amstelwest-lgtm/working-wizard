@@ -253,6 +253,8 @@
     "test:im-planner": "vite-node --config scripts/vite-test.config.ts scripts/im-planner-test.mts",
     "test:im-activation": "vite-node --config scripts/vite-test.config.ts scripts/im-activation-test.mts",
     "test:im-solution-plays": "vite-node --config scripts/vite-test.config.ts scripts/im-solution-plays-test.mts",
+    "test:im-opus-fallback": "vite-node --config scripts/vite-test.config.ts scripts/im-opus-fallback-test.mts",
+    "test:im-next-steps": "vite-node --config scripts/vite-test.config.ts scripts/im-next-steps-test.mts",
     "test:im-routine-schedule": "vite-node --config scripts/vite-test.config.ts scripts/im-routine-schedule-test.mts",
     "test:im-routine-cron": "vite-node --config scripts/vite-test.config.ts scripts/im-routine-cron-test.mts",
     "test:im-access-ladder": "vite-node --config scripts/vite-test.config.ts scripts/im-access-ladder-test.mts",

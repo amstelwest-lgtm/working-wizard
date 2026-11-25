@@ -5,6 +5,7 @@
  */
 import { CLAUDE_OPUS_55, claudeRequestFields } from "./claude-request.ts";
 import { buildCapabilityManifest } from "./im-capability-manifest.ts";
+import { planActionFor } from "./im-plan-actions.ts";
 import {
   DEFAULT_LEAD_PLAY_IDS,
   IM_PLAN_APPROVE,
@@ -32,6 +33,11 @@ export type IntegrationPlanRow = {
   bot: string;
   section: IntegrationPlanSection;
   status: IntegrationPlanStatus;
+  /** Step the accountant takes in Milōn. Filled from the play, not by the model. */
+  actionLabel: string;
+  actionHref: string;
+  actionPrompt: string;
+  actionApprove: string;
 };
 
 const PLAN_BOTS = new Set(["Financial Manager", "Analyst", "Advisor", "Tax Specialist"]);
@@ -183,9 +189,10 @@ export function playsForPlan(country?: IntegrationPlanCountry | null): SolutionP
 }
 
 function finishRow(
-  row: IntegrationPlanRow,
+  row: Omit<IntegrationPlanRow, "actionLabel" | "actionHref" | "actionPrompt" | "actionApprove">,
   country?: IntegrationPlanCountry | null,
 ): IntegrationPlanRow | null {
+  const action = planActionFor(row.playId);
   const next: IntegrationPlanRow = {
     playId: row.playId.trim(),
     problem: scrubMarket(plainWorkflowText(row.problem), country),
@@ -196,6 +203,10 @@ function finishRow(
     bot: scrubMarket(plainWorkflowText(row.bot), country),
     section: row.section === "already_covered" ? "already_covered" : "lead",
     status: STATUSES.has(row.status) ? row.status : "Waiting",
+    actionLabel: action.actionLabel,
+    actionHref: action.actionHref,
+    actionPrompt: action.actionPrompt,
+    actionApprove: scrubMarket(action.actionApprove, country),
   };
   if (!next.playId || !next.problem || !next.milon || !next.bot || !next.routine || !next.clientSees) {
     return null;
@@ -449,6 +460,8 @@ export function integrationPlanPrompt(input: {
     "Do not invent a play. Do not rewrite the catalogue sentences.",
     "Milōn drafts only. Nothing is posted to Xero or QuickBooks. Sage is a read-only sync. Nothing is filed with the tax authority.",
     "The tax-deadline play is a reminder and a document list. Auto-send is not on.",
+    "Do not promise a feature that is not in the catalogue. Do not promise a ledger write, a filing, email forwarding, practice-wide search, or a Compliance Officer.",
+    "Do not promise IRP5, EMP201, EMP501, or VAT201. Those forms are not ready.",
     "Catalogue:",
     JSON.stringify(catalogueForPrompt(input.plays, input.country)),
     "Interview answers:",
@@ -466,12 +479,13 @@ export function integrationPlanOpusBody(input: {
   interview: string;
   steps?: readonly string[];
   country?: IntegrationPlanCountry | null;
+  model?: string;
 }): {
-  model: typeof CLAUDE_OPUS_55;
+  model: string;
   max_tokens: number;
   messages: { role: "user"; content: string }[];
 } {
-  const model = CLAUDE_OPUS_55;
+  const model = input.model?.trim() || CLAUDE_OPUS_55;
   return {
     model,
     max_tokens: 700,

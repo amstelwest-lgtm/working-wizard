@@ -36,8 +36,9 @@ const TAX_COPY: Record<SolutionPlayCountry | "none", { output: string; clientSee
     clientSees: `A reminder and document list for the IRS and sales tax. ${TAX_ASK}`,
   },
   ZA: {
-    output: "Tax deadline reminder and document list for SARS. Nothing is filed.",
-    clientSees: `A reminder and document list for VAT201, EMP201, and provisional tax. ${TAX_ASK}`,
+    output:
+      "Tax deadline reminder and document list for SARS. Nothing is filed. Ready drafts are IRP6, ITR14, and ITR12.",
+    clientSees: `A reminder and document list for IRP6, ITR14, and ITR12. ${TAX_ASK}`,
   },
   UK: {
     output: "Tax deadline reminder and document list for HMRC. Nothing is filed.",
@@ -88,7 +89,8 @@ const PLAY_SEEDS: readonly PlaySeed[] = [
       "A link with a checklist that ticks off as files arrive. It asks the client to upload what is missing.",
     bot: "Financial Manager",
     source: "src/lib/client-agent-send.functions.ts",
-    signals: /\b(invoices?|bank statements?|pdfs?|uploads?|attachments?|checklists?|send an agent|documents?)\b/i,
+    signals:
+      /\b(invoices?|bank statements?|pdfs?|uploads?|attachments?|checklists?|send an agent|documents?)\b/i,
     present: (manifest) => hasTool(manifest, "Financial Manager", "Client sends"),
   },
   {
@@ -150,7 +152,8 @@ const PLAY_SEEDS: readonly PlaySeed[] = [
     question: "Which lines are over budget?",
     output: "Budget versus actual drift",
     routine: "Every month, when the actuals land",
-    clientSees: "Over-budget lines with one comment each. It asks the client to answer each comment.",
+    clientSees:
+      "Over-budget lines with one comment each. It asks the client to answer each comment.",
     bot: "Analyst",
     source: "src/lib/budget.variance.ts",
     signals: /\b(budgets?|over-?budget|variances?)\b/i,
@@ -163,7 +166,8 @@ const PLAY_SEEDS: readonly PlaySeed[] = [
     question: "Who is doing what, and by when?",
     output: "Action plan items and a PDF",
     routine: "Every month, with the client update",
-    clientSees: "A to-do list with owners and dates. It asks the client to accept the owners and dates.",
+    clientSees:
+      "A to-do list with owners and dates. It asks the client to accept the owners and dates.",
     bot: "Advisor",
     source: "src/lib/action-plan-pdf.ts",
     signals: /\b(action plans?|to-?dos?|owners and dates)\b/i,
@@ -181,7 +185,8 @@ const PLAY_SEEDS: readonly PlaySeed[] = [
     signals:
       /\b(vat201|emp201|provisional|irp6|itr14|sars|hmrc|irs|sales-?tax|tax prep|vat returns?|tax returns?)\b|\bfile\b[^.]{0,48}\breturn\b|\breturn\b[^.]{0,48}\b(hmrc|sars|irs)\b/i,
     present: (manifest) =>
-      hasTool(manifest, "Tax Specialist", "Tax drafts") && manifest.financeDeadlineSignals instanceof RegExp,
+      hasTool(manifest, "Tax Specialist", "Tax drafts") &&
+      manifest.financeDeadlineSignals instanceof RegExp,
   },
 ];
 

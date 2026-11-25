@@ -17,6 +17,8 @@
 
 export const CLAUDE_SONNET_55 = "claude-sonnet-5-5";
 export const CLAUDE_OPUS_55 = "claude-opus-5-5";
+/** Previous active Opus. Claude API id on the models overview (Claude Opus 5). */
+export const CLAUDE_OPUS_FALLBACK = "claude-opus-5";
 
 const FINANCIAL_MANAGER_AGENTS = new Set([
   "financial_manager",

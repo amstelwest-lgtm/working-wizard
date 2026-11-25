@@ -26,12 +26,15 @@ import { planActivationAccept } from "@/lib/im-activation-accept";
 import { imRoutinePeriodKey, scheduledRunInputs } from "@/lib/im-routine-schedule";
 import { SETUP_PARTNER_SOURCE_EVENT, SETUP_PARTNER_TASK_WORKFLOW } from "@/lib/setup-partner";
 import { CLAUDE_OPUS_55, CLAUDE_SONNET_55 } from "@/lib/claude-request";
+import { imOpusAttemptModels, imOpusFallbackModel } from "@/lib/im-opus-model";
+import { stampPlanActions, type PlanClient } from "@/lib/im-plan-actions";
 import {
   applyOpusIntegrationPlan,
   buildIntegrationPlanTable,
   integrationPlanOpusBody,
   plainWorkflowText,
   playsForPlan,
+  type IntegrationPlanRow,
 } from "@/lib/im-integration-plan";
 
 const ACTIVATION_RUN_SUMMARY = "Implementation Manager activation — draft only.";
@@ -115,13 +118,13 @@ async function pilotBooks(clientId: string): Promise<{ hasLedger: boolean; hasUp
 
 async function loadPilots(firmId: string): Promise<ImPilotClient[]> {
   const db = admin();
-  const listed = await db.from("clients").select("id, name").eq("firm_id", firmId).order("created_at", { ascending: true }).limit(40);
+  const listed = await db.from("clients").select("id, name, is_demo").eq("firm_id", firmId).order("created_at", { ascending: true }).limit(40);
   if (listed.error) throw new Error(listed.error.message);
   const pilots: ImPilotClient[] = [];
   for (const row of listed.data ?? []) {
     const id = typeof row.id === "string" ? row.id : "";
     const name = typeof row.name === "string" ? row.name : "Client";
-    if (!id) continue;
+    if (!id || row.is_demo === true) continue;
     const books = await pilotBooks(id);
     pilots.push({ id, name, ...books });
   }
@@ -697,41 +700,95 @@ export const draftImIntegrationPlan = createServerFn({ method: "POST" })
       country,
     });
     const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+    const client = await firstPlanClient(data.firmId);
+    const withActions = (rows: IntegrationPlanRow[]) => stampPlanActions(rows, client);
     if (!apiKey || fallback.length === 0 || !interview) {
-      return { rows: fallback, rejected: [] as string[], source: "fallback" as const };
+      return { rows: withActions(fallback), rejected: [] as string[], source: "fallback" as const, model: null };
     }
-    const body = integrationPlanOpusBody({
-      plays,
-      interview,
-      steps: steps.map((row) => plainWorkflowText(row.step)).filter(Boolean),
-      country,
-    });
+    const order = imOpusAttemptModels(CLAUDE_OPUS_55);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 25_000);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) return { rows: fallback, rejected: [] as string[], source: "fallback" as const };
-      const json = (await res.json()) as { content?: Array<{ type?: string; text?: string }> };
-      const text = (json.content ?? [])
-        .filter((block) => block.type === "text")
-        .map((block) => block.text ?? "")
-        .join("")
-        .trim();
-      if (!text) return { rows: fallback, rejected: [] as string[], source: "fallback" as const };
+      let text = "";
+      let served: string | null = null;
+      for (let i = 0; i < order.length; i += 1) {
+        const model = order[i];
+        if (!model) break;
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(
+            integrationPlanOpusBody({
+              plays,
+              interview,
+              steps: steps.map((row) => plainWorkflowText(row.step)).filter(Boolean),
+              country,
+              model,
+            }),
+          ),
+        });
+        if (!res.ok) {
+          const errBody = await res.text().catch(() => "");
+          const retry =
+            i === 0
+              ? imOpusFallbackModel({
+                  attempted: model,
+                  currentOpusId: CLAUDE_OPUS_55,
+                  status: res.status,
+                  body: errBody,
+                })
+              : null;
+          if (retry) {
+            console.info("im_opus_rejected", JSON.stringify({ surface: "im_integration_plan", model, status: res.status }));
+            continue;
+          }
+          return { rows: withActions(fallback), rejected: [] as string[], source: "fallback" as const, model: null };
+        }
+        const json = (await res.json()) as { content?: Array<{ type?: string; text?: string }> };
+        text = (json.content ?? [])
+          .filter((block) => block.type === "text")
+          .map((block) => block.text ?? "")
+          .join("")
+          .trim();
+        served = model;
+        break;
+      }
+      if (!text || !served) {
+        return { rows: withActions(fallback), rejected: [] as string[], source: "fallback" as const, model: served };
+      }
+      console.info("im_opus_served", JSON.stringify({ surface: "im_integration_plan", model: served }));
       const applied = applyOpusIntegrationPlan(text, fallback, { country, interview, plays });
-      return { rows: applied.rows, rejected: applied.rejected, source: "opus" as const };
+      return { rows: withActions(applied.rows), rejected: applied.rejected, source: "opus" as const, model: served };
     } catch {
-      return { rows: fallback, rejected: [] as string[], source: "fallback" as const };
+      return { rows: withActions(fallback), rejected: [] as string[], source: "fallback" as const, model: null };
     } finally {
       clearTimeout(timer);
     }
   });
+
+async function firstPlanClient(firmId: string): Promise<PlanClient | null> {
+  try {
+    const listed = (await admin()
+      .from("clients")
+      .select("id, name, is_demo")
+      .eq("firm_id", firmId)
+      .order("created_at", { ascending: true })
+      .limit(40)) as {
+      data: { id?: string; name?: string; is_demo?: boolean | null }[] | null;
+      error: { message: string } | null;
+    };
+    if (listed.error) return null;
+    const rows = (listed.data ?? []).filter((row) => typeof row.id === "string");
+    const real = rows.find((row) => row.is_demo !== true);
+    const row = real ?? rows[0];
+    if (!row || typeof row.id !== "string") return null;
+    return { id: row.id, name: typeof row.name === "string" ? row.name : "" };
+  } catch {
+    return null;
+  }
+}
