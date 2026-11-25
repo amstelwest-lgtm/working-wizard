@@ -8,6 +8,13 @@ on:
     paths:
       - "desktop/**"
       - ".github/workflows/desktop-windows.yml"
+      - "scripts/publish-windows-installer.mjs"
+  push:
+    branches: [main]
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-windows.yml"
+      - "scripts/publish-windows-installer.mjs"
   workflow_dispatch:
 
 concurrency:
@@ -48,3 +55,11 @@ jobs:
           name: milon-windows-exe
           path: desktop/release/*.exe
           if-no-files-found: error
+
+      # Overwrites the stable public object desktop/Milon-Setup.exe.
+      # Missing BLOB_READ_WRITE_TOKEN skips this step so the build still passes.
+      - name: Publish stable public installer
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        env:
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+        run: node scripts/publish-windows-installer.mjs

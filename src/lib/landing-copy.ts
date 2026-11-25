@@ -15,6 +15,25 @@ export { PRICING_OWNER_BAR_US, PRICING_TRIAL_AFTER };
 /** Empty unless VITE_WALKTHROUGH_URL is set. The hero slot stays unrendered. */
 export const WALKTHROUGH_URL = String(import.meta.env.VITE_WALKTHROUGH_URL ?? "").trim();
 
+/** https only. Empty hides the hero download until the owner sets the public URL. */
+function httpsUrl(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+export const WINDOWS_PILOT_INSTALLER_URL = httpsUrl(
+  import.meta.env.VITE_WINDOWS_PILOT_INSTALLER_URL,
+);
+export const WINDOWS_PILOT_DOWNLOAD_LABEL = "Download for Windows (pilot)";
+export const WINDOWS_PILOT_SMARTSCREEN_NOTE =
+  "Windows SmartScreen may warn because the pilot is unsigned (More info, then Run anyway).";
+
 export const HERO_BADGE = "For accounting firms and the businesses they advise";
 export const HERO_H1_LEAD = "Your AI finance team.";
 export const HERO_H1_GOLD = "You sign off.";

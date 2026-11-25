@@ -852,6 +852,28 @@ html[data-landing="1"] #hero .hero-cta .btn-gold{
   padding:0 28px;
   font-size:15px;
 }
+/* Secondary cobalt outline. Gold stays on the one or two sign-up CTAs. */
+html[data-landing="1"] #hero .hero-cta a.pilot-download{
+  background:transparent;
+  background-image:none;
+  border:1px solid var(--cobalt);
+  color:var(--cobalt);
+  -webkit-text-fill-color:var(--cobalt);
+  box-shadow:none;
+  min-height:52px;
+  padding:0 28px;
+  font-size:15px;
+}
+html[data-landing="1"] #hero .hero-cta a.pilot-download::after{content:none;display:none}
+html[data-landing="1"] #hero .hero-cta a.pilot-download:hover{
+  background:rgba(11,95,255,.08);
+  background-image:none;
+  border-color:#2563eb;
+  color:#2563eb;
+  -webkit-text-fill-color:#2563eb;
+  box-shadow:none;
+  transform:translateY(-2px);
+}
 html[data-landing="1"] .hero-cta-note{
   margin:10px 0 0;
   font-size:13px;
