@@ -2018,11 +2018,20 @@ function LandingPage() {
               {HERO_H1_LEAD} <span className="gold-text">{HERO_H1_GOLD}</span>
             </h1>
             <p className="hero-lede">{HERO_LEDE}</p>
-            <ul className="integrations-chips" id="integrations" aria-label="Works with">
-              <li>QuickBooks Online</li>
-              <li>Xero</li>
-              <li>Sage · coming soon</li>
-            </ul>
+            <div className="connects-with" id="integrations">
+              <p>Connects with</p>
+              <ul className="connects-logos" aria-label="Connects with Xero, QuickBooks and Sage">
+                <li>
+                  <img src="/brand/quickbooks.svg" alt="QuickBooks" height={28} />
+                </li>
+                <li>
+                  <span className="wordmark wordmark-xero">Xero</span>
+                </li>
+                <li>
+                  <span className="wordmark wordmark-sage">Sage</span>
+                </li>
+              </ul>
+            </div>
             <div className="hero-cta">
               <a
                 className="btn btn-gold"
@@ -2398,7 +2407,7 @@ function LandingPage() {
               <span className="n">01</span>
               <h3>Bring in the financials</h3>
               <p>
-                Connect QuickBooks or Xero. Sage is coming soon. Or upload the P&amp;L and balance sheet you
+                Milōn connects with Xero, QuickBooks and Sage. Sage is a read-only sync. Or upload the P&amp;L and balance sheet you
                 already have as a PDF, Excel file, or CSV — or simply upload a bank statement.
               </p>
             </div>
@@ -2820,7 +2829,7 @@ function LandingPage() {
             </a>
             <a href="#method">The Method</a>
             <a href="#how">How it works</a>
-            <a href="#integrations">QuickBooks &amp; Xero</a>
+            <a href="#integrations">Connects with</a>
             <a href="#bridge">Shared workspace</a>
             <a href="#pricing">Pricing</a>
             <a href="/for-owners">For owners</a>
@@ -2837,7 +2846,7 @@ function LandingPage() {
             </button>
           </nav>
           <div className="copy">
-            <span>QuickBooks Online and Xero. Sage coming soon.</span>
+            <span>Connects with Xero, QuickBooks and Sage. Sage is a read-only sync.</span>
             <span>
               © {new Date().getFullYear()} {MARKETING_COPYRIGHT_ENTITY}. All rights reserved.
             </span>

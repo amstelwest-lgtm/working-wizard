@@ -128,8 +128,8 @@ def render_accountant(path: Path):
     y = pdf.hrule(y)
     y = pdf.section_label(y, "How it works")
     steps = [
-        "Firm account \u2192 invite clients (or upload statements / connect books)",
-        "MIL\u014cN scores 4 pillars + 31 ratios \u2192 one health score",
+        "Firm account \u2192 invite clients",
+        "Upload figures or connect QuickBooks Online, Xero or Sage.",
         "You send a monthly advisory touch in minutes, not hours",
     ]
     box_w, gap, start_x, box_h = 58, 4, 14, 18
@@ -233,7 +233,7 @@ def render_owner(path: Path):
     y = pdf.hrule(y)
     y = pdf.section_label(y, "How it works")
     steps = [
-        "Upload financials / connect QuickBooks (or your accountant does)",
+        "Sign up and upload one set of figures \u2014 or connect QuickBooks Online, Xero or Sage.",
         "Score in under a minute after processing",
         "Open it anytime \u2014 phone-friendly, no meeting required",
     ]

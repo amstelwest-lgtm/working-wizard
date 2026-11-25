@@ -63,7 +63,7 @@ function ForAccountantsPage() {
           Every practice knows which clients need a real conversation. The problem is that finding
           out takes a morning per client, so it only happens at year-end, and by then the advice is
           history rather than help. {saPricing?.accountantsLead ??
-            "Management accounts, 13-week cash and advisory drafts from QuickBooks or Xero. Sage is coming soon."}
+            "Management accounts, 13-week cash and advisory drafts. Milōn connects with Xero, QuickBooks and Sage."}
         </>
       }
       heroCta={{ label: FIRM_TRIAL_CTA_LABEL, href: signupHref }}
@@ -82,11 +82,11 @@ function ForAccountantsPage() {
       copyPack={copyPack}
       geoZa={geoZa}
     >
-      <h2>Works with QuickBooks Online and Xero</h2>
+      <h2>Connects with Xero, QuickBooks and Sage</h2>
       <p>
-        Connect QuickBooks Online or Xero for a client. Sage is coming soon. Milōn reads the
+        Milōn connects with Xero, QuickBooks and Sage. Sage is a read-only sync. Milōn reads the
         profit and loss and balance sheet into the same workspace as an upload, and you review and
-        sign off. The books stay in QuickBooks or Xero — Milōn is not a ledger.
+        sign off. The books stay in the ledger — Milōn is not a ledger.
       </p>
       <div className="mk-grid">
         <div className="mk-card">
@@ -98,6 +98,13 @@ function ForAccountantsPage() {
           <p>
             Connect a Xero organisation the same way. Upload still works when the books live
             somewhere else.
+          </p>
+        </div>
+        <div className="mk-card">
+          <h3>Sage</h3>
+          <p>
+            Sage Business Cloud Accounting (South Africa) is a read-only sync. Milōn does not post
+            to Sage.
           </p>
         </div>
       </div>
@@ -131,7 +138,7 @@ function ForAccountantsPage() {
         <li>
           <strong>Source documents, with your approval.</strong> Clients can send invoices, bills
           and receipts. A named person approves before anything is posted to QuickBooks or Xero.
-          Sage is coming soon. Nothing posts on its own.
+          Milōn connects with Xero, QuickBooks and Sage. Sage is a read-only sync. Nothing posts on its own.
         </li>
         <li>
           Client data stays controlled: sensitive identifiers are filtered before AI model calls,
@@ -191,7 +198,7 @@ function ForAccountantsPage() {
           <div>
             <h3>Figures in, score out</h3>
             <p>
-              Connect QuickBooks Online or Xero, or upload the statements. {HEALTH_RATIO_COUNT} ratios, four
+              Connect Xero, QuickBooks or Sage, or upload the statements. Sage is a read-only sync. {HEALTH_RATIO_COUNT} ratios, four
               pillars, one score, and a 13-week cash forecast — computed the same way for every
               client, every month.
             </p>

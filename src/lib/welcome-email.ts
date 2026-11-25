@@ -10,7 +10,7 @@ import { FIRM_TRIAL_CARD_LINE } from "@/lib/stripe-plans";
 export const WELCOME_EMAIL_SUBJECT = "Welcome to Milōn";
 export const WELCOME_SIGN_OFF = "The MILŌN Team";
 export const WELCOME_NEXT_STEP =
-  "Connect QuickBooks or Xero, or upload your latest income statement, and Milōn will score the figures and suggest next moves.";
+  "Connect Xero, QuickBooks or Sage, or upload your latest income statement, and Milōn will score the figures and suggest next moves.";
 
 export const WELCOME_MAX_ATTEMPTS = 3;
 export const WELCOME_RETRY_COOLDOWN_MS = 24 * 60 * 60 * 1000;

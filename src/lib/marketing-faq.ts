@@ -5,7 +5,7 @@ import type { FaqItem } from "./seo";
 
 /** Visible /faq answer and FAQPage schema for this question must stay identical. */
 export const ACCOUNTING_SOFTWARE_ANSWER =
-  "Milōn is not a ledger, so you keep your existing accounting system and books. Connect QuickBooks Online or Xero. Sage is coming soon. Or upload the financial statements you already have — PDF, Excel, CSV, or a bank statement — and Milōn turns them into a financial health score, a 13-week cash forecast, and ranked next moves you can review and act on.";
+  "Milōn is not a ledger, so you keep your existing accounting system and books. Milōn connects with Xero, QuickBooks Online and Sage. Or upload the financial statements you already have — PDF, Excel, CSV, or a bank statement — and Milōn turns them into a financial health score, a 13-week cash forecast, and ranked next moves you can review and act on.";
 
 export const HOMEPAGE_FAQ_AI_TRAINING_QUESTION =
   "Is my clients' financial data used to train AI models?";
@@ -18,10 +18,10 @@ export const HOMEPAGE_FAQ_AI_TRAINING_JSONLD_SUFFIX =
   " Full detail: https://www.milonfinance.com/privacy.";
 
 /** Visible /faq answer and FAQPage schema for this question must stay identical. */
-export const LEDGER_CONNECT_QUESTION = "Does Milōn work with QuickBooks or Xero?";
+export const LEDGER_CONNECT_QUESTION = "Does Milōn work with Xero, QuickBooks or Sage?";
 
 export const LEDGER_CONNECT_ANSWER =
-  "Yes. Connect QuickBooks Online or Xero. Sage is coming soon. Milōn reads the profit and loss and balance sheet. You do not need either system — a PDF, Excel file, CSV, or bank statement still works. Milōn is not a ledger and does not replace QuickBooks Online or Xero.";
+  "Yes. Milōn connects with Xero, QuickBooks Online and Sage. Sage is a read-only sync. Milōn reads the profit and loss and balance sheet. You do not need any of them — a PDF, Excel file, CSV, or bank statement still works. Milōn is not a ledger and does not replace Xero, QuickBooks or Sage.";
 
 /**
  * Ask-AI sanitizer strips identifiers (tax IDs, account numbers, company-name
@@ -47,7 +47,7 @@ export const FAQ_OWNER_PLAN_US =
 export const FAQ_NOT_A_BOOKKEEPER_QUESTION = "Is Milōn an AI accountant or an AI bookkeeper?";
 
 export const FAQ_NOT_A_BOOKKEEPER_ANSWER =
-  "No. Milōn is an AI finance team that works alongside your accountant. The books stay in QuickBooks or Xero. Sage is coming soon. Milōn Financial Manager keeps the books data clean, the 13-week cash view and the budget, and hands the pack to the accountant. Milōn Analyst explains why margins moved and where cash is leaking. Milōn Advisor drafts the next moves for sign-off. It does not keep the ledger, file returns or make payments. A qualified accountant reviews and approves every advisory pack.";
+  "No. Milōn is an AI finance team that works alongside your accountant. Milōn connects with Xero, QuickBooks and Sage. Sage is a read-only sync. Milōn Financial Manager keeps the books data clean, the 13-week cash view and the budget, and hands the pack to the accountant. Milōn Analyst explains why margins moved and where cash is leaking. Milōn Advisor drafts the next moves for sign-off. It does not keep the ledger, file returns or make payments. A qualified accountant reviews and approves every advisory pack.";
 
 /** Last sentence of the homepage cost answer. USD only. ZA replaces this from the server chunk. */
 export const HOMEPAGE_OWNER_COST_US =
@@ -69,9 +69,9 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
       "No. Milōn works alongside your accountant. The AI team prepares the analysis, the cash view and the recommendations, and a qualified accountant reviews and approves every advisory pack. The client gets advice they can trust, and the firm keeps control. Milōn is not an accounting ledger, audit, CPA opinion, or regulated financial advice service.",
   },
   {
-    question: "Do I need QuickBooks or Xero to use Milōn?",
+    question: "Do I need Xero, QuickBooks or Sage to use Milōn?",
     answer:
-      "No, you do not need QuickBooks or Xero to use Milōn. When the books are already there, connect QuickBooks or Xero. Sage is coming soon. Milōn reads the profit and loss and balance sheet. You can also upload a P&L and balance sheet as a PDF, Excel file, or CSV, or upload a bank statement.",
+      "No, you do not need Xero, QuickBooks or Sage to use Milōn. When the books are already there, Milōn connects with Xero, QuickBooks and Sage. Sage is a read-only sync. Milōn reads the profit and loss and balance sheet. You can also upload a P&L and balance sheet as a PDF, Excel file, or CSV, or upload a bank statement.",
   },
   {
     question: "What does it cost?",
@@ -80,7 +80,7 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "What does the AI finance team do, and what's left to me?",
     answer:
-      "Milōn Financial Manager runs the team: clean books data from QuickBooks or Xero. Sage is coming soon. The 13-week cash view, the budget, the action points, and the hand-off to you stay with the firm. Milōn Analyst turns the health score, ratios and variances into a diagnosis of why margins moved and where cash is leaking. Milōn Advisor writes the next moves and the advisory deliverables, ready for sign-off. That prep comes off your plate. You review, edit and approve every pack, so the client gets advice they can trust.",
+      "Milōn Financial Manager runs the team: clean books data from a ledger that connects with Xero, QuickBooks and Sage. The 13-week cash view, the budget, the action points, and the hand-off to you stay with the firm. Milōn Analyst turns the health score, ratios and variances into a diagnosis of why margins moved and where cash is leaking. Milōn Advisor writes the next moves and the advisory deliverables, ready for sign-off. That prep comes off your plate. You review, edit and approve every pack, so the client gets advice they can trust.",
   },
   {
     question: HOMEPAGE_FAQ_AI_TRAINING_QUESTION,

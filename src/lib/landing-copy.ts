@@ -38,7 +38,7 @@ export const HERO_BADGE = "For accounting firms and the businesses they advise";
 export const HERO_H1_LEAD = "Your AI finance team.";
 export const HERO_H1_GOLD = "You sign off.";
 export const HERO_LEDE =
-  "Plug in QuickBooks or Xero. Sage is coming soon. Milōn Financial Manager, Milōn Analyst and Milōn Advisor read the numbers, diagnose the business and draft the advisory. You review and sign off.";
+  "Milōn connects with Xero, QuickBooks and Sage. Milōn Financial Manager, Milōn Analyst and Milōn Advisor read the numbers, diagnose the business and draft the advisory. You review and sign off.";
 export const HERO_CTA_LABEL = "Start my 14-day free trial";
 export const HERO_WALKTHROUGH_LABEL = "Book a 30-min walkthrough";
 /** Hero note. The pricing bar leads with FIRM_TRIAL_SENTENCE and uses the shorter line under it. */
@@ -65,7 +65,7 @@ export const OWNER_REGISTER_NOTE_US =
 export const HERO_SIGNOFF_POINT = "You review and sign off every advisory pack.";
 
 export const HERO_POINTS = [
-  "Connect a client's QuickBooks Online or Xero file. Sage is coming soon. Or upload a P&L and balance sheet.",
+  "Connect a client's books. Milōn connects with Xero, QuickBooks and Sage. Or upload a P&L and balance sheet.",
   "Milōn Financial Manager, Milōn Analyst and Milōn Advisor build the health score, 13-week cash forecast and action plan.",
   HERO_SIGNOFF_POINT,
 ] as const;
@@ -76,7 +76,7 @@ export const TRUST_HANDOFF =
   "The AI team prepares the work and your accountant reviews and approves it, so the client gets advice they can trust and the firm keeps control.";
 export const TRUST_FEE = "A Financial Manager, an Analyst and an Advisor, for a small monthly fee.";
 export const TRUST_BOOKS =
-  "QuickBooks and Xero stay the books. Sage is coming soon. Invoices, bills and receipts post only after a named person approves.";
+  "Milōn connects with Xero, QuickBooks and Sage. Sage is a read-only sync. Invoices, bills and receipts post to QuickBooks or Xero only after a named person approves.";
 
 export const TRUST_ITEMS = [TRUST_PREP, TRUST_HANDOFF, TRUST_FEE, TRUST_BOOKS] as const;
 
@@ -96,13 +96,13 @@ export const BRIDGE_DRAFT_BODY =
  * blocks every figure from the owner: unsigned packs can still be seen.
  */
 export const FIRM_NOT_A_BOOKKEEPER =
-  "Not an AI bookkeeper or AI accountant that replaces your firm: the books stay in QuickBooks Online or Xero. Sage is coming soon, and you review and sign off every advisory pack.";
+  "Not an AI bookkeeper or AI accountant that replaces your firm: the books stay in the ledger. Milōn connects with Xero, QuickBooks and Sage, and you review and sign off every advisory pack.";
 
 /** Three people on /for-accountants. What they do, what leaves the accountant's plate, and what the client gets. */
 export const FIRM_TEAM_BULLETS = [
   {
     title: "Milōn Financial Manager runs the team.",
-    body: "Keeps the books data clean from QuickBooks or Xero (Sage is coming soon), holds the 13-week cash view and the budget, lines up the action points, and hands the pack to you. The month-end pull and the first draft come off your plate, so the time you used to spend assembling the file goes back to the client. They get a cash picture they can act on while there is still time.",
+    body: "Keeps the books data clean from a ledger that connects with Xero, QuickBooks and Sage, holds the 13-week cash view and the budget, lines up the action points, and hands the pack to you. The month-end pull and the first draft come off your plate, so the time you used to spend assembling the file goes back to the client. They get a cash picture they can act on while there is still time.",
   },
   {
     title: "Milōn Analyst diagnoses the numbers.",
@@ -118,7 +118,7 @@ export const FIRM_TEAM_BULLETS = [
 export const FINANCE_TEAM = [
   {
     name: "Milōn Financial Manager",
-    body: "Runs the team. Keeps the books data clean from QuickBooks or Xero (Sage is coming soon), holds the 13-week cash view and the budget, and lines up the action points. The month-end pull and the hand-off pack come off the accountant's plate, so the review starts from a prepared file. Clients see the cash picture while they can still use it.",
+    body: "Runs the team. Keeps the books data clean from a ledger that connects with Xero, QuickBooks and Sage, holds the 13-week cash view and the budget, and lines up the action points. The month-end pull and the hand-off pack come off the accountant's plate, so the review starts from a prepared file. Clients see the cash picture while they can still use it.",
     bold: "You review and approve the hand-off.",
   },
   {
@@ -237,11 +237,11 @@ export function proofImageSrcSet(base: string): string {
 
 export const PROOF_SECURITY_FACTS = [
   "Less time per client: the team pulls the figures and writes the first draft, and you keep the judgement.",
-  "Better accuracy: the health score, the ratios and the cash view all come from the same QuickBooks or Xero file. Sage is coming soon.",
+  "Better accuracy: the health score, the ratios and the cash view all come from a file that connects with Xero, QuickBooks and Sage.",
   "A Financial Manager, an Analyst and an Advisor, for a small monthly fee.",
   "Clients' figures come alive as a diagnosis: why margins moved, and where cash is leaking.",
   "Advisory deliverables are ready to send once you sign off.",
-  "QuickBooks and Xero connect into the same workspace. Sage is coming soon.",
+  "Milōn connects with Xero, QuickBooks and Sage in the same workspace. Sage is a read-only sync.",
   "Invoices, bills and receipts can come in from the client. A named person approves before anything is posted to the books. Nothing posts on its own.",
   "Firms lead the move to AI, and help their clients adopt it in the finance work they already trust you to do.",
 ] as const;

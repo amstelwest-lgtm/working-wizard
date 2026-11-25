@@ -171,7 +171,7 @@ export function listManagementRulesPayload(rules: readonly ManagementHabitRuleRo
     citation_format: "Library rule: <id> (Reality|Habits|Expectations — <label>)",
     hard_no: [
       "Not Compliance or statutory filing.",
-      "Does not write to Xero, QuickBooks, Sage, or any ledger.",
+      "Does not write to Xero or QuickBooks, or any ledger. Sage is a read-only sync.",
     ],
   };
 }

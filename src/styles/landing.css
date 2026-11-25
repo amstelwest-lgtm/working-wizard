@@ -846,6 +846,13 @@ html[data-landing="1"] #hero .hero-lede{
   margin:0 0 14px;
 }
 html[data-landing="1"] #hero .integrations-chips{margin:0 0 4px}
+html[data-landing="1"] .connects-with{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;margin:0 0 4px}
+html[data-landing="1"] .connects-with p{margin:0;font-size:13px;font-weight:600;letter-spacing:.04em;color:var(--ink-dim);-webkit-text-fill-color:var(--ink-dim)}
+html[data-landing="1"] .connects-logos{display:flex;align-items:center;gap:18px;list-style:none;margin:0;padding:8px 16px;background:#fff;border:1px solid var(--line);border-radius:999px}
+html[data-landing="1"] .connects-logos img{height:28px;width:auto;display:block}
+html[data-landing="1"] .connects-logos .wordmark{font-size:22px;line-height:28px;font-weight:700;letter-spacing:-.02em}
+html[data-landing="1"] .connects-logos .wordmark-xero{color:#000856;-webkit-text-fill-color:#000856}
+html[data-landing="1"] .connects-logos .wordmark-sage{color:#102A43;-webkit-text-fill-color:#102A43}
 html[data-landing="1"] #hero .hero-cta{margin-top:24px}
 html[data-landing="1"] #hero .hero-cta .btn-gold{
   min-height:52px;

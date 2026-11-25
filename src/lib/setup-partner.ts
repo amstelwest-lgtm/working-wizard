@@ -665,7 +665,7 @@ export function fallbackWorkflowMap(
   const told = Object.values(answers).join(" ");
   const checklist = /\b(xero|quickbooks|qbo|sage)\b/i.test(told)
     ? []
-    : ["Connect Xero, QuickBooks, or Sage where the firm keeps the books."];
+    : ["Connect Xero, QuickBooks, or Sage where the firm keeps the books. Sage is a read-only sync."];
   return {
     todaysFlow: flow.length ? flow : ["Practice month-end close, review, and sign-off."],
     milonCoverage: setupPartnerCoverage(country),

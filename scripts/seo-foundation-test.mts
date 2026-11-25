@@ -256,7 +256,7 @@ assert(
   `${HERO_H1_LEAD} ${HERO_H1_GOLD}` === "Your AI finance team. You sign off.",
   "home H1 is the finance-team sign-off line",
 );
-assert(HERO_LEDE.startsWith("Plug in QuickBooks or Xero. Sage is coming soon."), "hero lede names QuickBooks and Xero, with Sage coming soon");
+assert(HERO_LEDE.startsWith("Milōn connects with Xero, QuickBooks and Sage."), "hero lede connects with Xero, QuickBooks and Sage");
 assert(landing.includes("{HERO_LEDE}"), "hero lede comes from landing copy");
 assert(HERO_LEDE.includes("diagnose the business"), "hero lede lists diagnosis as a deliverable");
 assert(!landing.includes("health tool that diagnoses the"), "old run-on hero lede is gone");
@@ -280,12 +280,12 @@ assert(!landing.includes("borrowed SA bands"), "US median disclaimer is not land
 assert(!landing.includes("the playbook"), "playbook is not the landing recommendation engine");
 assert(landing.includes('id="integrations"'), "landing has an integrations callout");
 assert(
-  landing.includes("QuickBooks Online and Xero. Sage coming soon."),
-  "landing footer names QuickBooks Online and Xero, with Sage coming soon",
+  landing.includes("Connects with Xero, QuickBooks and Sage. Sage is a read-only sync."),
+  "landing footer connects with Xero, QuickBooks and Sage",
 );
 assert(
-  landing.includes("Connect QuickBooks or Xero. Sage is coming soon"),
-  "landing tells visitors they can connect QuickBooks or Xero, with Sage coming soon",
+  landing.includes("Milōn connects with Xero, QuickBooks and Sage. Sage is a read-only sync."),
+  "landing connects with Xero, QuickBooks and Sage and keeps Sage read-only",
 );
 assert(!landing.includes("certified"), "landing does not claim certification");
 assert(!landing.includes("Intuit"), "landing does not claim an Intuit relationship");
@@ -324,15 +324,15 @@ assert(landing.includes('href="/for-owners"'), "landing links to owners hub");
 assert(landing.includes('id="home-faq"'), "landing has a visible FAQ block");
 assert(landing.includes("faqPageJson(homepageFaqItems(false))"), "landing FAQ schema stays on the US answers");
 assert(HOMEPAGE_FAQ_ITEMS.length === 6, "homepage FAQ is six questions");
-const ledgerFaq = HOMEPAGE_FAQ_ITEMS.find((item) => item.question.startsWith("Do I need QuickBooks"));
+const ledgerFaq = HOMEPAGE_FAQ_ITEMS.find((item) => item.question.startsWith("Do I need"));
 assert(ledgerFaq != null, "homepage FAQ still has the ledger question");
 assert(
-  ledgerFaq!.answer.includes("you do not need QuickBooks or Xero"),
-  "homepage FAQ still says neither ledger is required",
+  ledgerFaq!.answer.includes("you do not need Xero, QuickBooks or Sage"),
+  "homepage FAQ still says a ledger is not required",
 );
 assert(
-  ledgerFaq!.answer.includes("connect QuickBooks or Xero. Sage is coming soon"),
-  "homepage FAQ connects QuickBooks or Xero and marks Sage coming soon",
+  ledgerFaq!.answer.includes("connects with Xero, QuickBooks and Sage"),
+  "homepage FAQ connects with Xero, QuickBooks and Sage",
 );
 assert(
   faqPageJson(HOMEPAGE_FAQ_ITEMS).includes("Does Milōn replace the accountant?"),
@@ -371,12 +371,12 @@ assert(
 assert(firms.includes("readSaPricingCopy"), "firm page loads rand copy from the server");
 assert(!firms.includes("separate rand catalog"), "firm page drops the unpublished-catalog line");
 assert(
-  SEO_PAGES.forAccountants.title === "AI Finance Team for QuickBooks, Xero · Sage soon | MILŌN",
-  "firm page title names QuickBooks and Xero, with Sage soon",
+  SEO_PAGES.forAccountants.title === "AI Finance Team for Xero, QuickBooks, Sage | MILŌN",
+  "firm page title names Xero, QuickBooks and Sage",
 );
 assert(
-  SEO_PAGES.home.title === "AI Finance Team & CFO · QuickBooks, Xero, Sage soon | MILŌN",
-  "home title names the AI finance team and QuickBooks, Xero, Sage soon",
+  SEO_PAGES.home.title === "AI Finance Team & CFO · Xero, QuickBooks, Sage | MILŌN",
+  "home title names the AI finance team and Xero, QuickBooks and Sage",
 );
 assert(SEO_PAGES.home.title.length <= 60, "home title stays within 60 characters");
 assert(SEO_PAGES.forAccountants.title.length <= 60, "firm title stays within 60 characters");
@@ -410,8 +410,8 @@ assert(
   !HOMEPAGE_FAQ_ITEMS.some((item) => item.answer.includes("Milōn Accountant")),
   "homepage FAQ drops Milōn Accountant",
 );
-assert(firms.includes("Works with QuickBooks Online and Xero"), "firm page names both ledgers");
-assert(firms.includes("Connect QuickBooks Online or Xero"), "firm page says connect either ledger");
+assert(firms.includes("Connects with Xero, QuickBooks and Sage"), "firm page connects with Xero, QuickBooks and Sage");
+assert(firms.includes("Sage is a read-only sync"), "firm page keeps Sage read-only");
 assert(!firms.includes("certified"), "firm page does not claim certification");
 assert(!firms.includes("Intuit"), "firm page does not claim an Intuit relationship");
 
@@ -434,8 +434,8 @@ for (const page of [SEO_PAGES.home, SEO_PAGES.forAccountants, SEO_PAGES.forOwner
 const shell = readFileSync(resolve("src/components/marketing-shell.tsx"), "utf8");
 const preferredAssets = readFileSync(resolve("src/lib/landing-assets.ts"), "utf8");
 const preferredHref = "https://www.google.com/preferences/source?q=milonfinance.com";
-assert(shell.includes("QuickBooks Online and Xero. Sage coming soon."), "collateral footer names QuickBooks Online and Xero, with Sage coming soon");
-assert(shell.includes("Sage coming soon."), "collateral footer marks Sage coming soon");
+assert(shell.includes("Connects with Xero, QuickBooks and Sage. Sage is a read-only sync."), "collateral footer connects with Xero, QuickBooks and Sage");
+assert(shell.includes("Sage is a read-only sync."), "collateral footer keeps Sage read-only");
 assert(shell.includes("milonfinance.com"), "collateral footer uses the US domain");
 assert(preferredAssets.includes(preferredHref), "preferred source is a plain Google preferences deeplink");
 assert(
@@ -520,11 +520,11 @@ assert(!about.includes("former auditor"), "about does not describe a former audi
 assert(!/Outsourced CFO|\bOCFO\b/.test(about), "about does not name an employer");
 assert(!about.includes("founder"), "about has no founder career line");
 assert(
-  aboutText.includes("QuickBooks Online and Xero, plug-and-play."),
+  aboutText.includes("Milōn connects with Xero, QuickBooks and Sage, plug-and-play."),
   "about weaves the approved ledger wedge",
 );
 assert(
-  (aboutText.match(/QuickBooks Online and Xero, plug-and-play\./g) ?? []).length === 1,
+  (aboutText.match(/Milōn connects with Xero, QuickBooks and Sage, plug-and-play\./g) ?? []).length === 1,
   "about states the ledger wedge once",
 );
 assert(
@@ -548,8 +548,8 @@ assert(faq.includes("LEDGER_CONNECT_ANSWER"), "faq renders the ledger answer fro
 assert(ACCOUNTING_SOFTWARE_ANSWER.includes("not a ledger"), "accounting-software answer stays honest");
 assert(ACCOUNTING_SOFTWARE_ANSWER.includes("QuickBooks Online"), "accounting-software answer names QBO");
 assert(ACCOUNTING_SOFTWARE_ANSWER.includes("Xero"), "accounting-software answer names Xero");
-assert(LEDGER_CONNECT_ANSWER.includes("Connect QuickBooks Online or Xero"), "ledger answer says connect");
-assert(LEDGER_CONNECT_ANSWER.includes("do not need either system"), "ledger answer keeps upload as enough");
+assert(LEDGER_CONNECT_ANSWER.includes("connects with Xero, QuickBooks Online and Sage"), "ledger answer says connect");
+assert(LEDGER_CONNECT_ANSWER.includes("do not need any of them"), "ledger answer keeps upload as enough");
 assert(!LEDGER_CONNECT_ANSWER.includes("certified"), "ledger answer does not claim certification");
 assert(!LEDGER_CONNECT_ANSWER.includes("Intuit"), "ledger answer does not claim an Intuit relationship");
 assert(
