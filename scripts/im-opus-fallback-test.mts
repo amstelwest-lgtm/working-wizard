@@ -6,7 +6,6 @@
 import { CLAUDE_OPUS_55 } from "../src/lib/claude-request.ts";
 import {
   IM_OPUS_55_ID,
-  IM_OPUS_PREVIOUS_ID,
   anthropicRejectedModel,
   imOpusAttemptModels,
   imOpusFallbackModel,
@@ -21,24 +20,15 @@ assert(IM_OPUS_55_ID === "claude-opus-5-5", "Opus 5.5 id matches the Claude API 
 assert(IM_OPUS_55_ID === CLAUDE_OPUS_55, "the interview uses the shared Opus 5.5 constant");
 
 const same = imOpusAttemptModels(CLAUDE_OPUS_55);
-assert(same[0] === IM_OPUS_55_ID, "5.5 is first when the current id is already 5.5");
-assert(same[1] === IM_OPUS_PREVIOUS_ID, "the single retry is the previous Opus id");
-assert(same.length === 2, "one retry only");
-assert(new Set(same).size === same.length, "the same id is not tried twice");
+assert(same.length === 1 && same[0] === IM_OPUS_55_ID, "the shared Opus constant is not retried as itself");
 
 const override = imOpusAttemptModels("claude-opus-4-6");
 assert(
   override[0] === IM_OPUS_55_ID && override[1] === "claude-opus-4-6",
   "a distinct current Opus id is the retry",
 );
-assert(
-  imOpusAttemptModels("  ").join(",") === same.join(","),
-  "a blank current id uses the previous Opus",
-);
-assert(
-  imOpusAttemptModels(null).join(",") === same.join(","),
-  "a missing current id uses the previous Opus",
-);
+assert(imOpusAttemptModels("  ").join(",") === same.join(","), "a blank current id stays on the shared constant");
+assert(imOpusAttemptModels(null).join(",") === same.join(","), "a missing current id stays on the shared constant");
 
 const notFound = {
   status: 404,
@@ -49,16 +39,11 @@ assert(
   "404 not_found_error is a model rejection",
 );
 assert(
-  imOpusFallbackModel({ attempted: IM_OPUS_55_ID, currentOpusId: CLAUDE_OPUS_55, ...notFound }) ===
-    IM_OPUS_PREVIOUS_ID,
-  "a 404 on 5.5 selects the previous Opus",
+  imOpusFallbackModel({ attempted: IM_OPUS_55_ID, currentOpusId: CLAUDE_OPUS_55, ...notFound }) === null,
+  "a 404 does not retry the same shared Opus id",
 );
 assert(
-  imOpusFallbackModel({
-    attempted: IM_OPUS_PREVIOUS_ID,
-    currentOpusId: CLAUDE_OPUS_55,
-    ...notFound,
-  }) === null,
+  imOpusFallbackModel({ attempted: "claude-opus-4-6", currentOpusId: "claude-opus-4-6", ...notFound }) === null,
   "the retry is not tried again",
 );
 

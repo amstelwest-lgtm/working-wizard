@@ -1,26 +1,19 @@
 /**
  * Implementation Manager model selection.
  *
- * Opus 5.5 is CLAUDE_OPUS_55. Source: Anthropic models overview, Claude Opus
- * 5.5, Claude API ID column. The literal stays in claude-request.ts.
- *
- * If Anthropic rejects that id, one retry uses the Opus id this call already
- * had. When that id is already 5.5, the retry is Claude Opus 5 (`claude-opus-5`),
- * the previous Opus still listed as active on the same page.
+ * Opus 5.5 is CLAUDE_OPUS_55 from claude-request.ts. The repo defines no
+ * second Opus id. A caller-supplied current id is the one retry when it
+ * differs. The same id is not sent twice.
  */
 import { CLAUDE_OPUS_55 } from "./claude-request.ts";
 
 export const IM_OPUS_55_ID = CLAUDE_OPUS_55;
 
-/** Previous active Opus. Claude API ID from the models overview, row Claude Opus 5. */
-export const IM_OPUS_PREVIOUS_ID = "claude-opus-5";
-
-/** 5.5 first, then one distinct fallback. Never the same id twice. */
+/** 5.5 first. One distinct current id after it. Never the same id twice. */
 export function imOpusAttemptModels(currentOpusId: string | null | undefined): readonly string[] {
   const current = (currentOpusId ?? "").trim();
-  const fallback = current && current !== IM_OPUS_55_ID ? current : IM_OPUS_PREVIOUS_ID;
-  if (fallback === IM_OPUS_55_ID) return [IM_OPUS_55_ID];
-  return [IM_OPUS_55_ID, fallback];
+  if (!current || current === IM_OPUS_55_ID) return [IM_OPUS_55_ID];
+  return [IM_OPUS_55_ID, current];
 }
 
 /**
