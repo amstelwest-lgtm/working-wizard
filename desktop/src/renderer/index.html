@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Milōn</title>
+    <style>
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font: 14px/1.45 "Segoe UI", sans-serif;
+        color: #102a43;
+        background: #f4f7fb;
+      }
+      header { padding: 16px 16px 4px; }
+      h1 { margin: 0; font-size: 20px; }
+      .lede { margin: 4px 0 0; color: #4a6274; font-size: 12px; }
+      main { padding: 12px 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+      label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 650; }
+      input, select, button { font: inherit; }
+      input, select {
+        padding: 8px 10px;
+        border: 1px solid #d5e2ee;
+        border-radius: 8px;
+        background: #fff;
+        color: inherit;
+      }
+      button {
+        background: #0b5fff;
+        color: #fff;
+        border: 0;
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      button.quiet { background: #fff; color: #102a43; border: 1px solid #d5e2ee; }
+      button:disabled { opacity: 0.55; cursor: default; }
+      .row { display: flex; gap: 8px; align-items: end; }
+      .row > label, .row > button { flex: 1; }
+      .grow { flex: 1; }
+      ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+      li { background: #fff; border: 1px solid #e2ebf3; border-radius: 10px; padding: 10px; }
+      .name { font-weight: 650; word-break: break-word; }
+      .status { font-size: 12px; font-weight: 700; }
+      .uploaded { color: #0d7a4f; }
+      .failed { color: #9b1c1c; }
+      .uploading, .queued { color: #0b5fff; }
+      .needs { color: #8a5a00; }
+      .detail, .flags { margin: 4px 0 0; font-size: 12px; color: #4a6274; }
+      .flags { color: #8a5a00; }
+      .ask { display: flex; gap: 6px; margin-top: 8px; }
+      .ask input { flex: 1; }
+      .err { min-height: 1.2em; color: #9b1c1c; font-size: 12px; margin: 0; }
+      .who { margin: 0; font-size: 12px; color: #4a6274; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Milōn</h1>
+      <p class="lede">Upload assistant. New files in the watched folder go to source-document intake. Nothing is posted to a ledger.</p>
+    </header>
+    <main id="app"></main>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

@@ -1,0 +1,50 @@
+name: Desktop Windows
+
+# Unsigned Milōn tray installer. Separate from the web CI jobs in ci.yml.
+# Path filters keep this off pull requests that do not touch the desktop app.
+
+on:
+  pull_request:
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-windows.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-exe:
+    name: Unsigned NSIS installer
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Typecheck and unit tests
+        working-directory: desktop
+        run: npm test
+
+      - name: Build unsigned NSIS installer
+        working-directory: desktop
+        run: npm run dist
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: milon-windows-exe
+          path: desktop/release/*.exe
+          if-no-files-found: error

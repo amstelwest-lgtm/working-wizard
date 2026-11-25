@@ -1,0 +1,63 @@
+{
+  "name": "milon-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Milōn pilot tray app. Watches one folder and uploads into source-document intake. Not part of the web app.",
+  "main": "dist/main.js",
+  "author": "Milon",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/classifier.test.js dist/paths.test.js dist/snippet.test.js",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder --win nsis"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "chokidar": "^3.6.0",
+    "jszip": "^3.10.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.8.3"
+  },
+  "build": {
+    "appId": "finance.milon.desktop",
+    "productName": "Milon",
+    "asar": true,
+    "npmRebuild": false,
+    "forceCodeSigning": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "src/renderer/**/*",
+      "package.json",
+      "!dist/**/*.test.js"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Milon-Setup.${ext}",
+      "signAndEditExecutable": false,
+      "verifyUpdateCodeSignature": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Milon",
+      "artifactName": "Milon-Setup.${ext}"
+    }
+  }
+}
