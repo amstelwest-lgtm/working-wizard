@@ -142,7 +142,7 @@ async function callInterviewClaude(
           ? imOpusFallbackModel({ attempted: model, currentOpusId: current, status: failure.status, body: failure.body })
           : null;
       if (!retry) throw err;
-      console.info("im_opus_rejected", JSON.stringify({ surface, model, status: failure.status }));
+      console.info("im_opus_rejected", JSON.stringify({ surface, model, status: failure?.status }));
     }
   }
   throw last instanceof Error ? last : new Error("The interview timed out. Retry.");
