@@ -1,19 +1,14 @@
 /**
  * Implementation Manager model selection.
- *
- * Opus 5.5 is CLAUDE_OPUS_55 from claude-request.ts. The repo defines no
- * second Opus id. A caller-supplied current id is the one retry when it
- * differs. The same id is not sent twice.
+ * Opus 5.5 first, then CLAUDE_OPUS_FALLBACK. CLAUDE_MODEL_FM is not a retry.
  */
-import { CLAUDE_OPUS_55 } from "./claude-request.ts";
+import { CLAUDE_OPUS_55, CLAUDE_OPUS_FALLBACK } from "./claude-request.ts";
 
 export const IM_OPUS_55_ID = CLAUDE_OPUS_55;
 
-/** 5.5 first. One distinct current id after it. Never the same id twice. */
-export function imOpusAttemptModels(currentOpusId: string | null | undefined): readonly string[] {
-  const current = (currentOpusId ?? "").trim();
-  if (!current || current === IM_OPUS_55_ID) return [IM_OPUS_55_ID];
-  return [IM_OPUS_55_ID, current];
+/** Always Opus 5.5, then the shared fallback. The argument is ignored. */
+export function imOpusAttemptModels(_currentOpusId?: string | null): readonly [string, string] {
+  return [CLAUDE_OPUS_55, CLAUDE_OPUS_FALLBACK];
 }
 
 /**

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ImPlanLink } from "@/components/im-plan-link";
 import {
   buildImNextSteps,
   imStepStorageKey,
@@ -98,9 +99,13 @@ export function ImNextStepsList({
                   {starting ? "Starting…" : step.button}
                 </button>
               ) : (
-                <a className="setup-partner__primary" href={step.href ?? "/clients"} onClick={() => finish(step.id)}>
+                <ImPlanLink
+                  href={step.href ?? "/clients"}
+                  className="setup-partner__primary"
+                  onClick={() => finish(step.id)}
+                >
                   {step.button}
-                </a>
+                </ImPlanLink>
               )}
             </li>
           );

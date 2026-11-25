@@ -396,6 +396,9 @@ function testFirmInterviewAndDeadlineBucket() {
   assert(brief.includes("universal finance function"), "vision brief names the product");
   assert(/open question/i.test(brief) && /Never yes\/no/i.test(brief), "open questions only");
   assert(/how many hours/i.test(brief), "brief asks for hours already spent");
+  assert(/clients and segments/i.test(brief), "brief covers clients");
+  assert(/prepares, who reviews/i.test(brief), "brief covers the review chain");
+  assert(/hours × clients/.test(brief), "the brief plays the numbers back before the plan");
   assert(/cash-flow report/i.test(brief), "brief ends on the live cash step");
   assert(/Do not ask about/.test(brief), "brief stays off unbuilt work");
   assert(/Send an agent/i.test(brief), "brief names the document step");

@@ -39,6 +39,7 @@ import {
 import { InterviewExchange, PastInterviews } from "@/components/interview-exchange";
 import { ImCloudAccessPanel } from "@/components/im-cloud-access-panel";
 import { ImNextStepsList } from "@/components/im-next-steps-list";
+import { ImPlanLink } from "@/components/im-plan-link";
 import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import { desktopSyncClientReady } from "@/lib/desktop-sync-ready";
 import { buildIntegrationPlanTable, type IntegrationPlanRow } from "@/lib/im-integration-plan";
@@ -841,11 +842,26 @@ export function PracticeSetupInterview({
                         <td>
                           <div>{row.milon}</div>
                           {row.actionHref ? (
-                            <a className="im-plan-action" href={row.actionHref} data-im-plan-action={row.playId}>
+                            <ImPlanLink href={row.actionHref} className="im-plan-action" data-im-plan-action={row.playId}>
                               {row.actionLabel}
-                            </a>
+                            </ImPlanLink>
                           ) : null}
-                          {row.actionPrompt ? <p className="im-plan-prompt">{row.actionPrompt}</p> : null}
+                          {row.actionPrompt ? (
+                            <p className="im-plan-prompt">
+                              {row.actionPrompt}{" "}
+                              <button
+                                type="button"
+                                className="im-plan-copy"
+                                onClick={() => {
+                                  const text = row.actionPrompt;
+                                  if (!text || typeof navigator === "undefined" || !navigator.clipboard) return;
+                                  void navigator.clipboard.writeText(text);
+                                }}
+                              >
+                                Copy prompt
+                              </button>
+                            </p>
+                          ) : null}
                         </td>
                         <td>{row.routine}</td>
                         <td>{row.clientSees}</td>
@@ -858,9 +874,9 @@ export function PracticeSetupInterview({
                 </table>
               </div>
               <div className="setup-partner__actions">
-                <a className="im-plan-action" data-im-plan-action="add-rule" href={ruleAction.href}>
+                <ImPlanLink href={ruleAction.href} className="im-plan-action" data-im-plan-action="add-rule">
                   {ruleAction.label}
-                </a>
+                </ImPlanLink>
                 <button
                   type="button"
                   className="setup-partner__primary im-plan-start"

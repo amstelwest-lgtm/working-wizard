@@ -743,6 +743,18 @@
   color: #486581;
 }
 
+.im-plan-copy {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #102a43;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .im-plan-covered {
   display: block;
   margin-bottom: 2px;

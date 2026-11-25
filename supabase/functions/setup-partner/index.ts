@@ -646,11 +646,10 @@ async function handleSetupPartner(req: Request): Promise<Response> {
     if (!template) return respond({ error: "template is required" }, 400);
     const userPrompt = applyRedaction(setupPartnerPhraseUserPrompt(template), session);
     try {
-      const called = await callInterviewClaude("setup_partner_phrase", SETUP_PARTNER_PHRASE_SYSTEM, userPrompt, {
-        maxTokens: 512,
+      const res = await callClaude(SETUP_PARTNER_PHRASE_SYSTEM, userPrompt, {
+        maxTokens: 120,
         temperature: 0.2,
       });
-      const res = called.response;
       if (precard.firmId) {
         await finishPrecardAttempt({
           decision: precard,

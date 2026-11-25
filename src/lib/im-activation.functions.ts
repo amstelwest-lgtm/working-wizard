@@ -118,13 +118,13 @@ async function pilotBooks(clientId: string): Promise<{ hasLedger: boolean; hasUp
 
 async function loadPilots(firmId: string): Promise<ImPilotClient[]> {
   const db = admin();
-  const listed = await db.from("clients").select("id, name").eq("firm_id", firmId).order("created_at", { ascending: true }).limit(40);
+  const listed = await db.from("clients").select("id, name, is_demo").eq("firm_id", firmId).order("created_at", { ascending: true }).limit(40);
   if (listed.error) throw new Error(listed.error.message);
   const pilots: ImPilotClient[] = [];
   for (const row of listed.data ?? []) {
     const id = typeof row.id === "string" ? row.id : "";
     const name = typeof row.name === "string" ? row.name : "Client";
-    if (!id) continue;
+    if (!id || row.is_demo === true) continue;
     const books = await pilotBooks(id);
     pilots.push({ id, name, ...books });
   }
@@ -775,15 +775,18 @@ async function firstPlanClient(firmId: string): Promise<PlanClient | null> {
   try {
     const listed = (await admin()
       .from("clients")
-      .select("id, name")
+      .select("id, name, is_demo")
       .eq("firm_id", firmId)
       .order("created_at", { ascending: true })
-      .limit(1)) as {
-      data: { id?: string; name?: string }[] | null;
+      .limit(40)) as {
+      data: { id?: string; name?: string; is_demo?: boolean | null }[] | null;
       error: { message: string } | null;
     };
-    const row = listed.data?.[0];
-    if (listed.error || !row || typeof row.id !== "string") return null;
+    if (listed.error) return null;
+    const rows = (listed.data ?? []).filter((row) => typeof row.id === "string");
+    const real = rows.find((row) => row.is_demo !== true);
+    const row = real ?? rows[0];
+    if (!row || typeof row.id !== "string") return null;
     return { id: row.id, name: typeof row.name === "string" ? row.name : "" };
   } catch {
     return null;

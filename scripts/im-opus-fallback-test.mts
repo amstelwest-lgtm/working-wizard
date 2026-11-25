@@ -3,7 +3,7 @@
  * retries once with the current Opus id. Other failures do not.
  * Run: pnpm test:im-opus-fallback
  */
-import { CLAUDE_OPUS_55 } from "../src/lib/claude-request.ts";
+import { CLAUDE_OPUS_55, CLAUDE_OPUS_FALLBACK } from "../src/lib/claude-request.ts";
 import {
   IM_OPUS_55_ID,
   anthropicRejectedModel,
@@ -20,15 +20,14 @@ assert(IM_OPUS_55_ID === "claude-opus-5-5", "Opus 5.5 id matches the Claude API 
 assert(IM_OPUS_55_ID === CLAUDE_OPUS_55, "the interview uses the shared Opus 5.5 constant");
 
 const same = imOpusAttemptModels(CLAUDE_OPUS_55);
-assert(same.length === 1 && same[0] === IM_OPUS_55_ID, "the shared Opus constant is not retried as itself");
-
-const override = imOpusAttemptModels("claude-opus-4-6");
 assert(
-  override[0] === IM_OPUS_55_ID && override[1] === "claude-opus-4-6",
-  "a distinct current Opus id is the retry",
+  same[0] === CLAUDE_OPUS_55 && same[1] === CLAUDE_OPUS_FALLBACK,
+  "5.5 is first and the shared fallback is second",
 );
-assert(imOpusAttemptModels("  ").join(",") === same.join(","), "a blank current id stays on the shared constant");
-assert(imOpusAttemptModels(null).join(",") === same.join(","), "a missing current id stays on the shared constant");
+assert(same.length === 2, "one retry only");
+assert(imOpusAttemptModels("claude-opus-4-6").join(",") === same.join(","), "a model override is not the retry");
+assert(imOpusAttemptModels("  ").join(",") === same.join(","), "a blank current id still uses the shared fallback");
+assert(imOpusAttemptModels(null).join(",") === same.join(","), "a missing current id still uses the shared fallback");
 
 const notFound = {
   status: 404,
@@ -39,11 +38,12 @@ assert(
   "404 not_found_error is a model rejection",
 );
 assert(
-  imOpusFallbackModel({ attempted: IM_OPUS_55_ID, currentOpusId: CLAUDE_OPUS_55, ...notFound }) === null,
-  "a 404 does not retry the same shared Opus id",
+  imOpusFallbackModel({ attempted: IM_OPUS_55_ID, currentOpusId: CLAUDE_OPUS_55, ...notFound }) ===
+    CLAUDE_OPUS_FALLBACK,
+  "a 404 on 5.5 selects the shared fallback",
 );
 assert(
-  imOpusFallbackModel({ attempted: "claude-opus-4-6", currentOpusId: "claude-opus-4-6", ...notFound }) === null,
+  imOpusFallbackModel({ attempted: CLAUDE_OPUS_FALLBACK, currentOpusId: CLAUDE_OPUS_55, ...notFound }) === null,
   "the retry is not tried again",
 );
 
@@ -60,8 +60,8 @@ assert(
     attempted: IM_OPUS_55_ID,
     currentOpusId: "claude-opus-4-6",
     ...invalid,
-  }) === "claude-opus-4-6",
-  "a 400 invalid model selects the current Opus id",
+  }) === CLAUDE_OPUS_FALLBACK,
+  "a 400 invalid model selects the shared fallback, not an override",
 );
 
 const tooLong = {
