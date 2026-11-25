@@ -107,6 +107,9 @@ import {
   TRUST_ITEMS,
   HOME_TRUST_PRIVACY_LINE,
   WALKTHROUGH_URL,
+  WINDOWS_PILOT_DOWNLOAD_LABEL,
+  WINDOWS_PILOT_INSTALLER_URL,
+  WINDOWS_PILOT_SMARTSCREEN_NOTE,
   WATCH_EYEBROW,
   WATCH_SUB,
   WATCH_TITLE,
@@ -2041,7 +2044,15 @@ function LandingPage() {
                   {HERO_WALKTHROUGH_LABEL}
                 </a>
               ) : null}
+              {WINDOWS_PILOT_INSTALLER_URL ? (
+                <a className="btn btn-cobalt pilot-download" href={WINDOWS_PILOT_INSTALLER_URL}>
+                  {WINDOWS_PILOT_DOWNLOAD_LABEL}
+                </a>
+              ) : null}
             </div>
+            {WINDOWS_PILOT_INSTALLER_URL ? (
+              <p className="hero-cta-note">{WINDOWS_PILOT_SMARTSCREEN_NOTE}</p>
+            ) : null}
             <p className="hero-cta-note">{saPricing?.heroNote ?? HERO_CTA_NOTE}</p>
             <ul className="hero-points">
               {HERO_POINTS.map((point) => (
