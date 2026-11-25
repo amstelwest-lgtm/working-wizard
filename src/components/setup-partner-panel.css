@@ -698,6 +698,38 @@
   background: #ffffff;
 }
 
+.im-next-steps ol {
+  margin: 12px 0 0;
+  padding-left: 1.25rem;
+}
+
+.im-next-steps li {
+  margin: 0 0 16px;
+}
+
+.im-next-steps li[data-im-step-state="next"] {
+  outline: 2px solid #102a43;
+  outline-offset: 6px;
+}
+
+.im-next-steps__state {
+  margin: 0;
+  color: #486581;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.im-next-steps__title {
+  margin: 2px 0 0;
+  color: #102a43;
+}
+
+.im-next-steps .setup-partner__primary {
+  display: inline-block;
+  margin-top: 8px;
+  text-decoration: none;
+}
+
 .im-plan-action {
   display: inline-block;
   margin-top: 6px;

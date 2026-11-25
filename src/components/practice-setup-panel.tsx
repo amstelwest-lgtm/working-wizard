@@ -38,6 +38,8 @@ import {
 } from "@/lib/setup-partner-client";
 import { InterviewExchange, PastInterviews } from "@/components/interview-exchange";
 import { ImCloudAccessPanel } from "@/components/im-cloud-access-panel";
+import { ImNextStepsList } from "@/components/im-next-steps-list";
+import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import { desktopSyncClientReady } from "@/lib/desktop-sync-ready";
 import { buildIntegrationPlanTable, type IntegrationPlanRow } from "@/lib/im-integration-plan";
 import { rulesActionFromHref } from "@/lib/im-plan-actions";
@@ -885,6 +887,18 @@ export function PracticeSetupInterview({
               </ul>
             </div>
           ) : null}
+          <ImNextStepsList
+            firmId={firmId}
+            rows={tableRows.map((row) => ({
+              playId: row.playId,
+              section: row.section,
+              actionHref: row.actionHref,
+            }))}
+            integrationStarted={integrationStarted || firmRunCount > 0}
+            sendAgentAllowed={sendAgentFirmAllowed(firmId)}
+            starting={starting}
+            onStart={() => void onStart()}
+          />
         </div>
       ) : null}
 
