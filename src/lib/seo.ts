@@ -245,7 +245,7 @@ export function organizationGraphJson(): string {
           "Small business financial management",
           "QuickBooks Online",
           "Xero",
-          "Sage Business Cloud Accounting (South Africa)",
+          "Sage Business Cloud Accounting",
         ],
       },
       {
