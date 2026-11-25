@@ -1,6 +1,11 @@
 /* global milon */
 const app = document.getElementById("app");
 const drafts = new Map();
+const RENDERER_TIMEOUT_MS = 16000;
+let signingIn = false;
+let loginEmail = "";
+let loginError = "";
+let lastState = null;
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -9,47 +14,200 @@ function el(tag, className, text) {
   return node;
 }
 
+function svgEl(name, attrs) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", name);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  return node;
+}
+
+function eyeIcon(visible) {
+  const svg = svgEl("svg", {
+    viewBox: "0 0 24 24",
+    width: "20",
+    height: "20",
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "1.8",
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round",
+    "aria-hidden": "true",
+  });
+  svg.appendChild(svgEl("path", {
+    d: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z",
+  }));
+  svg.appendChild(svgEl("circle", { cx: "12", cy: "12", r: "3" }));
+  if (visible) svg.appendChild(svgEl("path", { d: "M4 20L20 4" }));
+  return svg;
+}
+
 function statusClass(status) {
   if (status === "needs answer") return "needs";
   return status;
 }
 
+function wordmark() {
+  const logo = document.createElement("img");
+  logo.className = "wordmark";
+  logo.src = "./wordmark.png";
+  logo.alt = "MILŌN";
+  return logo;
+}
+
+function signInOrTimeout(email, password) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      console.error("[milon-desktop] sign-in stage=renderer-timeout");
+      resolve({ ok: false, message: "Can't reach Milōn. Check your connection and try again." });
+    }, RENDERER_TIMEOUT_MS);
+    milon.signIn(email, password).then(
+      (result) => {
+        if (settled) {
+          if (result && result.ok) milon.getState().then((state) => render(state));
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        if (!result.ok) console.error(`[milon-desktop] sign-in stage=renderer message=${result.message || "failed"}`);
+        resolve(result);
+      },
+      () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        console.error("[milon-desktop] sign-in stage=renderer-rejected");
+        resolve({ ok: false, message: "Can't reach Milōn. Check your connection and try again." });
+      },
+    );
+  });
+}
+
+function renderLogin(state) {
+  const screen = el("div", "signin");
+  screen.appendChild(el("div", "signin-scrim"));
+  const card = el("section", "card");
+  card.append(
+    wordmark(),
+    el("h1", null, "Sign in"),
+    el("p", "lede", "Use your Milōn email and password. New files in the watched folder go to source-document intake."),
+  );
+
+  const form = el("form");
+  const fields = el("fieldset");
+  fields.disabled = signingIn;
+
+  const emailLabel = el("label");
+  const emailInput = Object.assign(document.createElement("input"), {
+    type: "email",
+    name: "email",
+    autocomplete: "username",
+    required: true,
+    value: loginEmail,
+  });
+  emailInput.addEventListener("input", () => {
+    loginEmail = emailInput.value;
+  });
+  emailLabel.append("Email", emailInput);
+
+  const passwordLabel = el("label");
+  passwordLabel.append("Password");
+  const passwordField = el("div", "password-field");
+  const passwordInput = Object.assign(document.createElement("input"), {
+    type: "password",
+    name: "password",
+    autocomplete: "current-password",
+    required: true,
+  });
+  const toggle = el("button", "eye");
+  toggle.type = "button";
+  toggle.setAttribute("aria-label", "Show password");
+  toggle.setAttribute("aria-pressed", "false");
+  toggle.appendChild(eyeIcon(false));
+  toggle.addEventListener("click", () => {
+    const showing = passwordInput.type === "password";
+    passwordInput.type = showing ? "text" : "password";
+    toggle.setAttribute("aria-pressed", showing ? "true" : "false");
+    toggle.setAttribute("aria-label", showing ? "Hide password" : "Show password");
+    toggle.replaceChildren(eyeIcon(showing));
+  });
+  passwordField.append(passwordInput, toggle);
+  passwordLabel.append(passwordField);
+
+  const forgot = el("button", "link", "Forgot password?");
+  forgot.type = "button";
+  forgot.addEventListener("click", async () => {
+    const result = await milon.openPasswordReset();
+    if (!result.ok) {
+      loginError = result.message || "Password reset could not be opened.";
+      console.error(`[milon-desktop] sign-in stage=password-reset message=${loginError}`);
+      render(lastState || state);
+    }
+  });
+
+  fields.append(emailLabel, passwordLabel, forgot);
+
+  const button = el("button", "primary");
+  button.type = "submit";
+  button.disabled = signingIn;
+  button.setAttribute("aria-busy", signingIn ? "true" : "false");
+  if (signingIn) {
+    const row = el("span", "signin-row");
+    row.append(el("span", "spinner"), document.createTextNode("Signing in…"));
+    button.appendChild(row);
+  } else {
+    button.textContent = "Sign in";
+  }
+
+  form.append(fields, button);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (signingIn) return;
+    const password = passwordInput.value;
+    loginEmail = emailInput.value.trim();
+    loginError = "";
+    signingIn = true;
+    render(state);
+    const result = await signInOrTimeout(loginEmail, password);
+    signingIn = false;
+    if (result.ok) {
+      loginError = "";
+      const next = await milon.getState();
+      render(next);
+      return;
+    }
+    loginError = result.message || "Could not sign in.";
+    render(lastState || state);
+  });
+
+  const message = loginError || state.error || "";
+  card.append(form, el("p", "err", message), el("p", "who", "The password is not stored. This PC keeps an encrypted session until you sign out."));
+  screen.appendChild(card);
+  app.appendChild(screen);
+}
+
 function render(state) {
+  lastState = state;
   const focused = document.activeElement;
   const keepId = focused && focused.dataset ? focused.dataset.answer : "";
   const keepValue = keepId ? focused.value : "";
   app.replaceChildren();
 
-  const error = el("p", "err", state.error || "");
-  app.appendChild(error);
-
   if (!state.signedIn) {
-    const form = el("form");
-    const email = el("label");
-    email.append("Email", Object.assign(document.createElement("input"), { type: "email", name: "email", autocomplete: "username", required: true }));
-    const password = el("label");
-    const passwordInput = Object.assign(document.createElement("input"), {
-      type: "password",
-      name: "password",
-      autocomplete: "current-password",
-      required: true,
-    });
-    password.append("Password", passwordInput);
-    const button = el("button", null, "Sign in");
-    button.type = "submit";
-    form.append(email, password, button);
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      button.disabled = true;
-      const result = await milon.signIn(form.email.value.trim(), passwordInput.value);
-      passwordInput.value = "";
-      button.disabled = false;
-      if (!result.ok) error.textContent = result.message || "Could not sign in.";
-    });
-    const note = el("p", "who", "The password is not stored. This PC keeps an encrypted session until you sign out.");
-    app.append(form, note);
+    renderLogin(state);
     return;
   }
+
+  signingIn = false;
+  loginError = "";
+  const workspace = el("div", "workspace");
+  workspace.append(
+    wordmark(),
+    el("h1", null, "Uploads"),
+    el("p", "lede", "New files in the watched folder go to source-document intake. Nothing is posted to a ledger."),
+    el("p", "err", state.error || ""),
+  );
 
   const who = el("p", "who", state.email || "");
   const signOut = el("button", "quiet", "Sign out");
@@ -58,7 +216,7 @@ function render(state) {
   const top = el("div", "row");
   top.append(who, signOut);
   who.classList.add("grow");
-  app.appendChild(top);
+  workspace.appendChild(top);
 
   const folderLabel = el("label", null, "Watched folder");
   const folderRow = el("div", "row");
@@ -72,7 +230,7 @@ function render(state) {
   choose.addEventListener("click", () => milon.pickFolder());
   folderRow.append(folderText, choose);
   folderLabel.append(folderRow);
-  app.appendChild(folderLabel);
+  workspace.appendChild(folderLabel);
 
   const clientLabel = el("label");
   clientLabel.append("Client");
@@ -93,17 +251,16 @@ function render(state) {
   refresh.addEventListener("click", () => milon.refreshClients());
   clientRow.append(select, refresh);
   clientLabel.append(clientRow);
-  app.appendChild(clientLabel);
+  workspace.appendChild(clientLabel);
 
   const periodLabel = el("label");
   periodLabel.append("Books period");
   const period = Object.assign(document.createElement("input"), { type: "month", value: state.period || "" });
   period.addEventListener("change", () => milon.setPeriod(period.value));
   periodLabel.append(period);
-  app.appendChild(periodLabel);
+  workspace.appendChild(periodLabel);
 
-  const heading = el("p", "who", "Status. The assistant's read stays on this PC.");
-  app.appendChild(heading);
+  workspace.appendChild(el("p", "who", "Status. The assistant's read stays on this PC."));
 
   const list = document.createElement("ul");
   if (state.items.length === 0) {
@@ -141,7 +298,8 @@ function render(state) {
     }
     list.appendChild(card);
   }
-  app.appendChild(list);
+  workspace.appendChild(list);
+  app.appendChild(workspace);
   if (keepId && window.CSS) {
     const again = app.querySelector(`input[data-answer="${CSS.escape(keepId)}"]`);
     if (again) again.focus();
