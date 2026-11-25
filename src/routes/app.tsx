@@ -7112,7 +7112,7 @@ function Index() {
                     <span className="text-xs text-slate-600 dark:text-slate-400">
                       {sageSoon
                         ? "Sage is not available yet."
-                        : "Sage Business Cloud Accounting (South Africa). Email, password, and Company ID."}
+                        : "Sage Business Cloud Accounting (South Africa). Email and password, then choose a company."}
                     </span>
                   </button>
                 ) : null}

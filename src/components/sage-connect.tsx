@@ -6,12 +6,18 @@ import {
   disconnectSage,
   getSageConfig,
   getSageStatus,
+  lookupSageCompanies,
   triggerSageSync,
   type SageStatus,
 } from "@/lib/sage.functions";
 import { Unlink, CheckCircle2, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { BrandConnectButton } from "@/components/brand-connect-button";
-import { sageSyncPopulatedFields } from "@/lib/sage";
+import {
+  SAGE_NO_COMPANIES_MESSAGE,
+  initialSageCompanyId,
+  sageSyncPopulatedFields,
+  type SageCompanyProof,
+} from "@/lib/sage";
 import { SAGE_NOT_SYNCED_HINT } from "@/lib/connect-books-copy";
 import { useConnectionProbe } from "@/lib/use-connection-probe";
 
@@ -39,6 +45,7 @@ export function SageConnectCard({
 }: Props) {
   const fetchStatus = useServerFn(getSageStatus);
   const checkConfig = useServerFn(getSageConfig);
+  const doLookup = useServerFn(lookupSageCompanies);
   const doConnect = useServerFn(connectSage);
   const doDisconnect = useServerFn(disconnectSage);
   const doSync = useServerFn(triggerSageSync);
@@ -57,17 +64,50 @@ export function SageConnectCard({
     },
   });
   const [connecting, setConnecting] = useState(false);
+  const [lookingUp, setLookingUp] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [emptySyncMessage, setEmptySyncMessage] = useState<string | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [companies, setCompanies] = useState<SageCompanyProof[] | null>(null);
   const [companyId, setCompanyId] = useState("");
+  const [lookupError, setLookupError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(!buttonFirst);
 
-  const handleConnect = async (event: FormEvent) => {
-    event.preventDefault();
+  const clearCompanyChoice = () => {
+    setCompanies(null);
+    setCompanyId("");
+    setLookupError(null);
+  };
+
+  const handleLookup = async () => {
     if (!clientId) return;
+    setLookingUp(true);
+    setLookupError(null);
+    try {
+      const result = await doLookup({
+        data: {
+          clientId,
+          username: username.trim(),
+          password,
+        },
+      });
+      const next = result.companies;
+      setCompanies(next);
+      setCompanyId(initialSageCompanyId(next));
+      if (next.length === 0) setLookupError(SAGE_NO_COMPANIES_MESSAGE);
+    } catch (err) {
+      setCompanies(null);
+      setCompanyId("");
+      setLookupError(err instanceof Error ? err.message : "Could not reach Sage");
+    } finally {
+      setLookingUp(false);
+    }
+  };
+
+  const handleConnect = async () => {
+    if (!clientId || !companyId.trim()) return;
     setConnecting(true);
     try {
       await doConnect({
@@ -83,6 +123,7 @@ export function SageConnectCard({
       toast.success("Sage connected. Sync will not change figures until a statement is available.");
       onConnectionChange?.();
       await reload();
+      clearCompanyChoice();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not connect Sage");
     } finally {
@@ -225,16 +266,25 @@ export function SageConnectCard({
     );
   }
 
+  const chooseCompany = Boolean(companies && companies.length > 0);
+
   return (
     <form
       className="ledger-connect ledger-connect--panel"
-      onSubmit={handleConnect}
+      onSubmit={(event: FormEvent) => {
+        event.preventDefault();
+        if (chooseCompany) {
+          void handleConnect();
+          return;
+        }
+        void handleLookup();
+      }}
       data-sage-connect="form"
     >
       <p className="ledger-connect__kicker">Sage Accounting</p>
       <p className="ledger-connect__hint">
-        South African Sage Business Cloud Accounting. Email, password, and Company ID. Milōn
-        checks the login with Sage and does not pull figures yet.
+        South African Sage Business Cloud Accounting. Enter the Sage email and password. Milōn
+        asks Sage which companies this login can see, then you choose one.
       </p>
       <div className="ledger-connect__fields">
         <label className="ledger-connect__label">
@@ -246,7 +296,10 @@ export function SageConnectCard({
             autoComplete="username"
             required
             value={username}
-            onChange={(event) => setUsername(event.target.value)}
+            onChange={(event) => {
+              setUsername(event.target.value);
+              clearCompanyChoice();
+            }}
           />
         </label>
         <label className="ledger-connect__label">
@@ -258,27 +311,61 @@ export function SageConnectCard({
             autoComplete="current-password"
             required
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              clearCompanyChoice();
+            }}
           />
         </label>
-        <label className="ledger-connect__label">
-          Company ID
-          <input
-            className="ledger-connect__input"
-            type="text"
-            name="sage-company-id"
-            inputMode="numeric"
-            autoComplete="off"
-            required
-            pattern="[0-9]{1,18}"
-            title="The numeric Company ID from Sage"
-            value={companyId}
-            onChange={(event) => setCompanyId(event.target.value)}
-          />
-        </label>
+        {chooseCompany ? (
+          <label className="ledger-connect__label">
+            Company
+            <select
+              className="ledger-connect__input"
+              name="sage-company"
+              required
+              value={companyId}
+              onChange={(event) => setCompanyId(event.target.value)}
+            >
+              {companies && companies.length > 1 ? (
+                <option value="">Select a company</option>
+              ) : null}
+              {companies?.map((company) => (
+                <option key={company.companyId} value={company.companyId}>
+                  {company.companyName?.trim()
+                    ? `${company.companyName.trim()} (${company.companyId})`
+                    : `Company ${company.companyId}`}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
       </div>
+      {lookupError ? (
+        <p className="ledger-connect__hint text-rose-400" role="alert" data-sage-lookup-error="">
+          {lookupError}
+        </p>
+      ) : null}
       <div style={{ marginTop: 12 }}>
-        <BrandConnectButton brand="sage" type="submit" busy={connecting} busyLabel="Checking Sage…" />
+        {chooseCompany ? (
+          <BrandConnectButton
+            brand="sage"
+            type="submit"
+            busy={connecting}
+            busyLabel="Checking Sage…"
+            disabled={lookingUp || !companyId}
+          />
+        ) : (
+          <button
+            type="submit"
+            className="brand-connect brand-connect--sage"
+            disabled={lookingUp || connecting}
+          >
+            <span className="brand-connect__label">
+              {lookingUp ? "Checking Sage…" : "Find companies"}
+            </span>
+          </button>
+        )}
       </div>
     </form>
   );

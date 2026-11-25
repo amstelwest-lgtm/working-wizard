@@ -13,8 +13,13 @@ import { describeLedgerLink } from "../src/lib/ledger-link-copy";
 import { isDatedLedgerSource } from "../src/lib/statement-period";
 import {
   SAGE_EMPTY_SYNC_MESSAGE,
+  SAGE_NO_COMPANIES_MESSAGE,
+  initialSageCompanyId,
+  listSageCompanies,
   parseSageCompany,
+  parseSageCompanyList,
   sageBasicAuthorization,
+  sageCompanyListUrl,
   sageCompanyValidateUrl,
   sageConnectionInsert,
   sageCredentialsConfigured,
@@ -68,6 +73,38 @@ assert(url.startsWith("https://accounting.sageone.co.za/api/2.0.0/Company/Get/42
 assert(url.includes("apikey=test-api-key"), "API key is the apikey query parameter");
 assert(url.includes("companyid=42"), "company id is sent with the company read");
 assert(!url.includes("/oauth"), "validate URL is not an OAuth endpoint");
+
+const listUrl = sageCompanyListUrl("test-api-key");
+assert(listUrl.startsWith("https://accounting.sageone.co.za/api/2.0.0/Company/Get?"), "list hits Company/Get");
+assert(!listUrl.includes("/Company/Get/"), "list does not pin a company id in the path");
+assert(listUrl.includes("apikey=test-api-key"), "list sends the API key");
+assert(!listUrl.toLowerCase().includes("companyid="), "list does not send a company id");
+assert(!listUrl.includes("/oauth"), "list URL is not an OAuth endpoint");
+
+const listed = parseSageCompanyList({
+  TotalResults: 2,
+  ReturnedResults: 2,
+  Results: [
+    { ID: 42, Name: "Cape Books" },
+    { ID: "7", Name: "Other" },
+    { ID: 42, Name: "Cape Books again" },
+    { Name: "No id" },
+    { ID: "not-a-number", Name: "Bad id" },
+  ],
+});
+assert(listed.length === 2, "list keeps numeric companies and skips the rest");
+assert(listed[0]?.companyId === "42" && listed[0]?.companyName === "Cape Books", "first company is Cape Books");
+assert(listed[1]?.companyId === "7" && listed[1]?.companyName === "Other", "second company keeps its id");
+assert(parseSageCompanyList([{ ID: 9, Name: "Bare" }])[0]?.companyName === "Bare", "a bare array is a company list");
+assert(parseSageCompanyList({ Results: [] }).length === 0, "an empty Results list is zero companies");
+assert(initialSageCompanyId(listed) === "", "several companies are not preselected");
+assert(
+  initialSageCompanyId([{ companyId: "42", companyName: "Cape Books" }]) === "42",
+  "one company is preselected",
+);
+assert(initialSageCompanyId([]) === "", "zero companies has no selection");
+assert(!SAGE_NO_COMPANIES_MESSAGE.includes("SAGE_"), "zero-company copy does not name an environment variable");
+assert(SAGE_NO_COMPANIES_MESSAGE.includes("cannot see any companies"), "zero-company copy says none are visible");
 
 const parsed = parseSageCompany({ ID: 42, Name: "Cape Books" }, "42");
 assert(parsed?.companyName === "Cape Books", "company name is read from Sage");
@@ -129,6 +166,88 @@ const unconfigured = await validateSageLogin(
   },
 );
 assert(unconfigured.ok === false && unconfigured.reason === "not_configured", "blank key does not call Sage");
+
+let listSeen = "";
+let listMethod = "";
+const listOk = await listSageCompanies(
+  { username: "owner@example.co.za", password: "s3cret", apiKey: "test-api-key" },
+  async (input, init) => {
+    listSeen = String(input);
+    listMethod = init?.method ?? "GET";
+    const headers = init?.headers as Record<string, string>;
+    assert(headers.Authorization.startsWith("Basic "), "list sends Basic auth");
+    assert(!String(input).includes("s3cret"), "password is not put on the list URL");
+    return new Response(
+      JSON.stringify({
+        Results: [
+          { ID: 42, Name: "Cape Books" },
+          { ID: 7, Name: "Other" },
+        ],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  },
+);
+assert(listOk.ok === true && listOk.companies.length === 2, "list happy path returns both companies");
+assert(listMethod === "GET", "company list is a GET");
+assert(listSeen.includes("/Company/Get?"), "list calls Company/Get");
+assert(!listSeen.includes("/Company/Get/"), "list call does not pin a company id");
+assert(!listSeen.includes("ProfitAndLoss") && !listSeen.includes("BalanceSheet"), "list does not pull statements");
+assert(initialSageCompanyId(listOk.ok ? listOk.companies : []) === "", "two companies wait for a choice");
+
+const oneCompany = await listSageCompanies(
+  { username: "owner@example.co.za", password: "s3cret", apiKey: "test-api-key" },
+  async () =>
+    new Response(JSON.stringify({ Results: [{ ID: 42, Name: "Cape Books" }] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }),
+);
+assert(oneCompany.ok === true && oneCompany.companies.length === 1, "one company comes back from Company/Get");
+assert(
+  initialSageCompanyId(oneCompany.ok ? oneCompany.companies : []) === "42",
+  "the single company is the preselected id",
+);
+
+const noCompanies = await listSageCompanies(
+  { username: "owner@example.co.za", password: "s3cret", apiKey: "test-api-key" },
+  async () =>
+    new Response(JSON.stringify({ TotalResults: 0, ReturnedResults: 0, Results: [] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }),
+);
+assert(noCompanies.ok === true && noCompanies.companies.length === 0, "zero companies is a successful empty list");
+
+const listRejected = await listSageCompanies(
+  { username: "owner@example.co.za", password: "wrong", apiKey: "test-api-key" },
+  async () => new Response("no", { status: 401 }),
+);
+assert(listRejected.ok === false && listRejected.reason === "rejected", "401 on Company/Get is a rejected login");
+assert(
+  sageValidateError("rejected") === "Sage rejected that email or password.",
+  "auth failure copy names the email or password",
+);
+
+const listForbidden = await listSageCompanies(
+  { username: "owner@example.co.za", password: "wrong", apiKey: "test-api-key" },
+  async () => new Response("no", { status: 403 }),
+);
+assert(listForbidden.ok === false && listForbidden.reason === "rejected", "403 on Company/Get is a rejected login");
+
+let listCalled = false;
+const listUnconfigured = await listSageCompanies(
+  { username: "a@b.co", password: "x", apiKey: "  " },
+  async () => {
+    listCalled = true;
+    throw new Error("should not call Sage without a key");
+  },
+);
+assert(
+  listUnconfigured.ok === false && listUnconfigured.reason === "not_configured",
+  "blank key does not list companies",
+);
+assert(listCalled === false, "a missing key does not hit Company/Get");
 
 globalThis.fetch = originalFetch;
 
@@ -199,6 +318,10 @@ assert(sageApiBase() === SAGE_SA_SANDBOX_API_BASE, "sandbox base URL is honoured
 assert(
   sageCompanyValidateUrl("42", "k").startsWith(`${SAGE_SA_SANDBOX_API_BASE}/Company/Get/42`),
   "validate uses the configured sandbox host",
+);
+assert(
+  sageCompanyListUrl("k").startsWith(`${SAGE_SA_SANDBOX_API_BASE}/Company/Get?`),
+  "company list uses the configured sandbox host",
 );
 assert(normalizeSageApiBase("http://resellers.accounting.sageone.co.za/api/2.0.0") === SAGE_SA_LIVE_API_BASE, "http is refused");
 assert(normalizeSageApiBase("https://evil.example.com/api/2.0.0") === SAGE_SA_LIVE_API_BASE, "foreign host is refused");
@@ -291,6 +414,18 @@ assert(!/oauth|access_token|refresh_token|redirect_uri/i.test(migration), "no OA
 
 const fn = read("src/lib/sage.functions.ts");
 assert(fn.includes("validateSageLogin"), "connect validates with Sage");
+assert(fn.includes("listSageCompanies"), "lookup calls Company/Get through the Sage client");
+const lookupFn = fn.slice(
+  fn.indexOf("export const lookupSageCompanies"),
+  fn.indexOf("export const connectSage"),
+);
+assert(lookupFn.includes("listSageCompanies"), "lookupSageCompanies is the company list");
+assert(
+  !lookupFn.includes(".upsert") && !lookupFn.includes(".insert") && !lookupFn.includes(".update"),
+  "company lookup does not write",
+);
+assert(!lookupFn.includes("password_enc"), "lookup does not touch the stored password");
+assert(!lookupFn.includes("console."), "lookup does not log the login");
 assert(fn.includes('from "@/lib/sage-password"'), "connect encrypts with the shared password module");
 assert(fn.includes("encryptSagePassword"), "connect encrypts the password");
 assert(!fn.includes("SESSION_SECRET"), "connect does not key the password off the session secret");
@@ -315,7 +450,14 @@ assert(read("src/components/statement-arap-fallback.tsx").includes("connect-sage
 assert(read("src/components/connect-books-card.tsx").includes('data-connect-books="sage"'), "Home offers Sage as a primary button");
 assert(card.includes("Email"), "card asks for email");
 assert(card.includes("Password"), "card asks for password");
-assert(card.includes("Company ID"), "card asks for Company ID");
+assert(card.includes("lookupSageCompanies"), "the card loads companies from the server");
+assert(card.includes("<select"), "the card offers a company dropdown");
+assert(card.includes("initialSageCompanyId"), "one company is preselected");
+assert(card.includes("SAGE_NO_COMPANIES_MESSAGE"), "zero companies has a message");
+assert(card.includes('role="alert"'), "lookup failures stay on the card");
+assert(!card.includes('name="sage-company-id"'), "the card does not ask the user to type a company id");
+assert(!card.includes("Company ID"), "the card does not ask for a Company ID");
+assert(card.includes("Find companies"), "the card looks companies up before connect");
 assert(card.includes("Coming soon"), "an unconfigured Sage card says coming soon");
 assert(!card.includes("Sage connection not available yet"), "an unconfigured Sage card does not show the error");
 assert(
