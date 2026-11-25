@@ -33,35 +33,35 @@ const HOME_OG_ALT =
 export const SEO_PAGES = {
   home: {
     path: "/",
-    title: "AI Finance Team & CFO · QuickBooks, Xero, Sage soon | MILŌN",
+    title: "AI Finance Team & CFO · Xero, QuickBooks, Sage | MILŌN",
     description:
-      "AI finance team for firms: health score, 13-week cash and advisory drafts from QuickBooks or Xero. Sage is coming soon. You sign off.",
+      "AI finance team for firms: health score, 13-week cash and advisory drafts. Connects with Xero, QuickBooks and Sage. You sign off.",
     ogTitle: "Your AI finance team. You sign off. | MILŌN",
     ogDescription:
-      "Milōn Financial Manager, Analyst and Advisor prepare the work from QuickBooks or Xero. Sage is coming soon. Your accountant signs off.",
+      "Milōn Financial Manager, Analyst and Advisor prepare the work. Milōn connects with Xero, QuickBooks and Sage. Your accountant signs off.",
     image: HOME_OG,
     imageAlt: HOME_OG_ALT,
   },
   forAccountants: {
     path: "/for-accountants",
-    title: "AI Finance Team for QuickBooks, Xero · Sage soon | MILŌN",
+    title: "AI Finance Team for Xero, QuickBooks, Sage | MILŌN",
     description:
-      "Not an AI accountant or bookkeeper that replaces your firm. Three agents draft from QuickBooks or Xero. Sage is coming soon. Your firm signs off.",
+      "Not an AI accountant or bookkeeper that replaces your firm. Agents draft the work. Connects with Xero, QuickBooks and Sage. Your firm signs off.",
     ogTitle: "An AI finance team for accounting firms | MILŌN",
     ogDescription:
-      "Milōn Financial Manager, Analyst and Advisor prepare the cash view and advisory pack from QuickBooks or Xero. Sage is coming soon. Your firm signs off.",
+      "Milōn Financial Manager, Analyst and Advisor prepare the cash view and advisory pack. Milōn connects with Xero, QuickBooks and Sage. Your firm signs off.",
     image: "/og/og-accountants-v11.png",
     imageAlt:
       "Milōn: An AI finance team for accounting firms. Milōn Financial Manager, Milōn Analyst, Milōn Advisor.",
   },
   forOwners: {
     path: "/for-owners",
-    title: "AI CFO · QuickBooks, Xero · Sage soon | MILŌN",
+    title: "AI CFO · Xero, QuickBooks and Sage | MILŌN",
     description:
-      `An AI finance team: 13-week cash and next moves from QuickBooks or Xero. Sage is coming soon. ${OWNER_MONTHLY_USD_LABEL.replace("/mo", "")} a month, or free with your accountant.`,
+      `An AI finance team: 13-week cash and next moves. Connects with Xero, QuickBooks and Sage. ${OWNER_MONTHLY_USD_LABEL.replace("/mo", "")} a month, or free with your accountant.`,
     ogTitle: "An AI finance team for small business owners | MILŌN",
     ogDescription:
-      "Milōn Financial Manager, Analyst and Advisor read QuickBooks or Xero. Sage is coming soon. Free when your accountant is on Milōn.",
+      "Milōn Financial Manager, Analyst and Advisor read the books. Milōn connects with Xero, QuickBooks and Sage. Free when your accountant is on Milōn.",
     image: "/og/og-owners-v11.png",
     imageAlt:
       "Milōn: An AI finance team for small business owners. Milōn Financial Manager, Milōn Analyst, Milōn Advisor.",
@@ -70,7 +70,7 @@ export const SEO_PAGES = {
     path: "/faq",
     title: "Milōn FAQ: AI Finance Team, Pricing, Data & Sign-off",
     description:
-      "Straight answers on pricing, data and sign-off. Agents draft from QuickBooks or Xero. Sage is coming soon. An accountant signs off.",
+      "Straight answers on pricing, data and sign-off. Milōn connects with Xero, QuickBooks and Sage. An accountant signs off.",
     image: HOME_OG,
     imageAlt: HOME_OG_ALT,
   },
@@ -224,7 +224,7 @@ export function organizationGraphJson(): string {
           height: 512,
         },
         description:
-          "Milōn gives accounting firms and the businesses they advise an AI finance team: Milōn Financial Manager, Milōn Analyst and Milōn Advisor work from QuickBooks or Xero. Sage is coming soon. A qualified accountant reviews and signs off.",
+          "Milōn gives accounting firms and the businesses they advise an AI finance team: Milōn Financial Manager, Milōn Analyst and Milōn Advisor work from books that connect with Xero, QuickBooks and Sage. A qualified accountant reviews and signs off.",
         address: {
           "@type": "PostalAddress",
           streetAddress: COMPANY_POSTAL_ADDRESS.streetAddress,
@@ -245,7 +245,7 @@ export function organizationGraphJson(): string {
           "Small business financial management",
           "QuickBooks Online",
           "Xero",
-          "Sage (coming soon)",
+          "Sage Business Cloud Accounting (South Africa)",
         ],
       },
       {
@@ -259,12 +259,12 @@ export function organizationGraphJson(): string {
         image: `${SITE_ORIGIN}/og/og-home-v11.png`,
         publisher: { "@id": `${SITE_ORIGIN}/#organization` },
         description:
-          "Your AI finance team. You sign off. Milōn Financial Manager keeps the books data clean from QuickBooks or Xero. Sage is coming soon. The 13-week cash view and the budget stay with the firm. Milōn Analyst diagnoses why margins moved and where cash is leaking. Milōn Advisor drafts the next moves. A qualified accountant reviews and approves.",
+          "Your AI finance team. You sign off. Milōn Financial Manager keeps the books data clean from a ledger that connects with Xero, QuickBooks and Sage. The 13-week cash view and the budget stay with the firm. Milōn Analyst diagnoses why margins moved and where cash is leaking. Milōn Advisor drafts the next moves. A qualified accountant reviews and approves.",
         featureList: [
-          "Milōn Financial Manager: clean books data from QuickBooks or Xero (Sage is coming soon), 13-week cash view, budget, action points and accountant hand-off",
+          "Milōn Financial Manager: clean books data from a ledger that connects with Xero, QuickBooks and Sage, 13-week cash view, budget, action points and accountant hand-off",
           `Milōn Analyst: health score, ${HEALTH_RATIO_COUNT} financial ratios and variances explained as a diagnosis`,
           "Milōn Advisor: next moves and advisory deliverables ready for accountant sign-off",
-          "Connect QuickBooks or Xero. Sage is coming soon. Or upload PDF, Excel, CSV or a bank statement",
+          "Milōn connects with Xero, QuickBooks and Sage. Sage is a read-only sync. Or upload PDF, Excel, CSV or a bank statement",
           "Source documents post to the books only after a named person approves",
           "Assignable action plans the accountant reviews with the client",
         ],
@@ -345,11 +345,11 @@ export const LLMS_TXT = `# Milōn
 
 > Your AI finance team. You sign off. Milōn gives accounting firms and the
 > small businesses they advise a Financial Manager, an Analyst and an Advisor.
-> They prepare the work from QuickBooks, Xero, or uploaded statements. Sage is coming soon.
+> They prepare the work from books that connect with Xero, QuickBooks and Sage, or from uploaded statements. Sage is a read-only sync.
 > A qualified accountant reviews and approves every advisory pack.
 
 ## The AI finance team
-- Milōn Financial Manager: keeps books data clean from QuickBooks Online or Xero (Sage is coming soon), runs the 13-week cash view and budget, sets action points and hands the pack to the accountant
+- Milōn Financial Manager: keeps books data clean from a ledger that connects with Xero, QuickBooks Online and Sage, runs the 13-week cash view and budget, sets action points and hands the pack to the accountant
 - Milōn Analyst: health score, ratios and variances explained as a diagnosis of why margins moved and where cash is leaking
 - Milōn Advisor: next moves and advisory deliverables ready for accountant sign-off
 - Milōn is not a ledger and does not file returns or make payments

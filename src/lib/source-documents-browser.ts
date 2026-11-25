@@ -1,6 +1,6 @@
 /**
  * Browser calls for source documents. Upload, list, extract, decide.
- * Nothing here posts to Xero, QuickBooks, or Sage.
+ * Nothing here posts to Xero or QuickBooks. Sage is a read-only sync.
  */
 import { supabase } from "@/integrations/supabase/client";
 import { refusesSignOffWording } from "@/lib/agent-draft-decision";

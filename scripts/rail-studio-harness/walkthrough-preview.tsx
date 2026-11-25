@@ -57,7 +57,7 @@ export function WalkthroughPreview() {
         </button>
       </section>
       <footer className="mk-foot" style={{ marginTop: 28 }}>
-        <span>QuickBooks Online and Xero. Sage coming soon.</span>
+        <span>Connects with Xero, QuickBooks and Sage. Sage is a read-only sync.</span>
       </footer>
     </div>
   );

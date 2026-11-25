@@ -21,7 +21,7 @@ export const MANAGEMENT_RULE_ARTIFACT_DOC_TYPE = "management_habit_rule";
 /** Prompt guardrails — bots and UI copy must stay aligned. */
 export const MANAGEMENT_HABITS_HARD_NO = [
   "Not statutory compliance, tax filing, or a second set of books.",
-  "Does not write to Xero, QuickBooks, Sage, or any ledger of record.",
+  "Does not write to Xero or QuickBooks, or any ledger of record. Sage is a read-only sync.",
   "Templates stay here until an accountant edits them; client confirm/dismiss on instances is separate (P1).",
 ] as const;
 
@@ -144,7 +144,7 @@ export function managementHabitRuleCitationLine(rule: Pick<ManagementHabitRuleRo
 }
 
 export const MANAGEMENT_HABITS_BOT_READ_PROMPT =
-  "list_client_management_rules returns client-scoped Reality / Habits / Expectations templates from the accountant library (management / habits view). They are firm IP, not Compliance and not statutory books. When you record_draft an action_point_draft or describe a cash call, cite at least one rule id from that list in detail using the exact line format: Library rule: <id> (Reality|Habits|Expectations — <label>). These reads never post to Xero, QuickBooks, or Sage.";
+  "list_client_management_rules returns client-scoped Reality / Habits / Expectations templates from the accountant library (management / habits view). They are firm IP, not Compliance and not statutory books. When you record_draft an action_point_draft or describe a cash call, cite at least one rule id from that list in detail using the exact line format: Library rule: <id> (Reality|Habits|Expectations — <label>). These reads never post to Xero or QuickBooks. Sage is a read-only sync.";
 
 const CITATION_RE =
   /Library rule:\s*([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\s*\(([^)]+)\)/gi;

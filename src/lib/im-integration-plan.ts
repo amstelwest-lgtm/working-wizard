@@ -447,7 +447,7 @@ export function integrationPlanPrompt(input: {
     "alreadyCovered is other catalogue ids for work the interview shows is already handled.",
     "Use play ids from the catalogue only. Any other id is rejected.",
     "Do not invent a play. Do not rewrite the catalogue sentences.",
-    "Milōn drafts only. Nothing is posted to Xero, QuickBooks, or Sage. Nothing is filed with the tax authority.",
+    "Milōn drafts only. Nothing is posted to Xero or QuickBooks. Sage is a read-only sync. Nothing is filed with the tax authority.",
     "The tax-deadline play is a reminder and a document list. Auto-send is not on.",
     "Catalogue:",
     JSON.stringify(catalogueForPrompt(input.plays, input.country)),

@@ -48,7 +48,7 @@ assert(!/whatsapp/i.test(section), "Mom Test wording does not name a chat app");
 assert(!/\b(SARS|IRS|HMRC|ZAR)\b/.test(section), "Mom Test wording stays market-neutral");
 assert(section.includes("client_setup") && section.includes("product_gap"), "answers use the two buckets");
 assert(section.includes("17:00 SAST"), "product gaps still feed the weekday digest");
-assert(section.includes("Nothing in this phase is posted to Xero, QuickBooks, or Sage"), "nothing is posted");
+assert(section.includes("Nothing in this phase is posted to Xero or QuickBooks. Sage is a read-only sync."), "nothing is posted");
 assert(section.includes("Nothing is filed"), "nothing is filed");
 for (const row of MOM_TEST_QUESTIONS) {
   assert(section.includes(row.prompt), `bank question is in the playbook: ${row.id}`);
