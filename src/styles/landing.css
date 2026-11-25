@@ -850,9 +850,9 @@ html[data-landing="1"] .connects-with{display:flex;flex-wrap:wrap;align-items:ce
 html[data-landing="1"] .connects-with p{margin:0;font-size:13px;font-weight:600;letter-spacing:.04em;color:var(--ink-dim);-webkit-text-fill-color:var(--ink-dim)}
 html[data-landing="1"] .connects-logos{display:flex;align-items:center;gap:18px;list-style:none;margin:0;padding:8px 16px;background:#fff;border:1px solid var(--line);border-radius:999px}
 html[data-landing="1"] .connects-logos img{height:28px;width:auto;display:block}
-html[data-landing="1"] .connects-logos .wordmark{font-size:22px;line-height:28px;font-weight:700;letter-spacing:-.02em}
-html[data-landing="1"] .connects-logos .wordmark-xero{color:#000856;-webkit-text-fill-color:#000856}
-html[data-landing="1"] .connects-logos .wordmark-sage{color:#102A43;-webkit-text-fill-color:#102A43}
+/* Sage file is 250×141. The letter body ends near y=97 and the g descends to y=141.
+   41px makes that body the same height as the 28px QuickBooks lockup. */
+html[data-landing="1"] .connects-logos .logo-sage{height:41px}
 html[data-landing="1"] #hero .hero-cta{margin-top:24px}
 html[data-landing="1"] #hero .hero-cta .btn-gold{
   min-height:52px;
