@@ -6280,8 +6280,8 @@ function ClientView() {
                   Sage Accounting
                 </DialogTitle>
                 <DialogDescription className="text-xs text-[#3D5270] dark:text-[#C5D4E4]">
-                  Connect Sage Business Cloud Accounting (South Africa). Email, password, and
-                  Company ID. Sync does not change this client&apos;s figures yet.
+                  Connect Sage Business Cloud Accounting (South Africa). Email and password, then
+                  choose a company. Sync does not change this client&apos;s figures yet.
                 </DialogDescription>
               </DialogHeader>
               <SageConnectCard

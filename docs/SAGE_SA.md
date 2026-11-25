@@ -20,8 +20,11 @@ Sage SA API 2.0.0 reads the application key on the query string (`apikey`),
 together with `companyid`. It does not use an OAuth authorization code, a
 redirect URI, or a bearer token.
 
-Validate calls `GET /Company/Get/{companyId}` only. That confirms the login
-and the company. It does not request a profit and loss or a balance sheet.
+The company list is `GET /Company/Get` with the login and the app key. No
+company id is sent. Sage returns the companies that login can see. After the
+user picks one, validate calls `GET /Company/Get/{companyId}` only. That
+confirms the login and the company. It does not request a profit and loss or
+a balance sheet. Nothing is posted to Sage.
 
 ## Env
 
@@ -65,6 +68,7 @@ table.
 
 No redirect URI to register. No Sage OAuth app. No client id or client secret.
 
-A user then opens Connect Sage, enters the Sage login email, password, and
-Company ID, and Milōn stores the connection after Sage accepts
-`Company/Get`. Sync stays empty until Eng1 maps the statements.
+A user then opens Connect Sage and enters the Sage login email and password.
+Milōn calls `GET /Company/Get` and shows the companies that login can see.
+The chosen company id is stored after Sage accepts `Company/Get/{companyId}`.
+Sync stays empty until Eng1 maps the statements.

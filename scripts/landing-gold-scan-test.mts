@@ -153,6 +153,16 @@ function pageWentAway(err: unknown): boolean {
   return msg.includes("Execution context was destroyed") || msg.includes("not attached");
 }
 
+/** Sticky nav covers a target that scrollIntoView parked at the top of the viewport. */
+function hoverBlocked(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    pageWentAway(err) ||
+    msg.includes("intercepts pointer events") ||
+    msg.includes("element is not stable")
+  );
+}
+
 async function withLivePage<T>(page: Page, fn: () => Promise<T>): Promise<T> {
   let last: unknown;
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -186,6 +196,28 @@ async function scrollIntoView(
     }
   }
   return null;
+}
+
+/** Hover a fresh locator, nudged below the sticky nav when that nav eats the click. */
+async function hoverInView(page: Page, selector: string): Promise<boolean> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const loc = await scrollIntoView(page, selector);
+      if (!loc) return false;
+      await loc.evaluate((el) => {
+        const nav = document.querySelector("#topnav");
+        const navH = nav ? nav.getBoundingClientRect().height : 0;
+        const top = el.getBoundingClientRect().top;
+        if (navH > 0 && top < navH + 8) window.scrollBy(0, top - navH - 16);
+      });
+      await loc.hover({ timeout: 5000 });
+      return true;
+    } catch (err) {
+      if (attempt === 2 || !hoverBlocked(err)) throw err;
+      await page.waitForTimeout(300);
+    }
+  }
+  return false;
 }
 
 async function paintLandingTheme(page: Page, theme: "light" | "dark") {
@@ -414,9 +446,7 @@ async function main() {
           ".watch-cta",
         ];
         for (const sel of hoverSel) {
-          const loc = await scrollIntoView(page, sel);
-          if (!loc) continue;
-          await loc.hover({ timeout: 5000 });
+          if (!(await hoverInView(page, sel))) continue;
           const hovered = await scan(page, `${width} ${theme} hover ${sel}`);
           for (const hit of hovered.hits) failures.push(`${hit.path} ${hit.sample}`);
         }
@@ -442,9 +472,7 @@ async function main() {
           const painted = await scan(page, `${path} ${width} ${theme}`);
           if (!painted.wordmark) failures.push(`${path} ${width} ${theme}: wordmark is not gold`);
           for (const hit of painted.hits) failures.push(`${hit.path} ${hit.sample}`);
-          const cardBtn = page.locator(".mk-cta .mk-btn").first();
-          if (await cardBtn.isVisible()) {
-            await cardBtn.hover();
+          if (await hoverInView(page, ".mk-cta .mk-btn")) {
             const hovered = await scan(page, `${path} ${width} ${theme} hover .mk-cta .mk-btn`);
             for (const hit of hovered.hits) failures.push(`${hit.path} ${hit.sample}`);
           }

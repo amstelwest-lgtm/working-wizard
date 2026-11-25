@@ -60,6 +60,16 @@ export function sageCompanyValidateUrl(companyId: string, apiKey: string): strin
   return url.toString();
 }
 
+/**
+ * Companies this login can see. No company id is sent.
+ * GET only. Nothing is posted to Sage.
+ */
+export function sageCompanyListUrl(apiKey: string): string {
+  const url = new URL(`${sageApiBase()}/Company/Get`);
+  url.searchParams.set("apikey", apiKey);
+  return url.toString();
+}
+
 export type SageCompanyProof = {
   companyId: string;
   companyName: string | null;
@@ -82,26 +92,32 @@ function readId(record: Record<string, unknown>): string | null {
   return null;
 }
 
-/** Pull a company object out of the shapes Company/Get returns. */
-export function parseSageCompany(body: unknown, expectedCompanyId: string): SageCompanyProof | null {
-  const expected = normalizeSageCompanyId(expectedCompanyId);
+function sageCompanyRecords(body: unknown): Record<string, unknown>[] {
   const records: Record<string, unknown>[] = [];
   if (Array.isArray(body)) {
     for (const item of body) {
       if (item && typeof item === "object") records.push(item as Record<string, unknown>);
     }
-  } else if (body && typeof body === "object") {
+    return records;
+  }
+  if (body && typeof body === "object") {
     const obj = body as Record<string, unknown>;
     const results = obj.Results ?? obj.results;
     if (Array.isArray(results)) {
       for (const item of results) {
         if (item && typeof item === "object") records.push(item as Record<string, unknown>);
       }
-    } else {
-      records.push(obj);
+      return records;
     }
+    records.push(obj);
   }
-  for (const record of records) {
+  return records;
+}
+
+/** Pull a company object out of the shapes Company/Get returns. */
+export function parseSageCompany(body: unknown, expectedCompanyId: string): SageCompanyProof | null {
+  const expected = normalizeSageCompanyId(expectedCompanyId);
+  for (const record of sageCompanyRecords(body)) {
     const id = readId(record);
     if (id && id !== expected) continue;
     if (!id && !readName(record)) continue;
@@ -154,6 +170,68 @@ export async function validateSageLogin(
   if (!company) return { ok: false, reason: "company_not_found" };
   return { ok: true, company };
 }
+
+/** Every company in a Company/Get list. Records without a numeric id are skipped. */
+export function parseSageCompanyList(body: unknown): SageCompanyProof[] {
+  const seen = new Set<string>();
+  const companies: SageCompanyProof[] = [];
+  for (const record of sageCompanyRecords(body)) {
+    const id = readId(record);
+    if (!id || !sageCompanyIdIsValid(id) || seen.has(id)) continue;
+    seen.add(id);
+    companies.push({ companyId: id, companyName: readName(record) });
+  }
+  return companies;
+}
+
+export type SageCompanyListResult =
+  | { ok: true; companies: SageCompanyProof[] }
+  | { ok: false; reason: "not_configured" | "rejected" | "unreachable" };
+
+/**
+ * GET Company/Get with the login. Returns the companies that login can see.
+ * Does not write to Sage. `fetchImpl` is injectable for tests.
+ */
+export async function listSageCompanies(
+  input: { username: string; password: string; apiKey: string },
+  fetchImpl: typeof fetch = fetch,
+): Promise<SageCompanyListResult> {
+  const apiKey = input.apiKey.trim();
+  if (!apiKey) return { ok: false, reason: "not_configured" };
+
+  let res: Response;
+  try {
+    res = await fetchImpl(sageCompanyListUrl(apiKey), {
+      method: "GET",
+      headers: {
+        Authorization: sageBasicAuthorization(input.username, input.password),
+        Accept: "application/json",
+      },
+    });
+  } catch {
+    return { ok: false, reason: "unreachable" };
+  }
+
+  if (res.status === 401 || res.status === 403) return { ok: false, reason: "rejected" };
+  if (!res.ok) return { ok: false, reason: "unreachable" };
+
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    return { ok: false, reason: "unreachable" };
+  }
+  return { ok: true, companies: parseSageCompanyList(body) };
+}
+
+/** The company id to preselect. One company is selected; zero or many wait for a choice. */
+export function initialSageCompanyId(companies: readonly { companyId: string }[]): string {
+  if (companies.length !== 1) return "";
+  return companies[0]?.companyId ?? "";
+}
+
+/** Shown when Company/Get succeeds and the login can see no companies. */
+export const SAGE_NO_COMPANIES_MESSAGE = "This Sage login cannot see any companies.";
 
 /** Shown when Sage cannot run. Never names an environment variable. */
 export const SAGE_CONNECTION_UNAVAILABLE = "Sage connection not available yet";

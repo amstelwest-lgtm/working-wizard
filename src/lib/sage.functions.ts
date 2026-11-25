@@ -6,6 +6,7 @@ import { getSupabaseAdminOrNull, supabaseAdmin } from "@/integrations/supabase/c
 import { encryptSagePassword } from "@/lib/sage-password";
 import { executeSageSync } from "@/lib/sage-sync.server";
 import {
+  listSageCompanies,
   sageConnectionInsert,
   sageCredentialsConfigured,
   sageValidateError,
@@ -122,6 +123,41 @@ export const getSageStatuses = createServerFn({ method: "POST" })
       };
     }
     return out;
+  });
+
+const lookupInput = z.object({
+  clientId: z.string().uuid(),
+  username: z.string().trim().min(3).max(200),
+  password: z.string().min(1).max(200),
+});
+
+/**
+ * GET Company/Get for this login. Returns the companies the user can see.
+ * Does not store a connection and does not write to Sage.
+ */
+export const lookupSageCompanies = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => lookupInput.parse(input))
+  .handler(async ({ data, context }) => {
+    assertClientScope(context.actingAsClientId, data.clientId);
+    const { data: client } = await context.supabase
+      .from("clients")
+      .select("id")
+      .eq("id", data.clientId)
+      .maybeSingle();
+    if (!client) throw new Error("Client not found");
+    if (!sageCredentialsConfigured()) {
+      throw new Error(sageValidateError("not_configured"));
+    }
+    if (!data.password.trim()) throw new Error("Sage password is empty");
+
+    const listed = await listSageCompanies({
+      username: data.username.trim(),
+      password: data.password,
+      apiKey: process.env.SAGE_SA_API_KEY?.trim() ?? "",
+    });
+    if (!listed.ok) throw new Error(sageValidateError(listed.reason));
+    return { companies: listed.companies };
   });
 
 export const connectSage = createServerFn({ method: "POST" })
