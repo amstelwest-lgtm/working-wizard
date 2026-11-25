@@ -37,7 +37,10 @@ const cashForecasts = classifyPracticeStep("Cash forecasts each Monday");
 const cashflowForecast = classifyPracticeStep("Cashflow forecasting for the clients");
 assert(cashForecast.bucket === "covered", `cash forecast bucket: ${cashForecast.bucket}`);
 assert(cashForecasts.bucket === "covered", `cash forecasts bucket: ${cashForecasts.bucket}`);
-assert(cashflowForecast.bucket === "covered", `cashflow forecast bucket: ${cashflowForecast.bucket}`);
+assert(
+  cashflowForecast.bucket === "covered",
+  `cashflow forecast bucket: ${cashflowForecast.bucket}`,
+);
 assert(
   cashForecast.covers.includes("13-week cash forecast") &&
     cashForecasts.covers.includes("13-week cash forecast") &&
@@ -264,9 +267,9 @@ assert(
 assert(sql.includes("seen="), "query also honours a merge timestamp");
 
 const prompts = read("supabase/functions/setup-partner/firm-interview-prompt.ts");
-assert(/deliverables/i.test(prompts), "firm interview learns what goes out");
-assert(/reviews/i.test(prompts), "firm interview learns the review chain");
-assert(/price and sell/i.test(prompts), "firm interview learns pricing");
+assert(/cash-flow report/i.test(prompts), "firm interview ends on a live step");
+assert(/Do not ask about/.test(prompts), "firm interview stays off unbuilt work");
+assert(/IRP6/.test(prompts) && !/WhatsApp/.test(prompts), "ready tax drafts only, and no chat app");
 assert(!/supplier bills/i.test(prompts), "firm interview is not one end client");
 const clientPrompts = SETUP_PARTNER_FIXED_QUESTIONS.map((row) => row.prompt).join(" ");
 assert(/this client/i.test(clientPrompts), "per-client interview stays on this client");

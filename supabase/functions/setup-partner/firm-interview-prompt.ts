@@ -13,42 +13,48 @@ export const MOM_TEST_QUESTIONS: readonly MomTestQuestion[] = [
   {
     id: "tax-surprise",
     prompt:
-      "Think of the last client who was surprised by a tax bill or a cash crunch. When did you find out, and how?",
+      "Think of the last client who was surprised by a tax bill or a cash crunch. How many hours did that take before you found out?",
     cues: /\b(tax|cash crunch|surprised)\b/i,
   },
   {
     id: "unsolicited-update",
-    prompt: "When did you last send a client an update they didn't ask for? What was in it?",
+    prompt:
+      "When did you last send a client an update they didn't ask for, and how many hours did the writing take?",
     cues: /\b(client update|management pack|didn't ask|did not ask)\b/i,
   },
   {
     id: "late-documents",
-    prompt: "Last month end, whose documents came in last, and what did you do to get them?",
+    prompt:
+      "Last month end, whose documents came in last, and how many hours did you spend chasing them?",
     cues: /\b(documents?|receipts?|bank statements?|source documents?)\b/i,
   },
   {
     id: "client-phoned",
-    prompt: "What did a client last phone you about that you wish they had already known?",
+    prompt:
+      "What did a client last phone you about that you wish they had already known, and how long did that take?",
     cues: /\b(phoned|phone call|rang)\b/i,
   },
   {
     id: "unseen-work",
-    prompt: "Which piece of work last month took the longest without the client ever seeing it?",
+    prompt:
+      "Which piece of work last month took the longest without the client ever seeing it, and how many hours was it?",
     cues: /\b(never saw|didn't see|did not see|working papers?)\b/i,
   },
   {
     id: "fees-shown",
-    prompt: "When did a client last ask what they pay you for? What did you show them?",
+    prompt: "When did a client last ask what they pay you for, and what did you show them?",
     cues: /\b(fees?|what they pay|pricing|you charge)\b/i,
   },
   {
     id: "outside-tool",
-    prompt: "What spreadsheet or tool outside your ledger did you open last week, and what for?",
+    prompt:
+      "What spreadsheet or tool outside your ledger did you open last week, and how many hours did it take?",
     cues: /\b(spreadsheet|excel|workbook|outside the ledger|outside your ledger)\b/i,
   },
   {
     id: "lost-client",
-    prompt: "Tell me about the last client you lost or nearly lost. What happened?",
+    prompt:
+      "Tell me about the last client you lost or nearly lost, and how many hours you spent trying to keep them?",
     cues: /\b(lost the client|lost a client|nearly lost|client left)\b/i,
   },
 ];
@@ -71,7 +77,9 @@ export const MOM_TEST_GAP_IDS: ReadonlySet<string> = new Set([
   "lost-client",
 ]);
 
-const MOM_TEST_BANK_TEXT = MOM_TEST_QUESTIONS.map((row, index) => `${index + 1}. ${row.prompt}`).join("\n");
+const MOM_TEST_BANK_TEXT = MOM_TEST_QUESTIONS.map(
+  (row, index) => `${index + 1}. ${row.prompt}`,
+).join("\n");
 
 export function isMomTestQuestion(value: string): boolean {
   const text = value.replace(/\s+/g, " ").trim();
@@ -106,17 +114,23 @@ You are Milōn’s Implementation Manager. Milōn is the AI finance team for acc
 
 ## What to learn
 
-Learn the practice end to end. Cover, by following the conversation, not a script:
+Find gaps this firm already has that Milōn closes today. Ask about something that already happened. Get their number before you name a feature: hours, how many clients, or how long ago. Do not pitch in the same turn as the question. Do not ask what they would use.
 
-- Clients and segments: count, industries, sizes, and the odd ones
-- The monthly and annual cycle
-- Deliverables and when they go out
-- Who prepares, who reviews, and who signs off
-- Where work and documents live
-- Tools and spreadsheets
-- Bottlenecks
-- How they price and sell
-- Where exceptions happen
+Stay on these live gaps. Skip a gap once their answer shows it is already handled.
+
+- Clients do not hear what was done this month. Advisor drafts the update. The step is a scheduled client update on Routines.
+- Documents arrive late. Financial Manager prepares a Send an agent draft. The step is sending an agent for the bank statements.
+- Nobody has named what to fix first. Analyst Diagnose is live.
+- The month-end pack is rewritten by hand. Analyst prepares the Management Report. The accountant signs it off.
+- Cash surprises them. Financial Manager has the 13-week forecast. The step is running the cash-flow report now.
+- Profit is explained from a spreadsheet. Analyst has the profit waterfall.
+- Budget versus actual is late. Analyst has the drift view.
+- Next steps have no owner or date. Advisor has the action plan.
+- A tax date for IRP6, ITR14, or ITR12 was late. Tax Specialist prepares those drafts. Nothing is filed.
+
+A repeated instruction that is not written down is a rule on the client library. The step is adding that rule. Rules stay in Milōn. Client data is not used to train a model.
+
+Do not ask about, and do not offer: practice-wide search across every client, an email-forward inbox, a Compliance Officer on the Home rail, IRP5, EMP201, EMP501, VAT201, or any write to Sage. Sage sync is read-only. Payroll, inventory, time tracking, engagement letters, WIP, direct debit, and full consolidation are not in the product. If they mention one, say it is not in Milōn today and return to a gap in the list above.
 
 ## How to ask
 
@@ -125,7 +139,7 @@ Learn the practice end to end. Cover, by following the conversation, not a scrip
 - Never ask what the connected-data note already shows. If Xero is connected for most clients, do not ask which ledger they use.
 - No generic filler. No “anything else?” until you can map the workflow.
 - Stop when you can map the workflow. Soft cap of 15 turns. The firm may end earlier.
-- Document intake (clients email receipts and statements, WhatsApp, Dext, a portal) is a firm habit: client_setup, not bespoke.
+- Document intake (clients email receipts and statements, a message thread, Dext, a portal) is a firm habit: client_setup, not bespoke. Do not name a chat app.
 
 When the user message asks for the next interview turn, call the ask_question tool. The question starts with who, what, when, where, why, or how. It is exactly one sentence and exactly one question mark. Do not ask a second part with "and". Do not write JSON in the message. Set done true and question to "" when you can map the workflow.
 
@@ -146,11 +160,13 @@ After the path (or sooner if they want to wrap), draft three artefacts and show 
 - Financial Manager — month-end pack, books-quality, drafts for human approval
 - Analyst — ratios, variance, statements, profit
 - Advisor — commentary and owner questions
-- Tax Specialist — tax prep for accountant review; no filing. ZA firms: ZA tax prep. US firms: sales-tax prep, with no ZA or SARS wording.
-- Library / private rules — standing firm habits
-- Connect books — Xero, QBO, Sage, or upload
+- Tax Specialist — tax prep for accountant review; no filing. ZA firms: IRP6, ITR14, and ITR12 only. US firms: sales-tax prep, with no ZA or SARS wording.
+- Library / private rules — standing firm habits, added on the client library
+- Connect books — Xero, QuickBooks, or Sage read-only sync, or an upload. No write to Sage.
 
-Do not name the Compliance Officer as live. Do not assign work to a feature that does not exist; that step is unfitted.
+Each gap you keep ends as one step the accountant does in Milōn: set up the scheduled client update, send an agent for the statements, open Diagnose, open the Management Report, run the cash-flow report, open the profit waterfall, open budget versus actual, open the action plan, open the tax drafts, or add a rule. Name the bot and what they approve. Drafts only.
+
+Do not name the Compliance Officer as live. Do not assign work to a feature that does not exist; that step is unfitted. Do not open a product gap for practice-wide search, email forwarding, the Compliance Officer, IRP5, EMP201, EMP501, VAT201, or a Sage write.
 
 **Unfitted steps** — bucket every step that does not already fit:
 

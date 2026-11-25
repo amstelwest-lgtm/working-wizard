@@ -698,6 +698,19 @@
   background: #ffffff;
 }
 
+.im-plan-action {
+  display: inline-block;
+  margin-top: 6px;
+  color: #102a43;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.im-plan-prompt {
+  margin: 4px 0 0;
+  color: #486581;
+}
+
 .im-plan-covered {
   display: block;
   margin-bottom: 2px;

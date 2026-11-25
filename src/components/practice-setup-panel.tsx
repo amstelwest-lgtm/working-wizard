@@ -40,6 +40,7 @@ import { InterviewExchange, PastInterviews } from "@/components/interview-exchan
 import { ImCloudAccessPanel } from "@/components/im-cloud-access-panel";
 import { desktopSyncClientReady } from "@/lib/desktop-sync-ready";
 import { buildIntegrationPlanTable, type IntegrationPlanRow } from "@/lib/im-integration-plan";
+import { rulesActionFromHref } from "@/lib/im-plan-actions";
 import {
   buildPracticeImplementationPlan,
   classifyMomTestAnswer,
@@ -482,6 +483,7 @@ export function PracticeSetupInterview({
       return match ? { ...row, status: match.status } : row;
     });
   }, [localRows, opusRows]);
+  const ruleAction = rulesActionFromHref(tableRows[0]?.actionHref);
 
   useEffect(() => {
     if (heldPlanRef.current) return;
@@ -820,8 +822,8 @@ export function PracticeSetupInterview({
                       <th scope="col">What Milōn does</th>
                       <th scope="col">Routine</th>
                       <th scope="col">What the client sees</th>
-                      <th scope="col">You approve</th>
-                      <th scope="col">Bot</th>
+                      <th scope="col">What you need to approve</th>
+                      <th scope="col">Which bot</th>
                       <th scope="col">Status</th>
                     </tr>
                   </thead>
@@ -834,10 +836,18 @@ export function PracticeSetupInterview({
                           ) : null}
                           {row.problem}
                         </td>
-                        <td>{row.milon}</td>
+                        <td>
+                          <div>{row.milon}</div>
+                          {row.actionHref ? (
+                            <a className="im-plan-action" href={row.actionHref} data-im-plan-action={row.playId}>
+                              {row.actionLabel}
+                            </a>
+                          ) : null}
+                          {row.actionPrompt ? <p className="im-plan-prompt">{row.actionPrompt}</p> : null}
+                        </td>
                         <td>{row.routine}</td>
                         <td>{row.clientSees}</td>
-                        <td>{row.approve}</td>
+                        <td>{row.actionApprove || row.approve}</td>
                         <td>{row.bot}</td>
                         <td>{row.status}</td>
                       </tr>
@@ -846,6 +856,9 @@ export function PracticeSetupInterview({
                 </table>
               </div>
               <div className="setup-partner__actions">
+                <a className="im-plan-action" data-im-plan-action="add-rule" href={ruleAction.href}>
+                  {ruleAction.label}
+                </a>
                 <button
                   type="button"
                   className="setup-partner__primary im-plan-start"

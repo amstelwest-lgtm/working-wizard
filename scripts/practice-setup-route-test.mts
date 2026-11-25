@@ -395,10 +395,10 @@ function testFirmInterviewAndDeadlineBucket() {
   const brief = read("supabase/functions/setup-partner/firm-interview-prompt.ts");
   assert(brief.includes("universal finance function"), "vision brief names the product");
   assert(/open question/i.test(brief) && /Never yes\/no/i.test(brief), "open questions only");
-  assert(/clients and segments/i.test(brief), "brief covers clients");
-  assert(/prepares, who reviews/i.test(brief), "brief covers the review chain");
-  assert(/price and sell/i.test(brief), "brief covers pricing");
-  assert(/bottlenecks/i.test(brief), "brief covers bottlenecks");
+  assert(/how many hours/i.test(brief), "brief asks for hours already spent");
+  assert(/cash-flow report/i.test(brief), "brief ends on the live cash step");
+  assert(/Do not ask about/.test(brief), "brief stays off unbuilt work");
+  assert(/Send an agent/i.test(brief), "brief names the document step");
   assert(!panel.includes("FIRM_SETUP_QUESTIONS"), "firm path does not walk a fixed list");
   const client = SETUP_PARTNER_FIXED_QUESTIONS.map((row) => row.prompt).join(" ");
   assert(/for this client/i.test(client), "per-client path keeps client wording");
@@ -1172,7 +1172,7 @@ async function runPanel() {
   assert(momAsked.length === 1, "the Mom Test asks one question after the plan");
   assert(
     momAsked[0]?.textContent ===
-      "Think of the last client who was surprised by a tax bill or a cash crunch. When did you find out, and how?",
+      "Think of the last client who was surprised by a tax bill or a cash crunch. How many hours did that take before you found out?",
     "the question on screen is the first bank question",
   );
   assert(!marketLeak(coverageText()), "a US firm coverage list has no ZA or SARS");
