@@ -1,5 +1,5 @@
 import type { MouseEvent, ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 
 type ClientSearch = {
   tab?: string;
@@ -45,6 +45,7 @@ export function ImPlanLink({
   onClick?: () => void;
   "data-im-plan-action"?: string;
 }) {
+  const router = useRouter();
   const url = new URL(href, "https://milon.invalid");
   const client = /^\/clients\/([^/]+)$/.exec(url.pathname);
   const click = onClick
@@ -53,6 +54,13 @@ export function ImPlanLink({
         void event;
       }
     : undefined;
+  if (!router) {
+    return (
+      <a href={href} className={className} onClick={click} {...rest}>
+        {children}
+      </a>
+    );
+  }
   if (client) {
     return (
       <Link
