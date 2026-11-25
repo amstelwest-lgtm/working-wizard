@@ -12,6 +12,7 @@ import {
 import { describeLedgerLink } from "../src/lib/ledger-link-copy";
 import { isDatedLedgerSource } from "../src/lib/statement-period";
 import {
+  SAGE_CONNECTION_UNAVAILABLE,
   SAGE_EMPTY_SYNC_MESSAGE,
   SAGE_NO_COMPANIES_MESSAGE,
   initialSageCompanyId,
@@ -148,7 +149,11 @@ const rejected = await validateSageLogin({
   apiKey: "test-api-key",
 });
 assert(rejected.ok === false && rejected.reason === "rejected", "401 is a rejected login");
-assert(sageValidateError("rejected") === "Sage rejected that email or password.", "rejected copy names Sage");
+assert(
+  sageValidateError("rejected") ===
+    "Sage rejected that email or password. If your Sage login uses an authenticator code, add a separate Sage user without 2FA for Milōn.",
+  "rejected copy names the password and the authenticator hint",
+);
 
 globalThis.fetch = async () => new Response("missing", { status: 404 });
 const missing = await validateSageLogin({
@@ -225,15 +230,79 @@ const listRejected = await listSageCompanies(
 );
 assert(listRejected.ok === false && listRejected.reason === "rejected", "401 on Company/Get is a rejected login");
 assert(
-  sageValidateError("rejected") === "Sage rejected that email or password.",
-  "auth failure copy names the email or password",
+  sageValidateError("rejected") ===
+    "Sage rejected that email or password. If your Sage login uses an authenticator code, add a separate Sage user without 2FA for Milōn.",
+  "401 copy keeps the password message and adds the authenticator hint",
 );
 
 const listForbidden = await listSageCompanies(
   { username: "owner@example.co.za", password: "wrong", apiKey: "test-api-key" },
   async () => new Response("no", { status: 403 }),
 );
-assert(listForbidden.ok === false && listForbidden.reason === "rejected", "403 on Company/Get is a rejected login");
+assert(listForbidden.ok === false && listForbidden.reason === "app_key", "403 on Company/Get is an app-key refusal");
+assert(sageValidateError("app_key") === SAGE_CONNECTION_UNAVAILABLE, "403 reuses the not-available copy");
+assert(!sageValidateError("app_key").toLowerCase().includes("password"), "403 copy does not mention the password");
+
+const secretKey = "  {A1B2C3D4-E5F6-7890-ABCD-EF1234567890}  ";
+const secretEmail = "sage-email-marker@example.co.za";
+const secretPassword = "pw-marker-secret";
+const previousKey = process.env.SAGE_SA_API_KEY;
+const previousWarn = console.warn;
+const warnings = [];
+console.warn = (...parts) => {
+  warnings.push(parts.map((part) => String(part)).join(" "));
+};
+process.env.SAGE_SA_API_KEY = secretKey;
+try {
+  const basic = sageBasicAuthorization(secretEmail, secretPassword);
+  const leakedBody = [
+    `apikey=${secretKey.trim()}`,
+    secretEmail,
+    secretPassword,
+    `Authorization: ${basic}`,
+    "{11111111-2222-4333-8444-555555555555}",
+  ].join(" ");
+  const loggedRejection = await listSageCompanies(
+    { username: secretEmail, password: secretPassword, apiKey: secretKey },
+    async () => new Response(leakedBody, { status: 401 }),
+  );
+  assert(loggedRejection.ok === false && loggedRejection.reason === "rejected", "logged 401 stays rejected");
+  assert(warnings.length === 1, "a failed Company/Get logs one line");
+  const line = warnings[0] ?? "";
+  assert(line.startsWith("[sage] Company/Get status=401 "), "the log names Company/Get and the status");
+  assert(!line.includes("\n"), "the failure log is one line");
+  assert(!line.includes(secretKey), "the log does not contain the raw api key");
+  assert(!line.includes(secretKey.trim()), "the log does not contain the api key");
+  assert(!line.includes("A1B2C3D4"), "the log does not contain a piece of the api key");
+  assert(!line.includes("EF1234567890"), "the log does not contain the end of the api key");
+  assert(!line.includes(secretEmail), "the log does not contain the email");
+  assert(!line.includes("sage-email-marker"), "the log does not contain the email local part");
+  assert(!line.includes(secretPassword), "the log does not contain the password");
+  assert(!line.includes("pw-marker"), "the log does not contain a piece of the password");
+  assert(!line.includes(basic.slice("Basic ".length)), "the log does not contain the Basic token");
+  assert(!line.includes("11111111-2222-4333-8444-555555555555"), "the log redacts other GUID-like keys");
+  assert(line.includes(`keyLen=${secretKey.length}`), "the log includes the configured key length");
+  assert(line.includes("braced=true"), "the log says the configured key is wrapped in braces");
+  assert(line.includes("guid=true"), "the log says the configured key matches a GUID");
+  assert(line.includes("whitespace=true"), "the log says the configured key has surrounding whitespace");
+
+  warnings.length = 0;
+  const loggedForbidden = await listSageCompanies(
+    { username: secretEmail, password: secretPassword, apiKey: secretKey },
+    async () => new Response(leakedBody, { status: 403 }),
+  );
+  assert(loggedForbidden.ok === false && loggedForbidden.reason === "app_key", "logged 403 is app_key");
+  const forbiddenLine = warnings[0] ?? "";
+  assert(forbiddenLine.includes("status=403"), "403 is logged with its status");
+  assert(!forbiddenLine.includes(secretKey.trim()), "the 403 log does not contain the api key");
+  assert(!forbiddenLine.includes("A1B2C3D4"), "the 403 log does not contain a piece of the api key");
+  assert(!forbiddenLine.includes(secretEmail), "the 403 log does not contain the email");
+  assert(!forbiddenLine.includes(secretPassword), "the 403 log does not contain the password");
+  assert(!forbiddenLine.includes(basic.slice("Basic ".length)), "the 403 log does not contain the Basic token");
+} finally {
+  console.warn = previousWarn;
+  process.env.SAGE_SA_API_KEY = previousKey;
+}
 
 let listCalled = false;
 const listUnconfigured = await listSageCompanies(

@@ -126,9 +126,81 @@ export function parseSageCompany(body: unknown, expectedCompanyId: string): Sage
   return null;
 }
 
+const SAGE_GUID_BODY =
+  "\\{?[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\}?";
+
+/** Length, braces, GUID form, and surrounding whitespace. Never the key itself. */
+function sageApiKeyShape(raw: string): string {
+  const trimmed = raw.trim();
+  const braced = trimmed.length >= 2 && trimmed.startsWith("{") && trimmed.endsWith("}");
+  const core = braced ? trimmed.slice(1, -1) : trimmed;
+  const guid =
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(core);
+  return `keyLen=${raw.length} braced=${braced} guid=${guid} whitespace=${raw !== trimmed}`;
+}
+
+function escapeForRedaction(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * One line for a failed Company/Get: status, a short redacted body, and the
+ * shape of the configured API key. The key, login, and Authorization stay out.
+ */
+async function warnSageCompanyGetFailure(
+  res: Response,
+  creds: { username: string; password: string; apiKey: string },
+): Promise<void> {
+  let raw = "";
+  try {
+    raw = await res.text();
+  } catch {
+    raw = "";
+  }
+  const configured = process.env.SAGE_SA_API_KEY ?? "";
+  const secrets = [
+    configured,
+    configured.trim(),
+    creds.apiKey,
+    creds.apiKey.trim(),
+    creds.username,
+    creds.password,
+    sageBasicAuthorization(creds.username, creds.password),
+  ];
+  for (const secret of [...secrets]) {
+    if (!secret) continue;
+    try {
+      const encoded = encodeURIComponent(secret);
+      if (encoded !== secret) secrets.push(encoded);
+    } catch {
+      // Lone surrogates cannot be encoded. The raw secret is still removed.
+    }
+  }
+  const unique = [...new Set(secrets.filter((secret) => secret.length > 0))].sort(
+    (a, b) => b.length - a.length,
+  );
+  let body = raw;
+  if (unique.length > 0) {
+    body = body.replace(new RegExp(unique.map(escapeForRedaction).join("|"), "g"), "[redacted]");
+  }
+  body = body
+    .replace(/apikey=[^&\s"'<>]+/gi, "apikey=[redacted]")
+    .replace(/authorization:\s*\S+/gi, "authorization:[redacted]")
+    .replace(/Basic\s+[A-Za-z0-9+/=]+/gi, "Basic [redacted]")
+    .replace(new RegExp(SAGE_GUID_BODY, "g"), "[redacted]")
+    .replace(/[\r\n]+/g, " ")
+    .slice(0, 200);
+  console.warn(
+    `[sage] Company/Get status=${res.status} body=${body} ${sageApiKeyShape(configured)}`,
+  );
+}
+
 export type SageValidateResult =
   | { ok: true; company: SageCompanyProof }
-  | { ok: false; reason: "not_configured" | "rejected" | "company_not_found" | "unreachable" };
+  | {
+      ok: false;
+      reason: "not_configured" | "rejected" | "app_key" | "company_not_found" | "unreachable";
+    };
 
 /**
  * Confirm the email, password, and Company ID with Sage.
@@ -156,9 +228,13 @@ export async function validateSageLogin(
     return { ok: false, reason: "unreachable" };
   }
 
-  if (res.status === 401 || res.status === 403) return { ok: false, reason: "rejected" };
-  if (res.status === 404) return { ok: false, reason: "company_not_found" };
-  if (!res.ok) return { ok: false, reason: "unreachable" };
+  if (!res.ok) {
+    await warnSageCompanyGetFailure(res, input);
+    if (res.status === 401) return { ok: false, reason: "rejected" };
+    if (res.status === 403) return { ok: false, reason: "app_key" };
+    if (res.status === 404) return { ok: false, reason: "company_not_found" };
+    return { ok: false, reason: "unreachable" };
+  }
 
   let body: unknown = null;
   try {
@@ -186,7 +262,7 @@ export function parseSageCompanyList(body: unknown): SageCompanyProof[] {
 
 export type SageCompanyListResult =
   | { ok: true; companies: SageCompanyProof[] }
-  | { ok: false; reason: "not_configured" | "rejected" | "unreachable" };
+  | { ok: false; reason: "not_configured" | "rejected" | "app_key" | "unreachable" };
 
 /**
  * GET Company/Get with the login. Returns the companies that login can see.
@@ -212,8 +288,12 @@ export async function listSageCompanies(
     return { ok: false, reason: "unreachable" };
   }
 
-  if (res.status === 401 || res.status === 403) return { ok: false, reason: "rejected" };
-  if (!res.ok) return { ok: false, reason: "unreachable" };
+  if (!res.ok) {
+    await warnSageCompanyGetFailure(res, input);
+    if (res.status === 401) return { ok: false, reason: "rejected" };
+    if (res.status === 403) return { ok: false, reason: "app_key" };
+    return { ok: false, reason: "unreachable" };
+  }
 
   let body: unknown = null;
   try {
@@ -244,9 +324,10 @@ export function sagePublicError(message: string): string {
 export function sageValidateError(reason: Exclude<SageValidateResult, { ok: true }>["reason"]): string {
   switch (reason) {
     case "not_configured":
+    case "app_key":
       return SAGE_CONNECTION_UNAVAILABLE;
     case "rejected":
-      return "Sage rejected that email or password.";
+      return "Sage rejected that email or password. If your Sage login uses an authenticator code, add a separate Sage user without 2FA for Milōn.";
     case "company_not_found":
       return "Sage did not find that Company ID on this login.";
     case "unreachable":
