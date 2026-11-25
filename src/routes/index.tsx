@@ -2025,10 +2025,10 @@ function LandingPage() {
                   <img src="/brand/quickbooks.svg" alt="QuickBooks" height={28} />
                 </li>
                 <li>
-                  <span className="wordmark wordmark-xero">Xero</span>
+                  <img src="/brand/xero.svg" alt="Xero" height={28} />
                 </li>
                 <li>
-                  <span className="wordmark wordmark-sage">Sage</span>
+                  <img className="logo-sage" src="/brand/sage.svg" alt="Sage" height={41} />
                 </li>
               </ul>
             </div>
