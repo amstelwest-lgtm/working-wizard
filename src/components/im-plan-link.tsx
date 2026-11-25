@@ -1,5 +1,6 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Link, useRouter } from "@tanstack/react-router";
+import { composerPromptText } from "@/lib/composer-prompt";
 
 type ClientSearch = {
   tab?: string;
@@ -7,6 +8,7 @@ type ClientSearch = {
   agent?: "financial_manager" | "analyst" | "advisor" | "tax_specialist";
   report?: string;
   action?: "preview" | "download";
+  prompt?: string;
 };
 
 function clientSearch(params: URLSearchParams): ClientSearch {
@@ -28,6 +30,8 @@ function clientSearch(params: URLSearchParams): ClientSearch {
     search.agent = agent;
   }
   if (action === "preview" || action === "download") search.action = action;
+  const prompt = composerPromptText(params.get("prompt"));
+  if (prompt) search.prompt = prompt;
   return search;
 }
 
@@ -78,6 +82,16 @@ export function ImPlanLink({
   if (url.pathname === "/clients" || url.pathname === "/clients/") {
     return (
       <Link to="/clients" className={className} onClick={click} {...rest}>
+        {children}
+      </Link>
+    );
+  }
+  if (
+    url.pathname === "/practice/needs-attention" ||
+    url.pathname === "/practice/needs-attention/"
+  ) {
+    return (
+      <Link to="/practice/needs-attention" className={className} onClick={click} {...rest}>
         {children}
       </Link>
     );

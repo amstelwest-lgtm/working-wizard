@@ -87,7 +87,9 @@ export function ImNextStepsList({
               data-im-step={step.id}
               data-im-step-state={state}
             >
-              <p className="im-next-steps__state">{state === "done" ? "Done" : state === "next" ? "Next" : "Later"}</p>
+              <p className="im-next-steps__state">
+                {state === "done" ? "Done" : state === "next" ? "Next" : "Later"}
+              </p>
               <p className="im-next-steps__title">{step.title}</p>
               {step.kind === "start" ? (
                 <button
@@ -99,13 +101,24 @@ export function ImNextStepsList({
                   {starting ? "Starting…" : step.button}
                 </button>
               ) : (
-                <ImPlanLink
-                  href={step.href ?? "/clients"}
-                  className="setup-partner__primary"
-                  onClick={() => finish(step.id)}
-                >
-                  {step.button}
-                </ImPlanLink>
+                <>
+                  <ImPlanLink
+                    href={step.href ?? "/clients"}
+                    className="setup-partner__primary"
+                    onClick={() => finish(step.id)}
+                  >
+                    {step.button}
+                  </ImPlanLink>
+                  {step.promptHref && step.promptButton ? (
+                    <ImPlanLink
+                      href={step.promptHref}
+                      className="setup-partner__primary"
+                      onClick={() => finish(step.id)}
+                    >
+                      {step.promptButton}
+                    </ImPlanLink>
+                  ) : null}
+                </>
               )}
             </li>
           );

@@ -397,6 +397,7 @@ import { homeActionNeeds, openActionSentence, presentHomeDraftBody, presentHomeD
 import { healthSnapshotFromBooks, readStoredScoreSnapshotHash, renderHealthNarrative } from "@/lib/health-snapshot";
 import { draftStoredFiguresHash, draftStoredHealth, latestFiguresStamp } from "@/lib/draft-figures";
 import type { AgentKey } from "@/lib/milon-team-feed";
+import { composerPromptPrefill } from "@/lib/composer-prompt";
 import {
   isTaxAgent,
   parseStageAgent,
@@ -777,6 +778,15 @@ const SPHERE_RATIO_META: Record<string, { friendly: string }> = {
 // (shared RATIO_NAME_TO_KEY from @/lib/health-score)
 
 // ── Component ──────────────────────────────────────────────────────────────
+
+/** Put plain text in an already-open composer. Does not send. */
+function fillAskComposer(el: HTMLElement, text: string) {
+  if (!text) return;
+  const ta = el.querySelector("textarea.ask-ai-textarea");
+  if (!(ta instanceof HTMLTextAreaElement) || ta.value === text || ta.value.trim()) return;
+  ta.value = text;
+  ta.dispatchEvent(new Event("input", { bubbles: true }));
+}
 
 function ClientView() {
   const { clientId } = Route.useParams();
@@ -2256,7 +2266,24 @@ function ClientView() {
   });
 
   // ── Milōn Bot widget mount (same widget the owner app uses) ─────────────
+  const composerPrefill = useRef<{ clientId: string; agent: string; text: string } | null>(null);
   useEffect(() => {
+    const askAgent = parseStageAgent(search.agent, clientGateCountry) ?? "";
+    const home = !search.tab || search.tab === "home";
+    const prefill = composerPromptPrefill(home && askAgent ? search.prompt : "");
+    if (prefill.text) composerPrefill.current = { clientId, agent: askAgent, text: prefill.text };
+    if (home && askAgent && typeof search.prompt === "string") {
+      void navigate({
+        to: "/clients/$clientId",
+        params: { clientId },
+        search: (prev) => {
+          const next = { ...(prev as Record<string, unknown>) };
+          delete next.prompt;
+          return next;
+        },
+        replace: true,
+      });
+    }
     if (!client) return;
     let cancelled = false;
     const el = document.getElementById("ask-ai-accountant");
@@ -2267,10 +2294,12 @@ function ClientView() {
     el.dataset.forecastKey = forecastPlFingerprint(client.cashflow, client.financials);
     if (client.firm_id) el.dataset.firmId = client.firm_id;
     else delete el.dataset.firmId;
-    const askAgent = parseStageAgent(search.agent, clientGateCountry) ?? "";
     if (askAgent) el.dataset.agent = askAgent;
     else delete el.dataset.agent;
     el.dispatchEvent(new Event("ask-ai-context"));
+    const saved = composerPrefill.current;
+    const promptText = saved && saved.clientId === clientId && saved.agent === askAgent ? saved.text : "";
+    fillAskComposer(el, promptText);
     // Remount once figures land so the pre-figures note disappears (same
     // pattern as the owner board's useAskAiMount).
     const wantMode = hasFigures ? "live" : "pre-figures";
@@ -2291,6 +2320,7 @@ function ClientView() {
           botEndpoint: `${base}/functions/v1/milon-bot`,
           variant: "studio",
           audience: "accountant",
+          initialQuestion: promptText,
           onOpenDeliverable: (handoff: CoachDestination & { why?: string }) =>
             openFromBotRef.current(handoff),
           onPersistedCreate: (payload: {
@@ -2317,7 +2347,7 @@ function ClientView() {
     return () => {
       cancelled = true;
     };
-  }, [client, clientId, activeTab, hasFigures, search.agent, clientGateCountry]);
+  }, [client, clientId, activeTab, hasFigures, search.agent, search.tab, search.prompt, clientGateCountry, navigate]);
 
   // Autosave debounce ref
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

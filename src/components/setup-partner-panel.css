@@ -727,6 +727,7 @@
 .im-next-steps .setup-partner__primary {
   display: inline-block;
   margin-top: 8px;
+  margin-right: 8px;
   text-decoration: none;
 }
 

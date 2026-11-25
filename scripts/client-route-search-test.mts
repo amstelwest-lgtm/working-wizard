@@ -548,6 +548,20 @@ assert(asked.tab === "home" && asked.agent === "financial_manager", "ask search 
 assert(asked.section == null, "ask search drops the previous section");
 const keptAgent = accountantClientRouteSearch({ tab: "home", agent: "analyst" });
 assert(keptAgent.agent === "analyst" && keptAgent.tab === "home", "the client route keeps the agent");
+const keptPrompt = accountantClientRouteSearch({
+  tab: "home",
+  agent: "advisor",
+  prompt: encodeURIComponent("Draft for North & Co"),
+});
+assert(keptPrompt.prompt === "Draft for North & Co", "the client route keeps a decoded composer prompt");
+const cappedPrompt = accountantClientRouteSearch({
+  tab: "home",
+  agent: "financial_manager",
+  prompt: "y".repeat(800),
+});
+assert(cappedPrompt.prompt?.length === 500, "the client route caps the composer prompt");
+const droppedPrompt = accountantClientRouteSearch({ tab: "health", agent: "advisor", prompt: "Draft" });
+assert(droppedPrompt.prompt == null, "a prompt off Home is not kept");
 const droppedAgent = accountantClientRouteSearch({ tab: "home", agent: "bot" });
 assert(droppedAgent.agent == null, "an unknown agent does not stick");
 const practice = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");

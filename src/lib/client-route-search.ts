@@ -19,6 +19,7 @@
  * `onboard`, `report`, `action`, …) are preserved by the route parser.
  * An Action Plan `filter` sticks only while the tab is `plan`.
  */
+import { composerPromptText } from "./composer-prompt.ts";
 import { isHomePagedView } from "./home-paged-view.ts";
 
 export const CLIENT_RAIL_TABS = [
@@ -959,6 +960,7 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
   report?: string;
   action?: "preview" | "download";
   agent?: string;
+  prompt?: string;
   profile?: number;
   view?:
     | "chart"
@@ -989,6 +991,7 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
     report?: string;
     action?: "preview" | "download";
     agent?: string;
+    prompt?: string;
     profile?: number;
     view?:
       | "chart"
@@ -1019,6 +1022,10 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
     search.agent === "tax_specialist"
   ) {
     out.agent = search.agent;
+  }
+  if (out.agent && (!out.tab || out.tab === "home") && typeof search.prompt === "string") {
+    const text = composerPromptText(search.prompt);
+    if (text) out.prompt = text;
   }
   if (search.profile === 1 || search.profile === "1") out.profile = 1;
   if (typeof search.draft === "string" && /^[0-9a-f-]{36}$/i.test(search.draft))

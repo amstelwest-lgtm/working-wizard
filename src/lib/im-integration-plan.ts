@@ -38,6 +38,7 @@ export type IntegrationPlanRow = {
   actionHref: string;
   actionPrompt: string;
   actionApprove: string;
+  clientName: string;
 };
 
 const PLAN_BOTS = new Set(["Financial Manager", "Analyst", "Advisor", "Tax Specialist"]);
@@ -189,7 +190,10 @@ export function playsForPlan(country?: IntegrationPlanCountry | null): SolutionP
 }
 
 function finishRow(
-  row: Omit<IntegrationPlanRow, "actionLabel" | "actionHref" | "actionPrompt" | "actionApprove">,
+  row: Omit<
+    IntegrationPlanRow,
+    "actionLabel" | "actionHref" | "actionPrompt" | "actionApprove" | "clientName"
+  >,
   country?: IntegrationPlanCountry | null,
 ): IntegrationPlanRow | null {
   const action = planActionFor(row.playId);
@@ -207,6 +211,7 @@ function finishRow(
     actionHref: action.actionHref,
     actionPrompt: action.actionPrompt,
     actionApprove: scrubMarket(action.actionApprove, country),
+    clientName: action.clientName,
   };
   if (!next.playId || !next.problem || !next.milon || !next.bot || !next.routine || !next.clientSees) {
     return null;
