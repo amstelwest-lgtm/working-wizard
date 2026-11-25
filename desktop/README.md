@@ -40,3 +40,11 @@ npm start
 ```
 
 `npm run dist` on Windows builds the unsigned NSIS installer into `desktop/release/`.
+
+## Window
+
+The installer, desktop shortcut, taskbar, and tray use the Milōn mark from `public/icons/icon-512.png` (the same artwork as the site favicon). `desktop/assets/icon.ico` is that file at 16, 24, 32, 48, 64, 128, and 256. The tray uses `desktop/assets/tray.png`, a 32-pixel copy. The gold wordmark on the sign-in card is cropped from `public/milon-wordmark.png`. The full-bleed background is `desktop/src/assets/signin-bg.webp`.
+
+Forgot password opens `https://www.milonfinance.com/reset-password` in the browser. That is the existing `/reset-password` page. The app checks the address is exactly that https URL before opening it.
+
+Sign-in shows the upload screen as soon as the password grant succeeds. Loading clients and arming the folder watcher happen after that. The password grant itself gives up after about 15 seconds.

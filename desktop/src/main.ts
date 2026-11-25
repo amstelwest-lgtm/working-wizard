@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Tray } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from "electron";
 import chokidar, { type FSWatcher } from "chokidar";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { readFile, stat } from "node:fs/promises";
@@ -18,8 +18,11 @@ import { listPickerClients, type ListedClient } from "./client-list";
 import { historyHas, loadSettings, rememberUpload, saveSettings, type Settings } from "./disk";
 import { intakeHasSha, sha256Hex, uploadToIntake } from "./intake";
 import { fileExtension, ignoredLocalFile, sizeError, watchedExtension } from "./paths";
+import { allowedPasswordResetUrl, PASSWORD_RESET_URL } from "./external-url";
+import { fetchWithDeadline } from "./fetch-deadline";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./public-config";
 import { clearSessionFile, encryptionAvailable, secureSessionStorage } from "./session-store";
+import { desktopAuthConfigOk, signInUserMessage } from "./sign-in-error";
 import { firstPageText } from "./snippet";
 
 type Status = "queued" | "uploading" | "uploaded" | "needs answer" | "failed";
@@ -59,7 +62,22 @@ let clients: ListedClient[] = [];
 let items: Item[] = [];
 let banner: string | null = null;
 let email: string | null = null;
+let userId: string | null = null;
+let signInAttempt = 0;
 const inflight = new Set<string>();
+
+function logSignIn(stage: string, error?: unknown): void {
+  const name = error instanceof Error ? error.name : "";
+  const code =
+    error && typeof error === "object" && "code" in error && typeof (error as { code?: unknown }).code === "string"
+      ? (error as { code: string }).code
+      : "";
+  console.error(`[milon-desktop] sign-in stage=${stage}${name ? ` name=${name}` : ""}${code ? ` code=${code}` : ""}`);
+}
+
+function assetPath(name: string): string {
+  return path.join(__dirname, "../assets", name);
+}
 
 function db(): SupabaseClient {
   if (!supabase) throw new Error("Sign in is not ready.");
@@ -98,22 +116,14 @@ function showWindow(): void {
   windowRef.focus();
 }
 
-function trayImage() {
-  const size = 16;
-  const buffer = Buffer.alloc(size * size * 4);
-  for (let y = 0; y < size; y += 1) {
-    for (let x = 0; x < size; x += 1) {
-      const dx = x - 7.5;
-      const dy = y - 7.5;
-      const inside = dx * dx + dy * dy <= 36;
-      const offset = (y * size + x) * 4;
-      buffer[offset] = inside ? 255 : 0;
-      buffer[offset + 1] = inside ? 95 : 0;
-      buffer[offset + 2] = inside ? 11 : 0;
-      buffer[offset + 3] = inside ? 255 : 0;
-    }
-  }
-  return nativeImage.createFromBitmap(buffer, { width: size, height: size });
+function windowIcon() {
+  return nativeImage.createFromPath(assetPath("icon.ico"));
+}
+
+function trayIcon() {
+  const image = nativeImage.createFromPath(assetPath("tray.png"));
+  if (!image.isEmpty()) return image;
+  return windowIcon().resize({ width: 32, height: 32 });
 }
 
 function refreshTrayMenu(): void {
@@ -135,7 +145,7 @@ function refreshTrayMenu(): void {
 }
 
 function createTray(): void {
-  tray = new Tray(trayImage());
+  tray = new Tray(trayIcon());
   tray.setToolTip("Milōn");
   tray.on("click", () => showWindow());
   refreshTrayMenu();
@@ -143,11 +153,12 @@ function createTray(): void {
 
 function createWindow(): void {
   windowRef = new BrowserWindow({
-    width: 440,
+    width: 1100,
     height: 720,
-    minWidth: 380,
-    minHeight: 520,
+    minWidth: 760,
+    minHeight: 560,
     title: "Milōn",
+    icon: windowIcon(),
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -184,19 +195,24 @@ function lineFor(item: Pick<Item, "docType" | "period" | "suggestedClientName">,
 }
 
 async function refreshIdentity(): Promise<void> {
+  const attempt = signInAttempt;
   const { data } = await db().auth.getSession();
+  if (attempt !== signInAttempt) return;
   email = data.session?.user?.email ?? null;
-  if (!email) clients = [];
+  userId = data.session?.user?.id ?? null;
+  if (!email) {
+    userId = null;
+    clients = [];
+  }
 }
 
 async function refreshClients(): Promise<void> {
-  const { data } = await db().auth.getSession();
-  const userId = data.session?.user?.id;
-  if (!userId) {
+  const id = userId;
+  if (!id) {
     clients = [];
     return;
   }
-  const listed = await listPickerClients(db(), userId);
+  const listed = await listPickerClients(db(), id);
   clients = listed.clients;
   banner = listed.error;
   if (settings.clientId && !clients.some((client) => client.id === settings.clientId)) {
@@ -361,8 +377,35 @@ function pumpQueued(): void {
 }
 
 async function bootSession(): Promise<void> {
+  const attempt = signInAttempt;
   await refreshIdentity();
-  if (email) await refreshClients();
+  if (attempt !== signInAttempt) return;
+  publish();
+  if (!email) return;
+  try {
+    await refreshClients();
+  } catch (error) {
+    logSignIn("clients", error);
+    if (attempt !== signInAttempt) return;
+    banner = "Clients could not be loaded.";
+  }
+  if (attempt !== signInAttempt) return;
+  startWatcher();
+  publish();
+  pumpQueued();
+}
+
+async function finishSignIn(attempt: number): Promise<void> {
+  if (attempt !== signInAttempt) return;
+  try {
+    await refreshClients();
+  } catch (error) {
+    logSignIn("clients", error);
+    if (attempt !== signInAttempt) return;
+    banner = "Clients could not be loaded.";
+  }
+  if (attempt !== signInAttempt) return;
+  startWatcher();
   publish();
   pumpQueued();
 }
@@ -375,44 +418,92 @@ async function signOut(): Promise<void> {
   }
   clearSessionFile();
   email = null;
+  userId = null;
   clients = [];
   banner = null;
+  signInAttempt += 1;
   publish();
 }
 
 function registerIpc(): void {
   ipcMain.handle("get-state", () => snapshot());
   ipcMain.handle("sign-in", async (_event, body: { email?: string; password?: string }) => {
+    const attempt = ++signInAttempt;
     const address = String(body?.email ?? "").trim();
     const password = String(body?.password ?? "");
     if (body) body.password = "";
     if (!address || !password) return { ok: false, message: "Enter your email and password." };
-    if (!encryptionAvailable()) {
+    if (!desktopAuthConfigOk(SUPABASE_URL, SUPABASE_ANON_KEY)) {
+      logSignIn("config");
+      banner = signInUserMessage({ code: "config" });
+      publish();
+      return { ok: false, message: banner };
+    }
+    let canEncrypt = false;
+    try {
+      canEncrypt = encryptionAvailable();
+    } catch (error) {
+      logSignIn("encryption", error);
+      canEncrypt = false;
+    }
+    if (!canEncrypt) {
+      logSignIn("encryption");
       banner = "This PC can't encrypt the Milōn session. The password was not saved.";
       publish();
       return { ok: false, message: banner };
     }
     try {
-      const { error } = await db().auth.signInWithPassword({ email: address, password });
-      if (error) {
-        await db().auth.signOut();
+      const { data, error } = await db().auth.signInWithPassword({ email: address, password });
+      if (attempt !== signInAttempt) return { ok: false, message: "Sign-in was interrupted. Try again." };
+      if (error || !data.session) {
+        logSignIn("password-grant", error);
+        try {
+          await db().auth.signOut();
+        } catch {
+          /* the failed grant should not keep a session */
+        }
         clearSessionFile();
         email = null;
-        const leaked = password.length > 0 && error.message.includes(password);
-        banner = leaked ? "Could not sign in." : error.message || "Could not sign in.";
+        userId = null;
+        banner = signInUserMessage(error);
         publish();
         return { ok: false, message: banner };
       }
-    } catch {
+      email = data.user?.email ?? data.session.user.email ?? address;
+      userId = data.user?.id ?? data.session.user.id ?? null;
+      banner = null;
+      // The login screen waits on this IPC. Client lookups and the folder
+      // watcher run after the upload screen is published.
+      publish();
+      setTimeout(() => {
+        void finishSignIn(attempt);
+      }, 0);
+      return { ok: true, message: "" };
+    } catch (error) {
+      logSignIn("password-grant", error);
       clearSessionFile();
       email = null;
-      banner = "This PC can't encrypt the Milōn session. The password was not saved.";
+      userId = null;
+      banner = signInUserMessage(
+        error instanceof Error ? { name: error.name, message: error.message, status: 0 } : null,
+      );
       publish();
       return { ok: false, message: banner };
     }
-    banner = null;
-    await bootSession();
-    return { ok: true, message: "" };
+  });
+  ipcMain.handle("open-password-reset", async () => {
+    const url = allowedPasswordResetUrl(PASSWORD_RESET_URL);
+    if (!url) {
+      console.error("[milon-desktop] sign-in stage=password-reset reason=blocked-url");
+      return { ok: false, message: "Password reset could not be opened." };
+    }
+    try {
+      await shell.openExternal(url);
+      return { ok: true, message: "" };
+    } catch (error) {
+      logSignIn("password-reset", error);
+      return { ok: false, message: "Password reset could not be opened." };
+    }
   });
   ipcMain.handle("sign-out", () => signOut());
   ipcMain.handle("pick-folder", async () => {
@@ -512,6 +603,7 @@ if (!gotLock) {
     app.setAppUserModelId("finance.milon.desktop");
     settings = loadSettings();
     supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { fetch: fetchWithDeadline() },
       auth: {
         storage: secureSessionStorage,
         persistSession: true,
@@ -522,12 +614,13 @@ if (!gotLock) {
     registerIpc();
     createWindow();
     createTray();
-    startWatcher();
-    try {
-      await bootSession();
-    } catch {
-      banner = "Sign in to Milōn.";
-      publish();
-    }
+    // Session restore and the folder watcher are not on the sign-in click.
+    setTimeout(() => {
+      void bootSession().catch((error: unknown) => {
+        logSignIn("startup-session", error);
+        banner = "Sign in to Milōn.";
+        publish();
+      });
+    }, 0);
   });
 }

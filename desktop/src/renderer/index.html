@@ -6,60 +6,142 @@
     <style>
       :root { color-scheme: light; }
       * { box-sizing: border-box; }
+      html, body { height: 100%; }
       body {
         margin: 0;
-        font: 14px/1.45 "Segoe UI", sans-serif;
-        color: #102a43;
-        background: #f4f7fb;
+        font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+        color: #102A43;
+        background: #fff;
       }
-      header { padding: 16px 16px 4px; }
-      h1 { margin: 0; font-size: 20px; }
-      .lede { margin: 4px 0 0; color: #4a6274; font-size: 12px; }
-      main { padding: 12px 16px 20px; display: flex; flex-direction: column; gap: 10px; }
-      label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 650; }
-      input, select, button { font: inherit; }
+      button, input, select { font: inherit; }
+      button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+        outline: 2px solid #38BDF8;
+        outline-offset: 2px;
+      }
+      .signin {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding: 32px 8vw;
+        background: #102A43 url("../assets/signin-bg.webp") center / cover no-repeat;
+      }
+      .signin-scrim {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(16, 42, 67, 0.08) 0%, rgba(16, 42, 67, 0.28) 48%, rgba(16, 42, 67, 0.5) 100%);
+      }
+      .card {
+        position: relative;
+        width: min(100%, 360px);
+        max-height: calc(100% - 24px);
+        overflow: auto;
+        padding: 28px 24px 22px;
+        border: 1px solid rgba(219, 234, 254, 0.95);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.94);
+        box-shadow: 0 18px 50px rgba(16, 42, 67, 0.28);
+        backdrop-filter: blur(16px);
+      }
+      .wordmark { display: block; width: 148px; height: auto; }
+      .card h1, .workspace h1 {
+        margin: 16px 0 0;
+        font-size: 22px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+        color: #102A43;
+      }
+      .lede { margin: 6px 0 0; color: #102A43; font-size: 13px; font-weight: 400; }
+      form, .fields { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
+      label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 650; }
       input, select {
-        padding: 8px 10px;
-        border: 1px solid #d5e2ee;
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #DBEAFE;
         border-radius: 8px;
         background: #fff;
-        color: inherit;
+        color: #102A43;
       }
-      button {
-        background: #0b5fff;
+      .password-field { position: relative; }
+      .password-field input { padding-right: 44px; }
+      button.primary { width: 100%; }
+      button.primary, .workspace button {
+        background: #0B5FFF;
         color: #fff;
         border: 0;
         border-radius: 8px;
-        padding: 8px 12px;
+        padding: 10px 14px;
         font-weight: 650;
         cursor: pointer;
       }
-      button.quiet { background: #fff; color: #102a43; border: 1px solid #d5e2ee; }
+      button.primary:hover:not(:disabled), .workspace button:hover:not(:disabled) { background: #2563EB; }
       button:disabled { opacity: 0.55; cursor: default; }
+      button.eye {
+        position: absolute;
+        right: 4px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        display: grid;
+        place-items: center;
+        background: transparent;
+        color: #102A43;
+        border: 0;
+        border-radius: 8px;
+      }
+      button.eye:hover:not(:disabled) { background: #DBEAFE; }
+      button.link {
+        align-self: flex-start;
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        color: #0B5FFF;
+        border: 0;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      button.link:hover:not(:disabled) { color: #2563EB; text-decoration: underline; }
+      .signin-row { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; }
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .spinner { animation: none; }
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      fieldset { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
+      .err { min-height: 1.2em; color: #9B1C1C; font-size: 12px; margin: 12px 0 0; }
+      .who { margin: 0; font-size: 12px; color: #102A43; }
+      .workspace { padding: 20px 24px 28px; max-width: 560px; display: flex; flex-direction: column; gap: 12px; }
+      .workspace .wordmark { width: 120px; }
       .row { display: flex; gap: 8px; align-items: end; }
-      .row > label, .row > button { flex: 1; }
+      .row > label, .row > button, .row > input, .row > select { flex: 1; }
       .grow { flex: 1; }
+      button.quiet { background: #fff; color: #102A43; border: 1px solid #DBEAFE; }
+      button.quiet:hover:not(:disabled) { background: #DBEAFE; }
       ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-      li { background: #fff; border: 1px solid #e2ebf3; border-radius: 10px; padding: 10px; }
+      li { background: #fff; border: 1px solid #DBEAFE; border-radius: 10px; padding: 10px; }
       .name { font-weight: 650; word-break: break-word; }
       .status { font-size: 12px; font-weight: 700; }
       .uploaded { color: #0d7a4f; }
       .failed { color: #9b1c1c; }
-      .uploading, .queued { color: #0b5fff; }
+      .uploading, .queued { color: #0B5FFF; }
       .needs { color: #8a5a00; }
-      .detail, .flags { margin: 4px 0 0; font-size: 12px; color: #4a6274; }
+      .detail, .flags { margin: 4px 0 0; font-size: 12px; color: #102A43; }
       .flags { color: #8a5a00; }
       .ask { display: flex; gap: 6px; margin-top: 8px; }
       .ask input { flex: 1; }
-      .err { min-height: 1.2em; color: #9b1c1c; font-size: 12px; margin: 0; }
-      .who { margin: 0; font-size: 12px; color: #4a6274; }
     </style>
   </head>
   <body>
-    <header>
-      <h1>Milōn</h1>
-      <p class="lede">Upload assistant. New files in the watched folder go to source-document intake. Nothing is posted to a ledger.</p>
-    </header>
     <main id="app"></main>
     <script src="./renderer.js"></script>
   </body>
