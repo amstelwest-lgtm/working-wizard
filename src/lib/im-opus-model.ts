@@ -1,10 +1,8 @@
 /**
  * Implementation Manager model selection.
  *
- * Opus 5.5 Claude API id: `claude-opus-5-5`.
- * Source: https://platform.claude.com/docs/en/about-claude/models/overview
- * (Latest models table, Claude Opus 5.5, Claude API ID). The same id is
- * CLAUDE_OPUS_55 in src/lib/claude-request.ts.
+ * Opus 5.5 is CLAUDE_OPUS_55. Source: Anthropic models overview, Claude Opus
+ * 5.5, Claude API ID column. The literal stays in claude-request.ts.
  *
  * If Anthropic rejects that id, one retry uses the Opus id this call already
  * had. When that id is already 5.5, the retry is Claude Opus 5 (`claude-opus-5`),
