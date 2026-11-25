@@ -20,6 +20,16 @@
   line-gap-override: 0%;
 }
 
+/* Border-box is also in the global preflight, which arrives on a later
+   stylesheet. Width 100% plus the 16px card padding must not wait for it:
+   content-box turns a 385px row into a 417px border box. */
+.owner-door,
+.owner-door *,
+.owner-door *::before,
+.owner-door *::after {
+  box-sizing: border-box;
+}
+
 .owner-door {
   --owner-serif: var(--font-display, "Owner Sans Fallback", sans-serif);
   --owner-sans: var(--font-sans, "Owner Sans Fallback", sans-serif);
@@ -130,16 +140,33 @@ html:not(.dark) .owner-door .owner-pillar-score.text-rose-400 {
 }
 
 .owner-door .owner-biz {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: 14px;
   font-weight: 500;
 }
 
 .owner-door .owner-biz b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 600;
+}
+
+.owner-door .owner-biz-ic {
+  flex: none;
+  display: inline-grid;
+}
+
+.owner-door .owner-biz-ic svg {
+  width: 13px;
+  height: 13px;
+  display: block;
 }
 
 .owner-door .owner-tools {
@@ -641,6 +668,8 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
 .owner-door .owner-agent-open {
   display: flex;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   flex-direction: column;
   align-items: center;
   gap: 8px;
@@ -671,6 +700,23 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
   line-height: 1.25;
 }
 
+.owner-door .owner-portrait {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.owner-door .owner-portrait-chip {
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+
+.owner-door .owner-portrait-chip svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
 .owner-door .owner-agent-open:focus-visible {
   outline: 2px solid var(--gold-bright);
   outline-offset: 3px;
@@ -687,6 +733,8 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
 
 .owner-door .owner-lines {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   min-height: 4.4em;
   flex-direction: column;
   align-items: center;
@@ -1012,6 +1060,8 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
 .owner-ask {
   display: inline-flex;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 44px;
   align-items: center;
   justify-content: center;
@@ -2465,7 +2515,7 @@ html.dark .owner-status.is-attention {
   }
 
   .owner-door .owner-pane[data-owner-home="true"] .owner-agents {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--owner-space-2);
   }
 
