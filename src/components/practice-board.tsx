@@ -1,6 +1,6 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { PeriodPill } from "@/components/chrome-icons";
-import { useEffect, useMemo, useState, useRef, Fragment } from "react";
+import { useEffect, useMemo, useState, useRef, Fragment, type ReactNode } from "react";
 import { reportClientError } from "@/lib/monitoring";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import {
@@ -1174,6 +1174,21 @@ function practiceSectionSubtitle(view: PracticeSection): string {
 /** A stay that already succeeded. Remounting All clients must not wait on it again. */
 const accountantPortalStay = new Set<string>();
 
+/** Home stays on the skeleton until the book deadline, then paints the jobs board. */
+function PracticeHomeReady({
+  cardPhase,
+  children,
+}: {
+  cardPhase: "ready";
+  children: ReactNode;
+}) {
+  return (
+    <div data-agent-card-phase={cardPhase} style={{ display: "contents" }}>
+      {children}
+    </div>
+  );
+}
+
 export function PracticeBoard({ view }: { view: PracticeView }) {
   const { user, restoreFailed } = useAuth();
   const navigate = useNavigate();
@@ -2342,7 +2357,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             ) : loading && !bookTimedOut ? (
               <DashboardSkeleton className="py-8" />
             ) : (
-            <>
+            <PracticeHomeReady cardPhase="ready">
             <FirstRunStrip
               step={firstRun}
               pilotClientId={pilotClientId}
@@ -2369,7 +2384,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 {firmReportsLine}
               </Link>
             ) : null}
-            </>
+            </PracticeHomeReady>
             )}
           </div>
         ) : null}
