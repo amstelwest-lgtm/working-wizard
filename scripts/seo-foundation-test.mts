@@ -373,7 +373,10 @@ assert(
   readFileSync(resolve("src/components/firm-band-pricing.tsx"), "utf8").includes("FIRM_TRIAL_SENTENCE"),
   "firm pricing keeps the compact trial label",
 );
-assert(firms.includes("readSaPricingCopy"), "firm page loads rand copy from the server");
+assert(!firms.includes("readSaPricingCopy"), "firm page does not load a rand price table");
+assert(!firms.includes("showSaPricing"), "firm page does not gate a rand price table on geo");
+assert(firms.includes("Pricing in rand: talk to us"), "firm page points rand firms to talk to us");
+assert(firms.includes("We price local firms individually."), "firm page says local firms are priced individually");
 assert(!firms.includes("separate rand catalog"), "firm page drops the unpublished-catalog line");
 assert(
   SEO_PAGES.forAccountants.title === "AI Finance Team for Xero, QuickBooks, Sage | MILŌN",
