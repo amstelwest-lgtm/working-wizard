@@ -150,7 +150,11 @@ type Hit = { path: string; prop: string; sample: string };
 /** Vite's dev server can full-reload once after the first paint. */
 function pageWentAway(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  return msg.includes("Execution context was destroyed") || msg.includes("not attached");
+  return (
+    msg.includes("Execution context was destroyed") ||
+    msg.includes("not attached") ||
+    msg.includes("Cannot find context with specified id")
+  );
 }
 
 /** Sticky nav covers a target that scrollIntoView parked at the top of the viewport. */
