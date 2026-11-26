@@ -20,7 +20,6 @@ import {
   type JobsBoardDraft,
 } from "@/lib/milon-jobs";
 import { clientNavSearch } from "@/lib/client-route-search";
-import { isCurrentTaxDraft, loadTaxFormDrafts } from "@/lib/tax-specialist/forms/drafts";
 import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
 import "@/components/owner-door/owner-door.css";
 import "@/components/practice-jobs-board.css";
@@ -137,21 +136,6 @@ function JobCard({
   );
 }
 
-function pickerDrafts(rows: Awaited<ReturnType<typeof loadTaxFormDrafts>>, clientId: string): JobsBoardDraft[] {
-  const out: JobsBoardDraft[] = [];
-  for (const row of rows) {
-    if (!isCurrentTaxDraft(row)) continue;
-    if (row.form_code !== "IRP6" && row.form_code !== "ITR14" && row.form_code !== "ITR12") continue;
-    out.push({
-      clientId,
-      form: row.form_code,
-      period: row.period,
-      status: row.status,
-    });
-  }
-  return out;
-}
-
 export function PracticeJobsBoard({
   counts,
   clients = [],
@@ -186,11 +170,22 @@ export function PracticeJobsBoard({
     if (openJob !== "tax" || drafts) return;
     const ids = taxClientKey ? taxClientKey.split("\n") : [];
     let cancel = false;
-    void Promise.all(ids.map(async (id) => pickerDrafts(await loadTaxFormDrafts(id), id))).then(
-      (groups) => {
-        if (!cancel) setReadDrafts(groups.flat());
-      },
-    );
+    // Same pattern as the tax page: the ZA form module stays out of the home bundle.
+    void import("@/lib/tax-specialist/forms/drafts").then(async ({ isCurrentTaxDraft, loadTaxFormDrafts }) => {
+      const groups = await Promise.all(
+        ids.map(async (id) => {
+          const rows = await loadTaxFormDrafts(id);
+          const out: JobsBoardDraft[] = [];
+          for (const row of rows) {
+            if (!isCurrentTaxDraft(row)) continue;
+            if (row.form_code !== "IRP6" && row.form_code !== "ITR14" && row.form_code !== "ITR12") continue;
+            out.push({ clientId: id, form: row.form_code, period: row.period, status: row.status });
+          }
+          return out;
+        }),
+      );
+      if (!cancel) setReadDrafts(groups.flat());
+    });
     return () => {
       cancel = true;
     };
