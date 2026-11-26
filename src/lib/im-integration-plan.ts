@@ -317,6 +317,8 @@ type ScoredPlay = {
 
 function noteEvidence(hit: ScoredPlay, text: string, kind: "pain" | "covered", quote = false) {
   if (quote) {
+    // The workflow step already names this row. Keep that sentence on screen.
+    if (hit.evidence && !hit.quote) return;
     hit.evidence = text;
     hit.evidencePain = true;
     hit.quote = true;
