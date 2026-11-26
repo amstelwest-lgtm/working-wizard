@@ -263,15 +263,68 @@ function specificProblem(question: string, detail: string): string {
   return `${question} You said: ${sentence}`;
 }
 
+function problemText(question: string, detail: string, quote: boolean): string {
+  if (!detail) return question;
+  if (!quote) return detail;
+  return specificProblem(question, detail);
+}
+
+type InterviewPair = { question: string; answer: string };
+
+function sameQuestion(left: string, right: string): boolean {
+  const norm = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const a = norm(left);
+  const b = norm(right);
+  if (!a || !b) return false;
+  return a === b || a.includes(b) || b.includes(a);
+}
+
+/** The interview question this play came from, not a later answer that happens to share a word. */
+function questionMatchesPlay(play: SolutionPlay, question: string): boolean {
+  if (!question.trim()) return false;
+  return play.signals.test(question) || sameQuestion(question, play.question);
+}
+
+/** Q/A lines from the firm transcript. An answer with no question is not quoted onto another row. */
+function interviewPairs(interview: string | undefined): InterviewPair[] {
+  const lines = (interview ?? "")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const pairs: InterviewPair[] = [];
+  let question = "";
+  for (const line of lines) {
+    if (/^Q:/i.test(line)) {
+      question = line.replace(/^Q:\s*/i, "").trim();
+      continue;
+    }
+    if (/^A:/i.test(line)) {
+      pairs.push({ question, answer: line.replace(/^A:\s*/i, "").trim() });
+      question = "";
+    }
+  }
+  return pairs;
+}
+
 type ScoredPlay = {
   play: SolutionPlay;
   pain: number;
   covered: number;
   evidence: string | null;
   evidencePain: boolean;
+  quote: boolean;
 };
 
-function noteEvidence(hit: ScoredPlay, text: string, kind: "pain" | "covered") {
+function noteEvidence(hit: ScoredPlay, text: string, kind: "pain" | "covered", quote = false) {
+  if (quote) {
+    // The workflow step already names this row. Keep that sentence on screen.
+    if (hit.evidence && !hit.quote) return;
+    hit.evidence = text;
+    hit.evidencePain = true;
+    hit.quote = true;
+    return;
+  }
+  if (hit.quote) return;
   if (kind === "pain") {
     if (!hit.evidencePain) {
       hit.evidence = text;
@@ -296,6 +349,7 @@ function scorePlays(
     covered: 0,
     evidence: null,
     evidencePain: false,
+    quote: false,
   }));
   for (const step of input.steps ?? []) {
     const kind = shownKind(step.bucket);
@@ -307,11 +361,23 @@ function scorePlays(
       noteEvidence(hit, step.step, kind);
     }
   }
-  for (const answer of userAnswerLines(input.interview)) {
+  for (const pair of interviewPairs(input.interview)) {
     for (const hit of scored) {
-      if (!hit.play.signals.test(answer)) continue;
-      hit.pain += 5;
-      noteEvidence(hit, answer, "pain");
+      const answerHit = Boolean(pair.answer) && hit.play.signals.test(pair.answer);
+      const questionHit = questionMatchesPlay(hit.play, pair.question);
+      if (!answerHit && !questionHit) continue;
+      hit.pain += answerHit ? 5 : 3;
+      if (questionHit && pair.answer) noteEvidence(hit, pair.answer, "pain", true);
+      else if (!pair.question && answerHit) noteEvidence(hit, pair.answer, "pain", true);
+    }
+  }
+  if (!interviewPairs(input.interview).length) {
+    for (const answer of userAnswerLines(input.interview)) {
+      for (const hit of scored) {
+        if (!hit.play.signals.test(answer)) continue;
+        hit.pain += 5;
+        noteEvidence(hit, answer, "pain", false);
+      }
     }
   }
   for (const row of input.coverage ?? []) {
@@ -340,6 +406,8 @@ export function materializePlayRow(input: {
   play: SolutionPlay;
   section: IntegrationPlanSection;
   evidence?: string | null;
+  /** True only when evidence is the answer to the question this play came from. */
+  quote?: boolean;
   country?: IntegrationPlanCountry | null;
   status: IntegrationPlanStatus;
 }): IntegrationPlanRow | null {
@@ -348,7 +416,7 @@ export function materializePlayRow(input: {
   return finishRow(
     {
       playId: input.play.id,
-      problem: specificProblem(input.play.question, detail),
+      problem: problemText(input.play.question, detail, input.quote === true),
       milon: copy.output,
       routine: input.play.routine,
       clientSees: copy.clientSees,
@@ -414,6 +482,7 @@ export function buildIntegrationPlanTable(input: {
       play: hit.play,
       section: "lead",
       evidence: hit.evidence,
+      quote: hit.quote,
       country: input.country,
       status,
     });
@@ -426,6 +495,7 @@ export function buildIntegrationPlanTable(input: {
       play: hit.play,
       section: "already_covered",
       evidence: hit.evidence,
+      quote: hit.quote,
       country: input.country,
       status,
     });
@@ -557,9 +627,16 @@ function unique(ids: readonly string[]): string[] {
   return out;
 }
 
-function interviewEvidence(play: SolutionPlay, interview: string | undefined): string | null {
-  for (const answer of userAnswerLines(interview)) {
-    if (play.signals.test(answer)) return answer;
+function interviewEvidence(play: SolutionPlay, interview: string | undefined): { text: string; quote: boolean } | null {
+  for (const pair of interviewPairs(interview)) {
+    if (pair.question && questionMatchesPlay(play, pair.question) && pair.answer) {
+      return { text: pair.answer, quote: true };
+    }
+  }
+  for (const pair of interviewPairs(interview)) {
+    if (!pair.question && pair.answer && play.signals.test(pair.answer)) {
+      return { text: pair.answer, quote: true };
+    }
   }
   return null;
 }
@@ -604,10 +681,12 @@ export function applyOpusIntegrationPlan(
     }
     const play = byPlay.get(id);
     if (!play) return;
+    const quoted = interviewEvidence(play, input.interview);
     const next = materializePlayRow({
       play,
       section,
-      evidence: interviewEvidence(play, input.interview),
+      evidence: quoted?.text,
+      quote: quoted?.quote,
       country: input.country,
       status,
     });

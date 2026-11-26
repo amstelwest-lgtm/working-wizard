@@ -12,6 +12,7 @@ import { classifyPracticeStep } from "./setup-partner-plan.ts";
 import type { ImReplayFixtureMeta } from "./im-replay.ts";
 import type { SetupPartnerCountry } from "./setup-partner.ts";
 import { FINANCE_DEADLINE_SIGNALS } from "./im-capability-manifest.ts";
+import { isImSampleClient } from "./im-setup-hold.ts";
 
 export type ImPilotClient = {
   id: string;
@@ -83,8 +84,9 @@ const LEDGER_GATE: ImApprovalGate = {
 };
 
 export function pickPilotClients(clients: readonly ImPilotClient[], count = 3): ImPilotClient[] {
-  const preferred = clients.filter((row) => row.hasLedger || row.hasUpload);
-  const pool = preferred.length ? preferred : clients;
+  const eligible = clients.filter((row) => !isImSampleClient({ name: row.name }));
+  const preferred = eligible.filter((row) => row.hasLedger || row.hasUpload);
+  const pool = preferred.length ? preferred : eligible;
   return pool.slice(0, Math.max(2, Math.min(count, 3, pool.length)));
 }
 

@@ -36,6 +36,20 @@ import {
   playsForPlan,
   type IntegrationPlanRow,
 } from "@/lib/im-integration-plan";
+import {
+  draftHref,
+  emptyImSetupHold,
+  imSetupHoldRuleText,
+  isImSampleClient,
+  parseImSetupHold,
+  queuedRunningLines,
+  routineLabel,
+  IM_SETUP_HOLD_EVENT,
+  IM_SETUP_HOLD_TASK,
+  type ImRunningLine,
+  type ImSetupHold,
+} from "@/lib/im-setup-hold";
+import type { SetupPartnerWorkflowMap } from "@/lib/setup-partner";
 
 const ACTIVATION_RUN_SUMMARY = "Implementation Manager activation — draft only.";
 
@@ -61,10 +75,15 @@ type DeleteFilter = {
   eq: (column: string, value: string) => Promise<DbResult<null>>;
 };
 
+type UpdateFilter = {
+  eq: (column: string, value: string) => Promise<DbResult<null>>;
+};
+
 type Admin = {
   from: (table: string) => {
     select: (columns: string) => Filter;
     insert: (row: Row | Row[]) => InsertFilter;
+    update: (row: Row) => UpdateFilter;
     delete: () => DeleteFilter;
     upsert?: (row: Row, options: { onConflict: string }) => Promise<DbResult<null>>;
   };
@@ -124,7 +143,7 @@ async function loadPilots(firmId: string): Promise<ImPilotClient[]> {
   for (const row of listed.data ?? []) {
     const id = typeof row.id === "string" ? row.id : "";
     const name = typeof row.name === "string" ? row.name : "Client";
-    if (!id || row.is_demo === true) continue;
+    if (!id || isImSampleClient({ name, isDemo: row.is_demo === true })) continue;
     const books = await pilotBooks(id);
     pilots.push({ id, name, ...books });
   }
@@ -595,11 +614,34 @@ export const startImIntegration = createServerFn({ method: "POST" })
       context,
     );
     const running = await loadActivationRuns(data.firmId);
+    const pilot = pilots[0] ?? null;
+    const queued = queuedRunningLines({
+      pilot: pilot ? { id: pilot.id, name: pilot.name } : null,
+      routines: activation.routineMaps.map((map) => ({
+        routine: map.routine,
+        bot: map.steps[0]?.botOwner ?? "Milōn",
+      })),
+    });
+    const lines =
+      running.lines.length > 0
+        ? queued.map((line, index) => {
+            const run = running.lines[index];
+            return run ? { ...line, id: run.id, status: run.status } : line;
+          })
+        : queued;
+    await rememberIntegrationStart({
+      firmId: data.firmId,
+      userId,
+      country: data.country,
+      lines,
+      steps: replay.plan.steps.map((row) => ({ step: row.step, bucket: row.bucket })),
+    });
     return {
       ...result,
       runCount: running.runCount,
       pilotIds: pilots.map((row) => row.id),
-      lines: running.lines,
+      lines,
+      started: true as const,
     };
   });
 
@@ -617,23 +659,138 @@ function activationRunStatus(status: string): string {
   return "Waiting";
 }
 
+async function readSetupHoldRow(firmId: string): Promise<{ id: string; hold: ImSetupHold } | null> {
+  const db = admin();
+  const listed = (await db
+    .from("milon_brain_rules")
+    .select("id, rule_text")
+    .eq("firm_id", firmId)
+    .is("client_id", null)
+    .eq("source_event", IM_SETUP_HOLD_EVENT)
+    .eq("status", "active")
+    .eq("task_type", IM_SETUP_HOLD_TASK)
+    .order("created_at", { ascending: false })
+    .limit(1)) as unknown as { data: Row[] | null; error: DbError };
+  if (listed.error) throw new Error(listed.error.message);
+  const row = listed.data?.[0];
+  if (!row || typeof row.id !== "string") return null;
+  return {
+    id: row.id,
+    hold: parseImSetupHold(typeof row.rule_text === "string" ? row.rule_text : null) ?? emptyImSetupHold(),
+  };
+}
+
+async function readSetupHold(firmId: string): Promise<ImSetupHold | null> {
+  const row = await readSetupHoldRow(firmId);
+  if (!row) return null;
+  const hold = row.hold;
+  if (!hold.pendingMap && hold.rows.length === 0 && !hold.started && hold.lines.length === 0) return null;
+  return hold;
+}
+
+async function writeSetupHold(firmId: string, userId: string, hold: ImSetupHold): Promise<void> {
+  const db = admin();
+  const rule_text = imSetupHoldRuleText(hold);
+  const existing = await readSetupHoldRow(firmId);
+  if (existing) {
+    const updated = await db.from("milon_brain_rules").update({ rule_text }).eq("id", existing.id);
+    if (updated.error) throw new Error(updated.error.message);
+    return;
+  }
+  const inserted = await db
+    .from("milon_brain_rules")
+    .insert({
+      firm_id: firmId,
+      client_id: null,
+      task_type: IM_SETUP_HOLD_TASK,
+      source_event: IM_SETUP_HOLD_EVENT,
+      source_row_id: null,
+      decision: "corrected",
+      rule_text,
+      approver_id: userId,
+      layer: "private",
+      status: "active",
+    })
+    .select("id")
+    .maybeSingle();
+  if (inserted.error) throw new Error(inserted.error.message);
+}
+
+async function planRowsForHold(input: {
+  firmId: string;
+  country?: "US" | "ZA";
+  interview?: string;
+  map?: SetupPartnerWorkflowMap | null;
+  steps?: { step: string; bucket?: string }[];
+}): Promise<IntegrationPlanRow[]> {
+  const steps =
+    input.steps ??
+    (input.map?.todaysFlow ?? []).map((step) => ({ step }));
+  const built = buildIntegrationPlanTable({
+    steps,
+    coverage: input.map?.milonCoverage ?? [],
+    interview: input.interview,
+    country: input.country,
+  });
+  return stampPlanActions(built, await firstPlanClient(input.firmId));
+}
+
+async function rememberIntegrationStart(input: {
+  firmId: string;
+  userId: string;
+  country?: "US" | "ZA";
+  lines: ImRunningLine[];
+  steps: { step: string; bucket?: string }[];
+}): Promise<void> {
+  const existing = (await readSetupHold(input.firmId)) ?? emptyImSetupHold();
+  const rows = existing.rows.length
+    ? existing.rows
+    : await planRowsForHold({ firmId: input.firmId, country: input.country, steps: input.steps });
+  await writeSetupHold(input.firmId, input.userId, {
+    pendingMap: null,
+    rows,
+    started: true,
+    lines: input.lines,
+  });
+}
+
 async function loadActivationRuns(firmId: string): Promise<{
   runCount: number;
-  lines: { id: string; bot: string; status: string; summary: string }[];
+  lines: ImRunningLine[];
 }> {
   const db = admin();
   const listed = (await db
     .from("agent_runs")
-    .select("id, agent, status, summary")
+    .select("id, agent, status, client_id")
     .eq("firm_id", firmId)
     .eq("summary", ACTIVATION_RUN_SUMMARY)
     .order("queued_at", { ascending: false })
     .limit(12)) as unknown as { data: Row[] | null; error: DbError };
   if (listed.error) throw new Error(listed.error.message);
+  const clientIds = [
+    ...new Set(
+      (listed.data ?? [])
+        .map((row) => (typeof row.client_id === "string" ? row.client_id : ""))
+        .filter(Boolean),
+    ),
+  ];
+  const names = new Map<string, string>();
+  if (clientIds.length) {
+    const clients = (await db.from("clients").select("id, name").in("id", clientIds).limit(12)) as unknown as {
+      data: Row[] | null;
+      error: DbError;
+    };
+    if (!clients.error) {
+      for (const row of clients.data ?? []) {
+        if (typeof row.id === "string") names.set(row.id, typeof row.name === "string" ? row.name : "");
+      }
+    }
+  }
   const lines = (listed.data ?? []).flatMap((row) => {
     const id = typeof row.id === "string" ? row.id : "";
     const agent = typeof row.agent === "string" ? row.agent : "";
     const status = typeof row.status === "string" ? row.status : "";
+    const clientId = typeof row.client_id === "string" ? row.client_id : "";
     if (!id) return [];
     return [
       {
@@ -641,10 +798,63 @@ async function loadActivationRuns(firmId: string): Promise<{
         bot: BOT_LABEL[agent] ?? "Milōn",
         status: activationRunStatus(status),
         summary: "Draft for your review. Nothing has been sent.",
+        href: clientId ? draftHref(clientId) : "/clients",
+        clientName: clientId ? (names.get(clientId) ?? "") : "",
+        routine: routineLabel("monthly_pack"),
       },
     ];
   });
   return { runCount: lines.length, lines };
+}
+
+async function linesFromArtifacts(firmId: string): Promise<ImRunningLine[]> {
+  const db = admin();
+  const listed = (await db
+    .from("clients")
+    .select("id, name, is_demo")
+    .eq("firm_id", firmId)
+    .order("created_at", { ascending: true })
+    .limit(40)) as unknown as { data: Row[] | null; error: DbError };
+  if (listed.error) return [];
+  const clients = (listed.data ?? []).flatMap((row) => {
+    const id = typeof row.id === "string" ? row.id : "";
+    if (!id) return [];
+    return [{ id, name: typeof row.name === "string" ? row.name : "", isDemo: row.is_demo === true }];
+  });
+  const real = clients.filter((row) => !isImSampleClient(row));
+  const pool = real.length ? real : [];
+  if (!pool.length) return [];
+  const artifacts = (await db
+    .from("client_artifacts")
+    .select("client_id, meta")
+    .in(
+      "client_id",
+      pool.map((row) => row.id),
+    )
+    .or(imRoutineMapArtifactFilter())
+    .limit(20)) as unknown as { data: Row[] | null; error: DbError };
+  if (artifacts.error || !artifacts.data?.length) return [];
+  const names = new Map(pool.map((row) => [row.id, row.name]));
+  const routines = artifacts.data.flatMap((row) => {
+    const meta = row.meta;
+    if (!meta || typeof meta !== "object" || Array.isArray(meta)) return [];
+    const rec = meta as Record<string, unknown>;
+    const routine = typeof rec.routine === "string" ? rec.routine : "";
+    if (!routine) return [];
+    const steps = Array.isArray(rec.steps) ? rec.steps : [];
+    const first = steps[0];
+    const bot =
+      first && typeof first === "object" && !Array.isArray(first)
+        ? String((first as Record<string, unknown>).botOwner ?? "")
+        : "";
+    return [{ routine, bot }];
+  });
+  const pilotId = typeof artifacts.data[0]?.client_id === "string" ? artifacts.data[0].client_id : pool[0]?.id ?? "";
+  if (!pilotId) return [];
+  return queuedRunningLines({
+    pilot: { id: pilotId, name: names.get(pilotId) ?? "" },
+    routines,
+  });
 }
 
 export const loadImRunningState = createServerFn({ method: "POST" })
@@ -654,7 +864,63 @@ export const loadImRunningState = createServerFn({ method: "POST" })
     const userId = context.userId;
     if (!userId) throw new Error("Not authenticated");
     await assertFirmAccess(userId, data.firmId);
-    return loadActivationRuns(data.firmId);
+    const hold = await readSetupHold(data.firmId);
+    const running = await loadActivationRuns(data.firmId);
+    let lines = hold?.lines.length ? hold.lines : running.lines;
+    let started = Boolean(hold?.started) || running.runCount > 0;
+    if (!started || lines.length === 0) {
+      const recovered = await linesFromArtifacts(data.firmId);
+      if (recovered.length) {
+        started = true;
+        if (!lines.length) lines = recovered;
+      }
+    }
+    return { runCount: running.runCount, started, lines };
+  });
+
+const holdSchema = z.object({
+  firmId: z.string().uuid(),
+  clearMap: z.boolean().optional(),
+  interview: z.string().max(8000).optional(),
+  country: z.enum(["US", "ZA"]).optional(),
+  pendingMap: z
+    .object({
+      todaysFlow: z.array(z.string().max(500)).max(40),
+      milonCoverage: z
+        .array(z.object({ agent: z.string().max(80), owns: z.string().max(400) }))
+        .max(12),
+      gaps: z.array(z.string().max(500)).max(20),
+      checklist: z.array(z.string().max(500)).max(20),
+    })
+    .nullable()
+    .optional(),
+});
+
+/** Save the unconfirmed map and the plan generated with it. Confirm clears the map. */
+export const saveImSetupHold = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => holdSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const userId = context.userId;
+    if (!userId) throw new Error("Not authenticated");
+    await assertFirmAccess(userId, data.firmId);
+    const existing = (await readSetupHold(data.firmId)) ?? emptyImSetupHold();
+    if (data.clearMap) {
+      await writeSetupHold(data.firmId, userId, { ...existing, pendingMap: null });
+      return { ok: true as const };
+    }
+    const pendingMap = data.pendingMap ?? existing.pendingMap;
+    const rows =
+      pendingMap && !existing.started
+        ? await planRowsForHold({
+            firmId: data.firmId,
+            country: data.country,
+            interview: data.interview,
+            map: pendingMap,
+          })
+        : existing.rows;
+    await writeSetupHold(data.firmId, userId, { ...existing, pendingMap, rows });
+    return { ok: true as const };
   });
 
 const draftSchema = z.object({
@@ -689,6 +955,10 @@ export const draftImIntegrationPlan = createServerFn({ method: "POST" })
     const userId = context.userId;
     if (!userId) throw new Error("Not authenticated");
     await assertFirmAccess(userId, data.firmId);
+    const stored = await readSetupHold(data.firmId);
+    if (stored?.rows.length) {
+      return { rows: stored.rows, rejected: [] as string[], source: "stored" as const, model: null };
+    }
     const country = data.country;
     const interview = data.interview?.trim() ?? "";
     const steps = data.steps ?? [];
@@ -784,8 +1054,7 @@ async function firstPlanClient(firmId: string): Promise<PlanClient | null> {
     };
     if (listed.error) return null;
     const rows = (listed.data ?? []).filter((row) => typeof row.id === "string");
-    const real = rows.find((row) => row.is_demo !== true);
-    const row = real ?? rows[0];
+    const row = rows.find((item) => !isImSampleClient({ name: item.name, isDemo: item.is_demo === true }));
     if (!row || typeof row.id !== "string") return null;
     return { id: row.id, name: typeof row.name === "string" ? row.name : "" };
   } catch {

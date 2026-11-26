@@ -28,6 +28,16 @@ export type FirmInterviewDraft = {
   sessionKind?: "redo" | null;
   /** Retired interviews loaded with the active draft. Not written back. */
   past?: FirmInterviewDraft[];
+  /**
+   * Unconfirmed workflow map from the setup hold row. Not written into this
+   * interview's rule_text. Cleared on confirm or discard.
+   */
+  pendingMap?: {
+    todaysFlow: string[];
+    milonCoverage: Array<{ agent: string; owns: string }>;
+    gaps: string[];
+    checklist: string[];
+  } | null;
 };
 
 function clipContent(value: string): string {

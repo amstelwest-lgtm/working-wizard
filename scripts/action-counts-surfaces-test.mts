@@ -61,7 +61,7 @@ for (const row of rawActions) {
 
 function query(table: string) {
   const source =
-    table === "action_items"
+    table === "action_items" || table === "action_items_v"
       ? rawActions
       : table === "action_plans"
         ? [{ client_id: CLIENT, target_date: "2026-12-31", is_active: true }]

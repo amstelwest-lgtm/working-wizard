@@ -76,7 +76,8 @@ export async function loadActionCountInputs(
   const [actions, plans] = await Promise.all([
     read(
       db
-        .from("action_items")
+        // owner_name is on the view. The table rejects that column with a 400.
+        .from("action_items_v")
         .select("id, client_id, status, due_date, created_at, title, owner_name")
         .in("client_id", ids)
         .neq("status", "done"),

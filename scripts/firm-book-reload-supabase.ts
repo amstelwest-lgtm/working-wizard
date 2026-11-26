@@ -96,10 +96,14 @@ function isFiguresSelect(columns: string): boolean {
   return columns.includes("financials") && columns.includes("cashflow");
 }
 
+function isActionRead(table: string): boolean {
+  return table === "action_items" || table === "action_items_v";
+}
+
 function rowsFor(query: Query): { data: unknown; error: null } {
   if (query.table === "clients" && isFiguresSelect(query.columns)) return { data: BOOK_FIGURES, error: null };
   if (query.table === "clients") return { data: BOOK_CLIENTS, error: null };
-  if (query.table === "action_items") return { data: BOOK_ACTIONS, error: null };
+  if (isActionRead(query.table)) return { data: BOOK_ACTIONS, error: null };
   return { data: [], error: null };
 }
 
@@ -109,7 +113,7 @@ function answer(query: Query): Promise<{ data: unknown; error: null }> {
   if (query.table === "clients" && isFiguresSelect(query.columns) && mode === "figures-hang") {
     return figuresGate.then(() => ({ data: BOOK_FIGURES, error: null }));
   }
-  if (query.table === "action_items" && mode === "slow-actions") {
+  if (isActionRead(query.table) && mode === "slow-actions") {
     return new Promise((resolve) => {
       window.setTimeout(() => resolve({ data: BOOK_ACTIONS, error: null }), actionDelayMs);
     });

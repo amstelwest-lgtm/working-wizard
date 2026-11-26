@@ -125,6 +125,21 @@ const whatsapp = JSON.stringify(
 );
 assert(!whatsapp.includes("WhatsApp"), "accountant copy does not say WhatsApp");
 assert(/a message/i.test(whatsapp), "a WhatsApp chase is described as a message");
+const mismatched = buildIntegrationPlanTable({
+  interview: [
+    "Q: Who prepares the VAT return?",
+    "A: Reconcile VAT.",
+    "Q: What do you hand the client at month end?",
+    "A: A spreadsheet pack the partner signs off.",
+  ].join("\n"),
+  country: "ZA",
+});
+const monthEnd = mismatched.find((row) => row.playId === "management-pack");
+assert(monthEnd != null && !monthEnd.problem.includes("Reconcile VAT"), "month-end does not quote the VAT answer");
+assert(
+  monthEnd.problem.includes("spreadsheet") || monthEnd.problem.includes("You said"),
+  "month-end quotes the answer to its own question",
+);
 const signOff = buildIntegrationPlanTable({
   steps: [{ step: "Who signs the pack", bucket: "client_setup" }],
   country: "ZA",

@@ -11,9 +11,12 @@ import {
 } from "../src/lib/firm-interview-draft.ts";
 import {
   INTERVIEW_MAP_MIN_ANSWERS,
+  INTERVIEW_MAP_OFFER_ANSWERS,
   interviewAnswerCount,
   shouldBuildInterviewMap,
 } from "../src/lib/setup-partner.ts";
+import { isImSampleClient, parseImSetupHold, queuedRunningLines } from "../src/lib/im-setup-hold.ts";
+import { tourHiddenOnPath } from "../src/components/walkthrough-wizard.tsx";
 import { approvalDraftTitles } from "../src/lib/setup-partner-plan.ts";
 import {
   PRACTICE_SETUP_INTERVIEW_MS,
@@ -121,9 +124,68 @@ assert(
 );
 assert(shouldBuildInterviewMap({ answers: 0, modelDone: false, forced: true }), "That's enough maps immediately");
 assert(
+  !shouldBuildInterviewMap({ answers: INTERVIEW_MAP_OFFER_ANSWERS - 1, modelDone: false, forced: false }),
+  "five answers still wait for the model",
+);
+assert(
+  shouldBuildInterviewMap({ answers: INTERVIEW_MAP_OFFER_ANSWERS, modelDone: false, forced: false }),
+  "six answers offer the map without another numeric question",
+);
+assert(
   implementationManagerStep({ phase: "map", interviewing: false }) === "plan",
   "the stepper lands on the integration plan",
 );
+assert(
+  implementationManagerStep({
+    phase: "interview",
+    interviewing: true,
+    integrationStarted: true,
+    firmRunCount: 0,
+  }) === "access",
+  "start unlocks the checklist while the interview is still open",
+);
+assert(tourHiddenOnPath("/practice/setup"), "the first-run tour stays off Implementation Manager");
+assert(!tourHiddenOnPath("/practice"), "the practice tour still runs on the book");
+assert(isImSampleClient({ name: "New York Yankees", isDemo: false }), "Yankees is not a pilot");
+assert(!isImSampleClient({ name: "Karoo Woodwork", isDemo: false }), "a real client name can be the pilot");
+assert(isImSampleClient({ name: "Harbour Glass", isDemo: true }), "a demo flag is not a pilot");
+const held = parseImSetupHold(
+  JSON.stringify({
+    pendingMap: {
+      todaysFlow: ["Partner reviews the pack"],
+      milonCoverage: [{ agent: "Analyst", owns: "the management report" }],
+      gaps: [],
+      checklist: [],
+    },
+    rows: [
+      {
+        playId: "management-pack",
+        problem: "What do you hand the client at month end?",
+        milon: "Advisory PDF pack",
+        routine: "Every month, after the close",
+        clientSees: "A signed-off PDF.",
+        approve: "You review it.",
+        bot: "Analyst",
+        section: "lead",
+        status: "Waiting",
+        actionLabel: "Open the Management Report",
+        actionHref: "/clients/abc",
+        actionPrompt: "",
+        actionApprove: "You sign off the PDF.",
+        clientName: "Harbour Glass",
+      },
+    ],
+    started: true,
+    lines: queuedRunningLines({
+      pilot: { id: "abc", name: "Harbour Glass" },
+      routines: [{ routine: "monthly_pack", bot: "Analyst" }],
+    }),
+  }),
+);
+assert(held?.pendingMap?.todaysFlow[0] === "Partner reviews the pack", "the map reloads from the hold");
+assert(held?.rows[0]?.clientName === "Harbour Glass", "the stored plan keeps its pilot");
+assert(held?.started === true && held.lines[0]?.href.includes("/clients/abc"), "start reloads with an openable draft");
+assert(held.lines[0]?.status === "Draft queued", "a start without a live run still reads as queued");
 assert(
   implementationManagerStep({ phase: "done", interviewing: false, firmRunCount: 0 }) === "plan",
   "no agent runs means the stepper is not on what's running",

@@ -12,6 +12,7 @@ import {
   SETUP_PARTNER_INTERVIEW_TASK,
   type FirmInterviewDraft,
 } from "@/lib/firm-interview-draft";
+import { IM_SETUP_HOLD_EVENT, IM_SETUP_HOLD_TASK, parseImSetupHold } from "@/lib/im-setup-hold";
 import {
   practicePlanFromConfirmRules,
   type PracticeImplementationPlan,
@@ -188,6 +189,25 @@ type DraftQuery = Promise<{
   limit: (count: number) => DraftQuery;
 };
 
+async function fetchPendingMap(firmId: string): Promise<FirmInterviewDraft["pendingMap"]> {
+  const builder = (
+    supabase as unknown as {
+      from: (table: string) => { select: (columns: string) => DraftQuery };
+    }
+  ).from("milon_brain_rules");
+  const { data, error } = await builder
+    .select("rule_text")
+    .eq("firm_id", firmId)
+    .is("client_id", null)
+    .eq("source_event", IM_SETUP_HOLD_EVENT)
+    .eq("task_type", IM_SETUP_HOLD_TASK)
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) return null;
+  return parseImSetupHold(data?.[0]?.rule_text)?.pendingMap ?? null;
+}
+
 /** Active in-progress interview for this firm. Not a confirmed plan row. */
 export async function fetchFirmInterviewDraft(firmId: string): Promise<FirmInterviewDraft | null> {
   const builder = (
@@ -224,11 +244,13 @@ export async function fetchFirmInterviewDraft(firmId: string): Promise<FirmInter
   const past = (pastRes.error ? [] : (pastRes.data ?? []))
     .map((item) => interviewDraftFromRuleText(item.rule_text))
     .filter((item): item is FirmInterviewDraft => item != null);
+  const pendingMap = await fetchPendingMap(firmId);
   if (!draft) {
+    if (pendingMap) return { messages: [], question: "", modelTurns: 0, past, pendingMap };
     if (!past.length) return null;
     return { messages: [], question: "", modelTurns: 0, past };
   }
-  return { ...draft, savedAt: draft.savedAt ?? row?.created_at ?? null, past };
+  return { ...draft, savedAt: draft.savedAt ?? row?.created_at ?? null, past, pendingMap };
 }
 
 /** Retire the redo draft. Confirmed workflow rules stay active. */

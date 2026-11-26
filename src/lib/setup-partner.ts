@@ -394,6 +394,9 @@ export function firmInterviewShouldStop(modelTurns: number, done: boolean): bool
 /** Map after enough answers and a model that says it can map, or as soon as the person stops. */
 export const INTERVIEW_MAP_MIN_ANSWERS = 4;
 
+/** After this many answers, offer the map instead of another numeric question. */
+export const INTERVIEW_MAP_OFFER_ANSWERS = 6;
+
 export function interviewAnswerCount(messages: readonly { role: string }[]): number {
   return messages.filter((message) => message.role === "user").length;
 }
@@ -404,6 +407,7 @@ export function shouldBuildInterviewMap(input: {
   forced: boolean;
 }): boolean {
   if (input.forced) return true;
+  if (input.answers >= INTERVIEW_MAP_OFFER_ANSWERS) return true;
   return input.modelDone && input.answers >= INTERVIEW_MAP_MIN_ANSWERS;
 }
 
