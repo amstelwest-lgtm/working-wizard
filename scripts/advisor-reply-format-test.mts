@@ -26,6 +26,9 @@ assert(
 );
 assert(!parts.prose.includes("Health78"), "jammed health leaves the prose");
 assert(!parts.prose.includes("termsWhat"), "the follow-ups leave the prose");
+const camel = parseAdvisorReply("When a partner signs off by WhatsApp voice note, what happens next?");
+assert(camel.suggestions.length === 0, "a capital inside a word is not a new question");
+assert(camel.prose.includes("WhatsApp"), "the word stays whole");
 
 const spaced = parseAdvisorReply("Health: 78\n\nRevenue is on file.");
 assert(spaced.figures.length === 0, "a spaced label stays in the prose");

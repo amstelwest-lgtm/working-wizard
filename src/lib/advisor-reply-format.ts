@@ -87,11 +87,14 @@ function extractKnownFollowUps(raw: string): { text: string; suggestions: string
 
 function extractGluedQuestions(raw: string): { text: string; suggestions: string[] } {
   const suggestions: string[] = [];
-  const text = raw.replace(/([a-z])([A-Z][^?\n]{6,100}\?)/g, (_full, prev: string, question: string) => {
-    const clean = question.trim();
-    if (clean && !suggestions.includes(clean)) suggestions.push(clean);
-    return prev;
-  });
+  const text = raw.replace(
+    /([a-z])((?:What|How|Which|Can|Where|Explain)[^?\n]{0,100}\?)/g,
+    (_full, prev: string, question: string) => {
+      const clean = question.trim();
+      if (clean && !suggestions.includes(clean)) suggestions.push(clean);
+      return prev;
+    },
+  );
   return { text, suggestions };
 }
 
