@@ -350,30 +350,20 @@ function howOf(sources: AgentReplySources): AgentReplyHow | null {
 export function structureAgentReply(raw: string, sources: AgentReplySources = {}): AgentReply {
   const text = typeof raw === "string" ? raw : "";
   const parsed = parseAdvisorReply(text);
-  const card = cardText(parsed.prose);
-  const fromReply: AgentReplyFigureChip[] = parsed.figures.map((figure) => ({
-    label: figure.label,
-    value: figure.value,
-    source: "reply",
-  }));
-  const figures: AgentReplyFigureChip[] = [];
-  const seen = new Set<string>();
-  for (const chip of [...fromReply, ...figureChips({ ...sources, rawText: parsed.prose })]) {
-    const key = chip.label.toLowerCase();
-    if (!chip.label || seen.has(key) || figures.length >= CHIP_CAP) continue;
-    seen.add(key);
-    figures.push(chip);
-  }
+  const laidOut = [parsed.prose, ...parsed.figures.map((figure) => `- ${figure.label}: ${figure.value}`)]
+    .filter(Boolean)
+    .join("\n");
+  const card = cardText(laidOut);
   return {
     agent: parseAgentReplyAgent(sources.agent),
-    headline: card.headline || (figures.length ? "Here are the figures on file." : ""),
+    headline: parsed.prose ? card.headline : "",
     kpis: card.kpis,
     bullets: card.bullets,
     detail: card.detail,
     suggestions: parsed.suggestions,
     decision: decisionOf(sources),
     how: howOf(sources),
-    figures,
+    figures: figureChips({ ...sources, rawText: parsed.prose }),
   };
 }
 

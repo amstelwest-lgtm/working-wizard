@@ -35,20 +35,30 @@ assert(spaced.figures.length === 0, "a spaced label stays in the prose");
 assert(spaced.prose.includes("Health: 78"), "spaced health is kept");
 
 const card = structureAgentReply(jammed, { agent: "advisor" });
-assert(card.headline === "Here are the figures on file.", card.headline);
-assert(card.figures[0]?.label === "Health" && card.figures[0]?.value === "78", "health is a chip");
-assert(card.figures[1]?.value === "R 1 760 000", "revenue keeps its spacing");
+assert(card.figures.length === 0, "a text-only reply with numbers produces zero chips");
+assert(card.kpis.some((kpi) => kpi.label === "Health" && kpi.value === "78"), "jammed health is spaced in the layout");
 assert(card.suggestions.length === 2, "follow-ups are separate");
 assert(!card.headline.includes("Explain"), "the headline is not the follow-up");
 assert(!agentReplyPlainText(card).includes("termsWhat"), "spoken text does not glue the follow-ups");
+assert(!agentReplyPlainText(card).includes("Health78"), "spoken text does not glue health to its number");
 for (const agent of ["financial_manager", "analyst", "advisor", "tax_specialist"] as const) {
   const shared = structureAgentReply(jammed, { agent });
   assert(shared.agent === agent, `${agent} keeps its name on the shared card`);
-  assert(shared.figures.length === 3, `${agent} gets the same figure chips`);
+  assert(shared.figures.length === 0, `${agent} does not chip numbers from the reply`);
   assert(shared.suggestions.length === 2, `${agent} gets the same follow-up chips`);
 }
 const firm = structureAgentReply(jammed, {});
-assert(firm.figures.length === 3 && firm.suggestions.length === 2, "a firm reply with no agent still uses the shared split");
+assert(firm.figures.length === 0 && firm.suggestions.length === 2, "a firm reply with no agent still uses the shared split");
+const grounded = structureAgentReply(jammed, {
+  agent: "advisor",
+  figures: [{ label: "Health", value: "80", source: "health" }],
+});
+assert(grounded.figures.length === 1, "reply text does not add a second health chip");
+assert(
+  grounded.figures[0]?.value === "80" && grounded.figures[0]?.source === "health",
+  "the tool value stays when the reply repeats the label",
+);
+assert(!grounded.figures.some((chip) => chip.source === "reply"), "reply text is not a chip source");
 
 const markdown = structureAgentReply(
   "Cash is fine.\n\n**Margin** is thin.\n\n- Revenue: R 1 760 000\n\n**Next actions**\n1. Collect the oldest invoice.",
@@ -146,7 +156,8 @@ assert(buttons[1]?.textContent === "What's the industry benchmark?", buttons[1]?
 const headline = host.querySelector("[data-agent-headline]")?.textContent ?? "";
 assert(!headline.includes("Explain") && !headline.includes("termsWhat"), headline);
 assert(!headline.includes("Health78"), "the headline does not glue health to its number");
-const health = host.querySelector("[data-figure-source=reply]");
+assert(host.querySelector("[data-figure-source]") == null, "a text-only reply renders no figure chips");
+const health = host.querySelector("[data-agent-kpi=Health]");
 assert(
   health?.textContent?.includes("Health") &&
     health.textContent.includes("78") &&
