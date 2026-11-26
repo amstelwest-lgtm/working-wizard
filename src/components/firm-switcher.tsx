@@ -9,10 +9,12 @@ import { practiceChipName } from "@/lib/accountant-identity";
 export function FirmSwitcher({ className, firmId: firmIdProp }: { className?: string; firmId?: string | null }) {
   const { firmId, firms, setActiveFirm, brandLoading, profile, headerName } = useAccountantProfile();
   const activeId = firmIdProp || firmId;
-  const active = firms.find((firm) => firm.id === activeId) ?? (firms.length === 1 ? firms[0] : null);
+  // A client page passes that client's firm. Do not fall back to another firm or the profile name.
+  const active =
+    firms.find((firm) => firm.id === activeId) ?? (firmIdProp ? null : firms.length === 1 ? firms[0] : null);
   const practiceName = practiceChipName({
     firmName: active?.name,
-    profileFirmName: profile.firmName,
+    profileFirmName: firmIdProp ? "" : profile.firmName,
     personName: headerName || profile.accountantName,
   });
 

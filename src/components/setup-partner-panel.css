@@ -425,6 +425,12 @@
   padding: 5px 10px;
 }
 
+.im-status__skeleton {
+  display: inline-block;
+  width: 4.5rem;
+  height: 0.7rem;
+}
+
 .im-stepper {
   display: flex;
   flex-direction: column;

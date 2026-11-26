@@ -3,6 +3,7 @@ import { AgentSendDraftCard } from "@/components/agent-send-draft-card";
 import { OwnerDraftCard } from "@/components/owner-draft-card";
 import { draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { CLIENT_UPDATE_DRAFT_KIND, clientUpdateSendLocked } from "@/lib/client-update-draft";
+import { draftStaysOnClient } from "@/lib/im-setup-hold";
 import { isVisibleAgentFinding, type AgentFindingRow } from "@/lib/milon-team-activity";
 import type { HealthScoreSnapshot } from "@/lib/health-snapshot";
 
@@ -12,6 +13,7 @@ import type { HealthScoreSnapshot } from "@/lib/health-snapshot";
  */
 export function AgentDraftShelf({
   findings,
+  clientId = null,
   focusId,
   canonicalRatios = null,
   health = null,
@@ -19,6 +21,8 @@ export function AgentDraftShelf({
   audience = "accountant",
 }: {
   findings: readonly AgentFindingRow[];
+  /** When set, a finding for another client is dropped, including a focused draft id. */
+  clientId?: string | null;
   focusId?: string | null;
   canonicalRatios?: Record<string, number> | null;
   health?: HealthScoreSnapshot | null;
@@ -27,6 +31,7 @@ export function AgentDraftShelf({
   audience?: "owner" | "accountant";
 }) {
   const rows = findings.filter((row) => {
+    if (clientId && !draftStaysOnClient(row.client_id, clientId)) return false;
     if (!isVisibleAgentFinding(row)) return false;
     if (focusId && row.id === focusId) return true;
     if (row.kind === CLIENT_UPDATE_DRAFT_KIND && clientUpdateSendLocked(row.evidence)) return true;

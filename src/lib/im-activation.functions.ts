@@ -38,7 +38,7 @@ import {
   type IntegrationPlanRow,
 } from "@/lib/im-integration-plan";
 import {
-  draftDeepLink,
+  attachDraftToLine,
   emptyImSetupHold,
   imResetAllowed,
   imSetupHoldRuleText,
@@ -603,25 +603,56 @@ function resolveStoredPilot(
 
 async function withDraftLinks(lines: readonly ImRunningLine[]): Promise<ImRunningLine[]> {
   const runIds = [...new Set(lines.map((line) => line.runId?.trim() ?? "").filter(Boolean))];
-  if (!runIds.length) return lines.map((line) => ({ ...line, href: line.draftId ? draftDeepLink(line.clientId ?? "", line.draftId) : "" }));
+  if (!runIds.length) return lines.map((line) => attachDraftToLine(line, null, null));
   const db = admin();
   const found = (await db
     .from("agent_findings")
-    .select("id, run_id")
+    .select("id, run_id, client_id")
     .in("run_id", runIds)
     .limit(40)) as unknown as { data: Row[] | null; error: DbError };
-  const draftByRun = new Map<string, string>();
+  const runs = (await db
+    .from("agent_runs")
+    .select("id, client_id")
+    .in("id", runIds)
+    .limit(40)) as unknown as { data: Row[] | null; error: DbError };
+  const draftByRun = new Map<string, { id: string; clientId: string }>();
   if (!found.error) {
     for (const row of found.data ?? []) {
       const runId = typeof row.run_id === "string" ? row.run_id : "";
       const id = typeof row.id === "string" ? row.id : "";
-      if (runId && id && !draftByRun.has(runId)) draftByRun.set(runId, id);
+      const clientId = typeof row.client_id === "string" ? row.client_id : "";
+      if (runId && id && !draftByRun.has(runId)) draftByRun.set(runId, { id, clientId });
+    }
+  }
+  const runClient = new Map<string, string>();
+  if (!runs.error) {
+    for (const row of runs.data ?? []) {
+      const id = typeof row.id === "string" ? row.id : "";
+      const clientId = typeof row.client_id === "string" ? row.client_id : "";
+      if (id && clientId) runClient.set(id, clientId);
+    }
+  }
+  const clientIds = [...new Set([...runClient.values()])];
+  const names = new Map<string, string>();
+  if (clientIds.length) {
+    const clients = (await db.from("clients").select("id, name").in("id", clientIds).limit(40)) as unknown as {
+      data: Row[] | null;
+      error: DbError;
+    };
+    if (!clients.error) {
+      for (const row of clients.data ?? []) {
+        if (typeof row.id === "string") names.set(row.id, typeof row.name === "string" ? row.name : "");
+      }
     }
   }
   return lines.map((line) => {
-    const draftId = line.draftId?.trim() || (line.runId ? draftByRun.get(line.runId) ?? "" : "");
-    const href = draftId ? draftDeepLink(line.clientId ?? "", draftId) : "";
-    return { ...line, draftId, href };
+    const runId = line.runId?.trim() ?? "";
+    const clientId = runId ? (runClient.get(runId) ?? "") : "";
+    return attachDraftToLine(
+      line,
+      runId ? (draftByRun.get(runId) ?? null) : null,
+      clientId ? { clientId, clientName: names.get(clientId) ?? "" } : null,
+    );
   });
 }
 
@@ -645,7 +676,10 @@ export const startImIntegration = createServerFn({ method: "POST" })
     const existing = (await readSetupHold(data.firmId)) ?? emptyImSetupHold();
     const storedPilot = existing.pilot?.id ? existing.pilot : pilotFromPlanRows(existing.rows);
     if (existing.started && storedPilot) {
-      const lines = await withDraftLinks(presentRunningLines({ rows: existing.rows, lines: existing.lines, pilot: storedPilot }));
+      const lines = presentRunningLines({
+        rows: existing.rows,
+        lines: await withDraftLinks(existing.lines),
+      });
       return {
         ok: true as const,
         wrote: 0,
@@ -715,7 +749,7 @@ export const startImIntegration = createServerFn({ method: "POST" })
         draftId: "",
       });
     }
-    const lines = await withDraftLinks(presentRunningLines({ rows, lines: seeded, pilot }));
+    const lines = presentRunningLines({ rows, lines: await withDraftLinks(seeded) });
     await writeSetupHold(data.firmId, userId, {
       pendingMap: null,
       rows,
@@ -939,8 +973,7 @@ export const loadImRunningState = createServerFn({ method: "POST" })
     const pilot = hold?.pilot?.id ? hold.pilot : pilotFromPlanRows(hold?.rows ?? []);
     let lines = presentRunningLines({
       rows: hold?.rows ?? [],
-      lines: hold?.lines ?? [],
-      pilot,
+      lines: await withDraftLinks(hold?.lines ?? []),
     });
     let started = Boolean(hold?.started) || lines.length > 0;
     if (!lines.length) {
@@ -950,7 +983,6 @@ export const loadImRunningState = createServerFn({ method: "POST" })
         lines = recovered;
       }
     }
-    lines = await withDraftLinks(lines);
     const running = await loadActivationRuns(data.firmId);
     return { runCount: running.runCount, started: started || running.runCount > 0, lines };
   });

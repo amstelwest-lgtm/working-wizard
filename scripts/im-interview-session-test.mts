@@ -16,20 +16,23 @@ import {
   shouldBuildInterviewMap,
 } from "../src/lib/setup-partner.ts";
 import {
+  attachDraftToLine,
   dedupeRunningLines,
+  draftStaysOnClient,
   imResetAllowed,
   isImSampleClient,
   parseImSetupHold,
-  pilotFromPlanRows,
   planRowKey,
   presentRunningLines,
   queuedRunningLines,
 } from "../src/lib/im-setup-hold.ts";
+import { reportCardClientName } from "../src/lib/advisory-pack.ts";
 import { practiceChipName } from "../src/lib/accountant-identity.ts";
 import { tourHiddenOnPath } from "../src/components/walkthrough-wizard.tsx";
 import { approvalDraftTitles } from "../src/lib/setup-partner-plan.ts";
 import {
   PRACTICE_SETUP_INTERVIEW_MS,
+  implementationManagerStatus,
   implementationManagerStep,
 } from "../src/components/practice-setup-panel.tsx";
 import { IMPLEMENTATION_MANAGER_THINKING, PastInterviews } from "../src/components/interview-exchange.tsx";
@@ -197,6 +200,7 @@ assert(held?.rows[0]?.clientName === "Harbour Glass", "the stored plan keeps its
 assert(held?.started === true && held.lines[0]?.href === "", "a line without a draft id has no link");
 assert(held.lines[0]?.status === "Draft queued", "a start without a live run still reads as queued");
 const woodwork = "11111111-1111-1111-1111-111111111111";
+const karoo = "33333333-3333-3333-3333-333333333333";
 const draft = "22222222-2222-2222-2222-222222222222";
 const shown = presentRunningLines({
   rows: [
@@ -218,17 +222,48 @@ const shown = presentRunningLines({
   lines: [
     { id: "a", bot: "Financial Manager", status: "Draft queued", summary: "", href: "/clients/karoo", clientName: "Karoo Traders", routine: "Document chase", rowKey: planRowKey("document-collection") },
     { id: "b", bot: "Financial Manager", status: "Draft queued", summary: "", href: "/clients/karoo", clientName: "Karoo Traders", routine: "Document chase", rowKey: planRowKey("document-collection") },
-    { id: "c", bot: "Financial Manager", status: "Draft queued", summary: "", href: "", clientName: "Karoo Traders", routine: "Cash", rowKey: planRowKey("cash-flow"), draftId: draft, runId: "run-1" },
+    { id: "c", bot: "Financial Manager", status: "Draft queued", summary: "", href: "", clientName: "Karoo Traders", routine: "Cash", rowKey: planRowKey("cash-flow"), draftId: draft, runId: "run-1", clientId: karoo },
   ],
-  pilot: pilotFromPlanRows([
-    { clientName: "Woodwork", actionHref: `/clients/${woodwork}?tab=plan` },
-  ]),
 });
-assert(shown.length === 2, "running lines follow the plan rows, not duplicate runs");
-assert(shown.every((line) => line.clientName === "Woodwork"), "a mismatched snapshot shows the stored pilot");
-assert(shown[0]?.href === "", "no draft yet means no link");
-assert(shown[1]?.href.includes(`draft=${draft}`) && shown[1]?.href.includes(woodwork), "a draft id deep-links that finding");
-assert(dedupeRunningLines(shown).length === 2, "row keys stay unique");
+const woodworkLines = shown.filter((line) => line.clientId === woodwork || line.clientName === "Woodwork");
+const karooLines = shown.filter((line) => line.clientName === "Karoo Traders" || line.clientId === karoo);
+assert(woodworkLines.length === 2, "the plan rows stay on Woodwork");
+assert(karooLines.length >= 1, "an older Karoo run stays on Karoo");
+assert(woodworkLines.every((line) => !line.href.includes(draft)), "a Karoo draft is not opened on Woodwork");
+assert(karooLines.every((line) => !line.href.includes(woodwork)), "a Karoo draft is not relabelled to Woodwork");
+assert(
+  shown.some((line) => line.clientId === karoo && line.href.includes(karoo) && line.href.includes(`draft=${draft}`)),
+  "the draft link uses the run's own client",
+);
+assert(!shown.some((line) => line.clientName === "Woodwork" && line.clientId === karoo), "a run is not given another client's name");
+const relabelled = attachDraftToLine(
+  { id: "run-1", bot: "Financial Manager", status: "Draft queued", summary: "", href: "", clientName: "Woodwork", clientId: woodwork, routine: "Cash", rowKey: planRowKey("cash-flow"), draftId: draft, runId: "run-1" },
+  { id: draft, clientId: karoo },
+  { clientId: karoo, clientName: "Karoo Traders" },
+);
+assert(relabelled.clientId === karoo && relabelled.clientName === "Karoo Traders", "a stamped line is put back on the run's client");
+assert(relabelled.href.includes(karoo) && !relabelled.href.includes(woodwork), "the corrected link stays on that client");
+assert(
+  reportCardClientName({
+    pageClientId: woodwork,
+    pageClientName: "Woodwork",
+    packClientId: woodwork,
+    packClientName: "Karoo Traders",
+  }) === "Woodwork",
+  "the report card does not keep another business's baked name",
+);
+assert(
+  reportCardClientName({
+    pageClientId: woodwork,
+    pageClientName: "Woodwork",
+    packClientId: karoo,
+    packClientName: "Karoo Traders",
+  }) === "",
+  "a pack for another client is not labelled on this page",
+);
+assert(draftStaysOnClient(karoo, woodwork) === false, "a Karoo finding is not listed on Woodwork");
+assert(draftStaysOnClient(woodwork, woodwork), "a finding stays on its own client");
+assert(dedupeRunningLines(shown).length === shown.length, "different clients are not collapsed onto one row");
 assert(imResetAllowed("e8f7a440-1111-1111-1111-111111111111"), "the test firm can reset the hold");
 assert(!imResetAllowed("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), "other firms cannot reset the hold");
 assert(
@@ -239,6 +274,25 @@ assert(
   practiceChipName({ firmName: "", profileFirmName: "Theo", personName: "Theo" }) === "",
   "the person's name is not a stand-in for the firm",
 );
+assert(
+  practiceChipName({ firmName: "Theo", profileFirmName: "Ben Accountants", personName: "Theo" }) === "",
+  "a firm row that is only the person's name stays blank",
+);
+assert(
+  practiceChipName({ firmName: "", profileFirmName: "Theo", personName: "Theo Smith" }) === "",
+  "a first name is not the practice chip",
+);
+assert(
+  implementationManagerStatus({ booting: true, phase: "interview", interviewing: false, redo: false }) !== "Not started",
+  "loading the hold does not read as Not started",
+);
+assert(
+  implementationManagerStatus({ booting: true, phase: "done", interviewing: false, redo: false }) === "Saved",
+  "a stored plan stays Saved while the hold finishes loading",
+);
+assert(panel.includes('data-im-status="loading"'), "the hero uses a skeleton while the hold loads");
+assert(panel.includes("const thinkingNow = !booting && loading"), "thinking waits until the hold has loaded");
+assert(/data-im-start=""[\s\S]{0,700}data-im-reset=""/.test(panel), "reset sits with the started control");
 assert(
   implementationManagerStep({ phase: "done", interviewing: false, firmRunCount: 0 }) === "plan",
   "no agent runs means the stepper is not on what's running",

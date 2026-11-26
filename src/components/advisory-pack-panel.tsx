@@ -68,6 +68,7 @@ import {
   HIGH_EDIT_RATE,
   PACK_SCHEMA1_LAYOUT_NOTE,
   isAdvisoryPackV2,
+  reportCardClientName,
   advisoryPackSignOffGate,
   computeEditStats,
   diffPackSections,
@@ -255,11 +256,12 @@ export function AdvisoryPackPanel({
       try {
         const res = await fetchLatest({ data: { clientId, packId } });
         if (mine !== seq.current) return;
+        const onPage = res.pack && res.pack.client_id === clientId ? res.pack : null;
         setMigrated(res.migrated);
-        setPack(res.pack);
-        setReviews(res.reviews);
-        setActors(res.actors ?? {});
-        setVersions(res.versions);
+        setPack(onPage);
+        setReviews(onPage ? res.reviews : []);
+        setActors(onPage ? (res.actors ?? {}) : {});
+        setVersions(onPage ? res.versions : []);
       } catch {
         if (mine !== seq.current) return;
         setPack(null);
@@ -668,7 +670,12 @@ export function AdvisoryPackPanel({
     .filter(Boolean)
     .join(" ");
 
-  const reportClient = pack?.content.clientName?.trim() || clientName?.trim() || "";
+  const reportClient = reportCardClientName({
+    pageClientId: clientId,
+    pageClientName: clientName,
+    packClientId: pack?.client_id,
+    packClientName: pack?.content.clientName,
+  });
   const reportPeriod = fixture
     ? fixture.periodLabel
     : pack

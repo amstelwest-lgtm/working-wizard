@@ -5786,6 +5786,7 @@ function ClientView() {
                         />
                         <AgentDraftShelf
                           findings={homeActivity.findings}
+                          clientId={clientId}
                           focusId={typeof search.draft === "string" ? search.draft : null}
                           canonicalRatios={canonicalRatios}
                           health={liveScoreSnapshot}
