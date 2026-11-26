@@ -17,7 +17,11 @@ test("a request that never responds aborts", async () => {
   const port = address && typeof address === "object" ? address.port : 0;
   const started = Date.now();
   await assert.rejects(fetchWithDeadline(400)(`http://127.0.0.1:${port}/token?grant_type=password`), (error: unknown) => {
-    return error instanceof Error && error.name === "AbortError";
+    return (
+      error instanceof Error &&
+      (error.name === "TimeoutError" || error.name === "AbortError") &&
+      (error.name === "AbortError" || (error as { code?: string }).code === "timeout")
+    );
   });
   assert.ok(Date.now() - started < 2000);
   for (const socket of sockets) socket.destroy();
@@ -33,4 +37,22 @@ test("the deadline wrapper calls the injected fetch", async () => {
   const response = await fetchWithDeadline(1_000, injected)("https://example.test/auth/v1/token?grant_type=password");
   assert.equal(response.status, 200);
   assert.equal(seen, "https://example.test/auth/v1/token?grant_type=password");
+});
+
+test("a hung net.fetch that never resolves rejects at the deadline", { timeout: 2_000 }, async () => {
+  let signal: AbortSignal | undefined;
+  const hung: FetchLike = (_input, init) => {
+    signal = init?.signal ?? undefined;
+    return new Promise(() => {
+      /* Electron net.fetch can ignore AbortSignal and never settle. */
+    });
+  };
+  const started = Date.now();
+  await assert.rejects(fetchWithDeadline(80, hung)("https://example.test/auth/v1/token?grant_type=password"), (error: unknown) => {
+    return error instanceof Error && error.name === "TimeoutError" && (error as { code?: string }).code === "timeout";
+  });
+  const elapsed = Date.now() - started;
+  assert.ok(elapsed >= 60);
+  assert.ok(elapsed < 1_500);
+  assert.equal(signal?.aborted, true);
 });

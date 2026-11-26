@@ -8,6 +8,7 @@ import {
   FINANCE_FUNCTION_PURPOSE,
   MILON_ORG_MISSION_LANDING,
 } from "@/lib/milon-mission";
+import { versionedInstallerHref } from "../../desktop/src/installer-href";
 
 export { FINANCE_FUNCTION_PURPOSE, MILON_ORG_MISSION_LANDING } from "@/lib/milon-mission";
 export { PRICING_OWNER_BAR_US, PRICING_TRIAL_AFTER };
@@ -27,8 +28,8 @@ function httpsUrl(value: unknown): string {
   }
 }
 
-export const WINDOWS_PILOT_INSTALLER_URL = httpsUrl(
-  import.meta.env.VITE_WINDOWS_PILOT_INSTALLER_URL,
+export const WINDOWS_PILOT_INSTALLER_URL = versionedInstallerHref(
+  httpsUrl(import.meta.env.VITE_WINDOWS_PILOT_INSTALLER_URL),
 );
 export const WINDOWS_PILOT_DOWNLOAD_LABEL = "Download for Windows";
 export const WINDOWS_PILOT_SMARTSCREEN_NOTE =

@@ -34,26 +34,56 @@ export function desktopAuthConfigOk(url: string, anonKey: string): boolean {
   }
 }
 
-/** Plain copy for the sign-in form. Never returns the raw server text. */
-export function signInUserMessage(failure: SignInFailure | null | undefined): string {
-  const code = failure?.code ?? "";
-  const name = failure?.name ?? "";
-  const message = failure?.message ?? "";
-  if (code === "config") return MISCONFIGURED;
-  if (code === "invalid_credentials" || /invalid login credentials/i.test(message)) return WRONG_PASSWORD;
-  if (code === "email_not_confirmed") return "Confirm your email, then sign in.";
-  if (/encrypt/i.test(message)) return "This PC can't encrypt the Milōn session. The password was not saved.";
+function reachKind(failure: SignInFailure): "timeout" | "network" | "auth" {
+  const code = failure.code ?? "";
+  const name = failure.name ?? "";
+  const message = failure.message ?? "";
+  if (
+    code === "timeout" ||
+    code === "renderer_timeout" ||
+    name === "AbortError" ||
+    name === "TimeoutError" ||
+    /abort|timeout|deadline/i.test(message)
+  ) {
+    return "timeout";
+  }
   if (
     name === "AuthRetryableFetchError" ||
-    name === "AbortError" ||
-    failure?.status === 0 ||
-    (typeof failure?.status === "number" && failure.status >= 500) ||
-    /abort|timeout|network|fetch|enotfound|econn|socket/i.test(message)
+    code === "network" ||
+    code === "renderer_rejected" ||
+    failure.status === 0 ||
+    (typeof failure.status === "number" && failure.status >= 500) ||
+    /network|fetch|enotfound|econn|socket/i.test(message)
   ) {
-    return UNREACHABLE;
+    return "network";
   }
-  if (!failure) return UNREACHABLE;
-  return "Could not sign in.";
+  return "auth";
+}
+
+/** Fields off a thrown auth or fetch error. Status defaults to 0 when absent. */
+export function signInFailureFromThrown(error: unknown): SignInFailure | null {
+  if (!error || typeof error !== "object") return null;
+  const record = error as { name?: unknown; message?: unknown; status?: unknown; code?: unknown };
+  const failure: SignInFailure = {};
+  if (typeof record.name === "string") failure.name = record.name;
+  if (typeof record.message === "string") failure.message = record.message;
+  failure.status = typeof record.status === "number" ? record.status : 0;
+  if (typeof record.code === "string" || typeof record.code === "number") failure.code = String(record.code);
+  return failure;
+}
+
+/** Plain copy for the sign-in form. Never returns the raw server text. The parenthetical is timeout, network, or auth. */
+export function signInUserMessage(failure: SignInFailure | null | undefined): string {
+  const code = failure?.code ?? "";
+  const message = failure?.message ?? "";
+  if (code === "config") return MISCONFIGURED;
+  if (code === "invalid_credentials" || /invalid login credentials/i.test(message)) return `${WRONG_PASSWORD} (auth)`;
+  if (code === "email_not_confirmed") return "Confirm your email, then sign in. (auth)";
+  if (/encrypt/i.test(message)) return "This PC can't encrypt the Milōn session. The password was not saved.";
+  if (!failure) return `${UNREACHABLE} (network)`;
+  const kind = reachKind(failure);
+  if (kind === "timeout" || kind === "network") return `${UNREACHABLE} (${kind})`;
+  return "Could not sign in. (auth)";
 }
 
 function safeName(value: string): string {

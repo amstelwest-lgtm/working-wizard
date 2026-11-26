@@ -29,7 +29,8 @@ import {
   type RecoveryWatch,
 } from "./session-recover";
 import { clearSessionFile, encryptionAvailable, secureSessionStorage } from "./session-store";
-import { desktopAuthConfigOk, redactedSignInFailure, SIGN_IN_TIMEOUT_MS, signInUserMessage } from "./sign-in-error";
+import { appendDesktopLog } from "./desktop-log";
+import { desktopAuthConfigOk, redactedSignInFailure, SIGN_IN_TIMEOUT_MS, signInFailureFromThrown, signInUserMessage } from "./sign-in-error";
 import { firstPageText } from "./snippet";
 
 type Status = "queued" | "uploading" | "uploaded" | "needs answer" | "failed";
@@ -75,6 +76,16 @@ let recoveryAbort: AbortController | null = null;
 let recovering = false;
 let sessionWatch: RecoveryWatch | null = null;
 const inflight = new Set<string>();
+
+function reportSignInFailure(error: unknown): void {
+  const line = redactedSignInFailure(error);
+  console.error(line);
+  try {
+    appendDesktopLog(app.getPath("userData"), line);
+  } catch {
+    /* The sign-in banner still returns if the log file cannot be written. */
+  }
+}
 
 function logSignIn(stage: string, error?: unknown): void {
   const name = error instanceof Error ? error.name : "";
@@ -535,7 +546,7 @@ function registerIpc(): void {
       const { data, error } = await db().auth.signInWithPassword({ email: address, password });
       if (attempt !== signInAttempt) return { ok: false, message: "Sign-in was interrupted. Try again." };
       if (error || !data.session) {
-        console.error(redactedSignInFailure(error));
+        reportSignInFailure(error);
         try {
           await db().auth.signOut();
         } catch {
@@ -559,13 +570,11 @@ function registerIpc(): void {
       }, 0);
       return { ok: true, message: "" };
     } catch (error) {
-      console.error(redactedSignInFailure(error));
+      reportSignInFailure(error);
       clearSessionFile();
       email = null;
       userId = null;
-      banner = signInUserMessage(
-        error instanceof Error ? { name: error.name, message: error.message, status: 0 } : null,
-      );
+      banner = signInUserMessage(signInFailureFromThrown(error));
       publish();
       return { ok: false, message: banner };
     }

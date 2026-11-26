@@ -50,6 +50,7 @@ try {
     allowOverwrite: true,
     multipart: true,
     contentType: "application/vnd.microsoft.portable-executable",
+    cacheControlMaxAge: 300,
   });
 } catch (err) {
   const message = String(err && err.message ? err.message : err).split(token).join("[redacted]");
