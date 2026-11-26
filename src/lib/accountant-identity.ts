@@ -53,20 +53,39 @@ export function resolvePersistedAccountantIdentity(input: {
   return { firmName, accountantName };
 }
 
+/** Every stored person name. Brand contact must not hide the profile or auth name. */
+export function practicePersonNames(input: {
+  accountantName?: string | null;
+  profileFullName?: string | null;
+  authFullName?: string | null;
+}): string[] {
+  const out: string[] = [];
+  for (const value of [input.accountantName, input.profileFullName, input.authFullName]) {
+    const name = trimmed(value);
+    if (!name) continue;
+    if (out.some((item) => item.localeCompare(name, undefined, { sensitivity: "accent" }) === 0)) continue;
+    out.push(name);
+  }
+  return out;
+}
+
 /**
  * Practice chip. The firm row name wins. A profile firm name is only a
- * fallback when it is not the signed-in person's name.
+ * fallback when it is not the signed-in person's name. A firm row that is
+ * only that person's name is blank, even when brand contact is someone else.
  */
 export function practiceChipName(input: {
   firmName?: string | null;
   profileFirmName?: string | null;
   personName?: string | null;
+  personNames?: readonly (string | null | undefined)[];
 }): string {
+  const people = [input.personName, ...(input.personNames ?? [])].map(trimmed).filter(Boolean);
+  const blocked = (candidate: string) => people.some((person) => isPersonLabel(candidate, person));
   const firm = trimmed(input.firmName);
-  const person = trimmed(input.personName);
-  if (firm) return isPersonLabel(firm, person) ? "" : firm;
+  if (firm) return blocked(firm) ? "" : firm;
   const profile = trimmed(input.profileFirmName);
-  if (!profile || isPersonLabel(profile, person)) return "";
+  if (!profile || blocked(profile)) return "";
   return profile;
 }
 

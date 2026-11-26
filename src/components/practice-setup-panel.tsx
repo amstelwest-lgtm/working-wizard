@@ -1,4 +1,4 @@
-import { createElement, useEffect, useMemo, useRef, useState } from "react";
+import { createElement, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
@@ -53,7 +53,7 @@ import {
   type PracticeImplementationPlan,
 } from "@/lib/setup-partner-plan";
 import { nextMomTestQuestion } from "../../supabase/functions/setup-partner/firm-interview-prompt.ts";
-import { imResetAllowed } from "@/lib/im-setup-hold";
+import { imResetVisible } from "@/lib/im-setup-hold";
 
 /** User-facing name. Internal ids stay setup_partner. */
 export const IMPLEMENTATION_MANAGER_LABEL = "Implementation Manager";
@@ -722,6 +722,27 @@ export function PracticeSetupInterview({
     interviewing: showInterview,
     redo: redoOpen,
   });
+  const resetHold = resetSetupHold;
+  const showReset = !booting && Boolean(resetHold) && imResetVisible(firmId, status);
+  const resetIntegration = showReset ? (
+    <button
+      type="button"
+      className="setup-partner__ghost"
+      data-im-reset=""
+      onClick={() => {
+        if (!resetHold) return;
+        void resetHold(firmId).then(() => {
+          setIntegrationStarted(false);
+          setRunningLines([]);
+          setFirmRunCount(0);
+          setOpusRows(null);
+          setPlanEpoch((epoch) => epoch + 1);
+        });
+      }}
+    >
+      Reset integration
+    </button>
+  ) : null;
   const step = implementationManagerStep({
     phase,
     interviewing: showInterview,
@@ -846,7 +867,13 @@ export function PracticeSetupInterview({
         title="Implementation Manager"
         subtitle="Maps how your practice runs so Milōn can take on the work"
       />
-      <PracticeSetupHero status={status} step={step} working={thinkingNow} pending={booting} />
+      <PracticeSetupHero
+        status={status}
+        step={step}
+        working={thinkingNow}
+        pending={booting}
+        action={resetIntegration}
+      />
 
       {showInterview ? (
         <div className="im-card" data-im-interview="">
@@ -955,24 +982,6 @@ export function PracticeSetupInterview({
                 >
                   {starting ? "Starting…" : integrationStarted ? "Integration started" : "Start integration"}
                 </button>
-                {integrationStarted && resetSetupHold && imResetAllowed(firmId) ? (
-                  <button
-                    type="button"
-                    className="setup-partner__ghost"
-                    data-im-reset=""
-                    onClick={() => {
-                      void resetSetupHold(firmId).then(() => {
-                        setIntegrationStarted(false);
-                        setRunningLines([]);
-                        setFirmRunCount(0);
-                        setOpusRows(null);
-                        setPlanEpoch((epoch) => epoch + 1);
-                      });
-                    }}
-                  >
-                    Reset integration
-                  </button>
-                ) : null}
               </div>
             </div>
           ) : visibleMap && visibleMap.milonCoverage.length > 0 ? (
@@ -1128,11 +1137,14 @@ function PracticeSetupHero({
   step,
   working,
   pending = false,
+  action = null,
 }: {
   status: ImplementationManagerStatus;
   step: ImplementationManagerStep;
   working: boolean;
   pending?: boolean;
+  /** Reset sits with the status so a redo is not left on the plan table alone. */
+  action?: ReactNode;
 }) {
   const current = SETUP_STEPS.findIndex((item) => item.id === step);
   return (
@@ -1158,6 +1170,7 @@ function PracticeSetupHero({
                 {status}
               </span>
             )}
+            {pending ? null : action}
           </div>
           <p className="im-hero__role">Maps the close, the review, and the sign-off.</p>
         </div>

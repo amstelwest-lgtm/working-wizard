@@ -88,14 +88,22 @@ const { PracticeSetupInterview } = await import("../src/components/practice-setu
 
 const savedStep = classifyPracticeStep("Who signs the pack");
 
-async function mount(draft: unknown, discardRedo?: (firmId: string) => Promise<void>) {
+async function mount(
+  draft: unknown,
+  discardRedo?: (firmId: string) => Promise<void>,
+  extra?: {
+    firmId?: string;
+    resetSetupHold?: (firmId: string) => Promise<unknown>;
+    loadRunning?: (firmId: string) => Promise<{ runCount: number; started: boolean; lines: [] }>;
+  },
+) {
   const rootRoute = createRootRoute({ component: () => createElement(Outlet) });
   const homeRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/",
     component: () =>
       createElement(PracticeSetupInterview, {
-        firmId: "firm-1",
+        firmId: extra?.firmId ?? "firm-1",
         firmMarket: { country: "ZA" },
         firmsReady: true,
         loadSaved: async () => ({ steps: [savedStep] }),
@@ -108,6 +116,8 @@ async function mount(draft: unknown, discardRedo?: (firmId: string) => Promise<v
           throw new Error("no confirm");
         },
         discardRedo,
+        resetSetupHold: extra?.resetSetupHold,
+        loadRunning: extra?.loadRunning,
       }),
   });
   const router = createRouter({
@@ -242,5 +252,30 @@ const draftsBody = edge.slice(draftsAt, edge.indexOf("async function retirePrior
 assert(draftsBody.includes("approvalDraftClientId"), "confirm asks which client the draft is for");
 assert(draftsBody.includes("if (!clientId) continue"), "a draft with no client is skipped");
 assert(!draftsBody.includes(".limit(1)"), "confirm does not take the firm's first client");
+
+const benFirm = "e8f7a440-a541-422c-8e4f-82ba33dd0604";
+let cleared = false;
+const redoReset = await mount(redoDraft, undefined, {
+  firmId: benFirm,
+  resetSetupHold: async () => {
+    cleared = true;
+    return { ok: true };
+  },
+});
+await act(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 30));
+});
+assert(
+  document.querySelector("[data-im-status]")?.textContent?.trim() === "Redo in progress",
+  "a redo still says Redo in progress",
+);
+const reset = button("Reset integration");
+assert(reset?.tagName === "BUTTON", "reset is on the redo, not only beside a started plan");
+await act(async () => {
+  (reset as { click?: () => void } | undefined)?.click?.();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+assert(cleared, "reset clears the hold and nothing else");
+await redoReset.unmount();
 
 console.log("im-redo-reload ok");
