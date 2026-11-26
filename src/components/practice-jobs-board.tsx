@@ -10,6 +10,8 @@ import type { AgentKey } from "@/lib/milon-team-feed";
 import { agentShortName } from "@/lib/milon-team";
 import { JOB_META, LIVE_JOB_KEYS, type JobKey, type JobsBoardCount } from "@/lib/milon-jobs";
 import { clientNavSearch } from "@/lib/client-route-search";
+import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
+import "@/components/owner-door/owner-door.css";
 import { TAX_AGENT, stageAgentShortName, type StageAgentKey } from "@/lib/tax-specialist/agents";
 
 export type JobsBoardAgentRow = {
@@ -61,8 +63,22 @@ function JobCard({
         >
           {meta.label}
         </h2>
-        <span className="text-[12px] text-[var(--milon-ink-faint)]">
-          {agents.map(agentName).join(" · ")}
+        <span className="flex items-center gap-1.5" data-job-faces={job}>
+          <span className="flex -space-x-2">
+            {agents.map((agent) => (
+              <OwnerAvatar
+                key={agent}
+                agent={agent}
+                variant="character"
+                motion="idle"
+                size="sm"
+                label={agentName(agent)}
+              />
+            ))}
+          </span>
+          <span className="text-[12px] text-[var(--milon-ink-faint)]">
+            {agents.map(agentName).join(" · ")}
+          </span>
         </span>
       </header>
       <div className="flex items-end gap-3">
@@ -189,13 +205,26 @@ export function PracticeJobsBoard({
               className="flex flex-wrap items-center justify-between gap-2 py-2.5"
               data-agent-row={row.agent}
             >
-              <div className="flex min-w-0 flex-col">
-                <span className="text-[14px] font-semibold text-[var(--milon-ink)]">
-                  {agentName(row.agent)}
-                </span>
-                <span className="text-[13px] text-[var(--milon-ink-muted)]">
-                  {row.finding || JOB_META[jobsFor(row.agent)].outcome}
-                </span>
+              <div className="flex min-w-0 items-center gap-3">
+                <OwnerAvatar
+                  agent={row.agent}
+                  variant="character"
+                  motion={
+                    row.status?.tone === "attention" || row.status?.tone === "critical"
+                      ? "found"
+                      : "idle"
+                  }
+                  size="sm"
+                  label={agentName(row.agent)}
+                />
+                <div className="flex min-w-0 flex-col">
+                  <span className="text-[14px] font-semibold text-[var(--milon-ink)]">
+                    {agentName(row.agent)}
+                  </span>
+                  <span className="text-[13px] text-[var(--milon-ink-muted)]">
+                    {row.finding || JOB_META[jobsFor(row.agent)].outcome}
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 {row.status ? (
