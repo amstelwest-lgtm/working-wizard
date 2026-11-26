@@ -23,14 +23,19 @@ test("sign-in failures stay plain", () => {
   );
   assert.equal(
     signInUserMessage({ name: "AuthRetryableFetchError", message: "Failed to fetch", status: 0 }),
-    "Can't reach Milōn. Check your connection and try again. (network)",
+    "Can't reach Milōn. Check your connection and try again. (AuthRetryableFetchError: Failed to fetch)",
+  );
+  assert.equal(
+    signInUserMessage({ name: "TypeError", message: "Failed to fetch" }),
+    "Can't reach Milōn. Check your connection and try again. (TypeError: Failed to fetch)",
   );
   assert.equal(
     signInUserMessage({ name: "TimeoutError", message: "timeout", code: "timeout", status: 0 }),
     "Can't reach Milōn. Check your connection and try again. (timeout)",
   );
   assert.equal(signInUserMessage({ code: "config" }), "This app is missing its Milōn sign-in configuration.");
-  assert.equal(signInUserMessage({ message: "database schema is private", status: 400 }), "Could not sign in. (auth)");
+  assert.equal(signInUserMessage({ message: "database schema is private", status: 400 }), "Could not sign in. (HTTP 400)");
+  assert.equal(signInUserMessage({ name: "AuthApiError", status: 500, message: "upstream failed" }), "Can't reach Milōn. Check your connection and try again. (HTTP 500)");
   assert.equal(
     signInUserMessage({ message: "This PC can't encrypt the Milōn session." }),
     "This PC can't encrypt the Milōn session. The password was not saved.",
@@ -47,28 +52,32 @@ test("the renderer waits longer than session recovery plus the fetch deadline", 
   assert.ok(rendererMs > SESSION_RECOVER_MS + SIGN_IN_TIMEOUT_MS);
   assert.match(renderer, /Check your connection and try again\. \(timeout\)/);
   assert.match(renderer, /Check your connection and try again\. \(network\)/);
+  assert.match(renderer, /reportSignInFailure/);
 });
 
-test("a failed sign-in logs only the error name and code", () => {
+test("a failed sign-in logs the host, name, code, and a redacted message", () => {
   const error = Object.assign(
     new Error("ada@example.com hunter2 https://jxclnsbsqpixxqlbcapl.supabase.co/auth/v1/token?apikey=secret eyJhbGciOi.payload.sig"),
-    { name: "AuthApiError", code: "invalid_credentials" },
+    { name: "AuthApiError", code: "invalid_credentials", status: 400 },
   );
-  const line = redactedSignInFailure(error);
-  assert.equal(line, "[milon-desktop] sign-in name=AuthApiError code=invalid_credentials");
+  const line = redactedSignInFailure(error, "jxclnsbsqpixxqlbcapl.supabase.co");
+  assert.equal(
+    line,
+    "[milon-desktop] sign-in host=jxclnsbsqpixxqlbcapl.supabase.co name=AuthApiError code=invalid_credentials status=400 message=",
+  );
   assert.equal(line.includes("ada@example.com"), false);
   assert.equal(line.includes("hunter2"), false);
-  assert.equal(line.includes("supabase.co"), false);
   assert.equal(line.includes("apikey"), false);
   assert.equal(line.includes("eyJ"), false);
+  assert.equal(line.includes("/auth/"), false);
   const leaked = redactedSignInFailure(
     Object.assign(new Error("https://example.supabase.co/?apikey=secret"), {
       name: "https://example.supabase.co/?apikey=secret",
       code: "https://example.supabase.co/?apikey=secret",
     }),
+    "not a host",
   );
-  assert.equal(leaked, "[milon-desktop] sign-in name=Error code=");
-  assert.equal(leaked.includes("supabase"), false);
+  assert.equal(leaked, "[milon-desktop] sign-in host= name=Error code= status= message=");
   assert.equal(leaked.includes("apikey"), false);
   assert.equal(leaked.includes("secret"), false);
 });

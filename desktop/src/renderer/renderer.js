@@ -53,6 +53,20 @@ function wordmark() {
   return logo;
 }
 
+function failureFields(error) {
+  const record = error && typeof error === "object" ? error : {};
+  return {
+    name: typeof record.name === "string" ? record.name : "Error",
+    message: typeof error === "string" ? error : typeof record.message === "string" ? record.message : "",
+    code: typeof record.code === "string" || typeof record.code === "number" ? String(record.code) : "",
+    status: typeof record.status === "number" ? record.status : undefined,
+  };
+}
+
+function reportFailure(fields) {
+  return milon.reportSignInFailure(fields).catch(() => null);
+}
+
 function signInOrTimeout(email, password) {
   return new Promise((resolve) => {
     let settled = false;
@@ -60,7 +74,11 @@ function signInOrTimeout(email, password) {
       if (settled) return;
       settled = true;
       console.error("[milon-desktop] sign-in name=TimeoutError code=renderer_timeout");
-      resolve({ ok: false, message: "Can't reach Milōn. Check your connection and try again. (timeout)" });
+      reportFailure({ name: "TimeoutError", code: "renderer_timeout", message: "timeout" }).then((reported) => {
+        resolve(reported && reported.message
+          ? reported
+          : { ok: false, message: "Can't reach Milōn. Check your connection and try again. (timeout)" });
+      });
     }, RENDERER_TIMEOUT_MS);
     milon.signIn(email, password).then(
       (result) => {
@@ -72,12 +90,18 @@ function signInOrTimeout(email, password) {
         clearTimeout(timer);
         resolve(result);
       },
-      () => {
+      (error) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        console.error("[milon-desktop] sign-in name=Error code=renderer_rejected");
-        resolve({ ok: false, message: "Can't reach Milōn. Check your connection and try again. (network)" });
+        const fields = failureFields(error);
+        if (!fields.code) fields.code = "renderer_rejected";
+        console.error(`[milon-desktop] sign-in name=${fields.name} code=${fields.code}`);
+        reportFailure(fields).then((reported) => {
+          resolve(reported && reported.message
+            ? reported
+            : { ok: false, message: "Can't reach Milōn. Check your connection and try again. (network)" });
+        });
       },
     );
   });
