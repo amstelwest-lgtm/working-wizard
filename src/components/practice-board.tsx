@@ -165,16 +165,20 @@ import { PracticeRail } from "@/components/practice-rail";
 import { AgentWork } from "@/components/milon-team/agent-work";
 import { practiceAgentWork } from "@/lib/agent-work";
 import { useOverlayHistory } from "@/lib/overlay-history";
-import { OwnerHome } from "@/components/owner-door/owner-home";
-import { MILON_HOME_LEDE } from "@/lib/milon-mission";
+import { PracticeJobsBoard, type JobsBoardAgentRow } from "@/components/practice-jobs-board";
+import { FirstRunStrip } from "@/components/first-run-strip";
+import { firstRunStep, jobsBoardCounts, type JobsBoardClient } from "@/lib/milon-jobs";
+import { imTaxDeadlineApproaching } from "@/lib/im-routine-tax-deadlines";
+import { fetchFirmSetupPlan } from "@/lib/setup-partner-client";
+import { AGENT_ORDER } from "@/lib/milon-team";
+import { TAX_AGENT, type StageAgentKey } from "@/lib/tax-specialist/agents";
 import {
+  clientReportsReadyCount,
   firmReportsHomeClient,
   firmReportsHomeLine,
   firmReportsReadyTotal,
 } from "@/lib/reports-drafter-copy";
 import { practiceCardStatuses, practiceHomeLines } from "@/lib/owner-answers";
-import { ownerPresence } from "@/lib/owner-presence";
-import { emptyAgentActivity } from "@/lib/milon-team-activity";
 import { askAgentFromHash, askHashForAgent } from "@/lib/ask-agent";
 import { isTaxAgent, parseStageAgent } from "@/lib/tax-specialist/agents";
 import {
@@ -187,7 +191,6 @@ import { collapseDuplicateClientShells, loadClientDisplayNames } from "@/lib/cli
 import { ChaseDraftDialog } from "@/components/chase-draft-dialog";
 import type { ChaseDraftInput } from "@/lib/chase-draft";
 import { KpiTrendline } from "@/components/kpi-trendline";
-import { PracticeSetupCard } from "@/components/practice-setup-card";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -2097,6 +2100,65 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     [clientRows],
   );
 
+  // ── Jobs board ────────────────────────────────────────────────────────────
+  const jobCounts = useMemo(() => {
+    const now = new Date();
+    const rows: JobsBoardClient[] = clientRows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      openQueries: row.openQueries,
+      chaseActions: row.chaseActions,
+      openActions: row.openActions,
+      overdueActions: row.overdueActions,
+      taxEnabled: clientTaxMarketEnabled(row.market),
+      taxDeadlineNear: imTaxDeadlineApproaching(now, row.operating_profile),
+      reportsReady: clientReportsReadyCount(row.financials),
+      hasFigures: row.financials != null && Object.keys(row.financials).length > 0,
+    }));
+    return jobsBoardCounts(rows);
+  }, [clientRows]);
+  const jobAgentRows = useMemo<JobsBoardAgentRow[]>(() => {
+    const agents: StageAgentKey[] = [...AGENT_ORDER];
+    if (firmCountry === "ZA") agents.push(TAX_AGENT);
+    return agents.map((agent) => {
+      const card = isTaxAgent(agent) ? null : practiceStatus[agent];
+      return {
+        agent,
+        status: card ? { label: card.word, tone: card.tone } : null,
+        finding: isTaxAgent(agent)
+          ? ""
+          : (practiceLines[agent] ?? []).filter((line) => line.trim()).join(" "),
+      };
+    });
+  }, [firmCountry, practiceStatus, practiceLines]);
+  const [interviewDone, setInterviewDone] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!firmId) return;
+    let cancel = false;
+    void fetchFirmSetupPlan(firmId)
+      .then((plan) => {
+        if (!cancel) setInterviewDone(Boolean(plan && plan.steps.length > 0));
+      })
+      .catch(() => {
+        if (!cancel) setInterviewDone(false);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [firmId]);
+  const clientsWithFigures = useMemo(
+    () => clientRows.filter((row) => row.financials != null && Object.keys(row.financials).length > 0),
+    [clientRows],
+  );
+  const pilotClientId = clientsWithFigures[0]?.id ?? clientRows[0]?.id ?? null;
+  const firstRun = firstRunStep({
+    // Unknown reads as done so the strip never flashes for a settled firm.
+    interviewDone: interviewDone ?? true,
+    clientsWithFigures: clientsWithFigures.length,
+    finishedRuns: 0,
+    approvedDrafts: clientRows.reduce((s, row) => s + (row.reports_issued_count ?? 0), 0),
+  });
+
   const scatterClients = useMemo(
     () =>
       scoredRows
@@ -2281,29 +2343,20 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               <DashboardSkeleton className="py-8" />
             ) : (
             <>
-            <OwnerHome
-              title="Your whole finance team"
-              lede={MILON_HOME_LEDE}
-              firmId={firmId}
-              showInvite={false}
-              variant="character"
-              audience="accountant"
-              marketCountry={parseMarketSelection(firmMarket)?.country ?? null}
-              sampleClient={false}
-              cardPhase="ready"
-              presence={ownerPresence(emptyAgentActivity())}
-              lines={practiceLines}
-              status={practiceStatus}
-              onOpen={(agent) => {
-                void navigate({ to: "/dashboard", hash: askHashForAgent(agent) });
-              }}
+            <FirstRunStrip
+              step={firstRun}
+              pilotClientId={pilotClientId}
+              runningLine={null}
+            />
+            <PracticeJobsBoard
+              counts={jobCounts}
+              loading={bookLoading}
+              showTax={firmCountry === "ZA"}
+              agentRows={jobAgentRows}
+              signOffCount={countsReady ? attentionBook.items.length : null}
               onAsk={(agent) => {
                 void navigate({ to: "/dashboard", hash: askHashForAgent(agent) });
               }}
-              onOpenTaxAgent={() => {
-                void navigate({ to: "/dashboard", hash: askHashForAgent("tax_specialist") });
-              }}
-              extraCard={<PracticeSetupCard embedded exampleClientId={clientRows[0]?.id ?? null} />}
             />
             {firmReportsLine && firmReportsClientId ? (
               <Link
