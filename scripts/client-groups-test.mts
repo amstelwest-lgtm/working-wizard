@@ -11,10 +11,12 @@ import {
   backfillSharesAGroup,
   billableCompanyCount,
   canAccessCompany,
+  companiesInGroupLabel,
   companyCountBanner,
   connectionHealth,
   countsTowardCompanySlot,
   groupChromeVisible,
+  indexGroupCompanies,
   membershipsAfterMove,
 } from "../src/lib/client-groups.ts";
 
@@ -194,6 +196,87 @@ test("company groups use the shared rail kicker on the navy rail", () => {
   const shine = readFileSync(new URL("../src/styles/premium-shine.css", import.meta.url), "utf8");
   assert.match(chrome, /className="rail-kicker">Groups/);
   assert.match(shine, /\.deliverable-rail \.rail-kicker[\s\S]*--pp-frame-dim/);
+});
+
+test("companies in group counts multi-company groups and dashes a standalone client", () => {
+  assert.equal(companiesInGroupLabel(3), "3 companies");
+  assert.equal(companiesInGroupLabel(2), "2 companies");
+  assert.equal(companiesInGroupLabel(1), "—");
+  assert.equal(companiesInGroupLabel(0), "—");
+  const indexed = indexGroupCompanies([
+    {
+      id: "harbour",
+      companies: [
+        { id: "a", name: "Harbour Glass" },
+        { id: "b", name: "North Quay" },
+        { id: "c", name: "Harbour Yard" },
+      ],
+    },
+  ]);
+  assert.equal(indexed.size, 3);
+  assert.equal(indexed.get("b")?.companies.length, 3);
+  assert.equal(indexed.get("solo"), undefined);
+  assert.equal(groupChromeVisible(1), false);
+  assert.equal(groupChromeVisible(3), true);
+});
+
+test("the practice rail no longer mounts the Groups section", () => {
+  const rail = readFileSync(
+    new URL("../src/components/practice-rail.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.equal(rail.includes("CompanyGroupRail"), false);
+  assert.equal(rail.includes("client-group-chrome"), false);
+  assert.equal(rail.includes(">Groups<"), false);
+});
+
+test("the client rail shows a Group tab only for a multi-company group", () => {
+  const studio = readFileSync(
+    new URL("../src/components/client-studio-chrome.tsx", import.meta.url),
+    "utf8",
+  );
+  const chrome = readFileSync(
+    new URL("../src/components/client-group-chrome.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(studio, /<ClientGroupTab clientId=\{clientId\} \/>/);
+  assert.equal(studio.includes("CompanyGroupRail"), false);
+  assert.match(chrome, /data-client-group-tab=""/);
+  assert.match(chrome, /<span className="nav-text">Group<\/span>/);
+  assert.match(chrome, /if \(!next \|\| !groupChromeVisible\(next\.companies\.length\)\)/);
+  assert.match(chrome, /if \(!group\) return null/);
+  assert.match(chrome, /to="\/clients\/\$clientId"/);
+  assert.match(chrome, />\s*Status\s*</);
+  assert.match(chrome, /GroupStatusDialog/);
+});
+
+test("the all-clients table adds an expandable Companies in group column", () => {
+  const board = readFileSync(
+    new URL("../src/components/practice-board.tsx", import.meta.url),
+    "utf8",
+  );
+  const chrome = readFileSync(
+    new URL("../src/components/client-group-chrome.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(board, /<th>Companies in group<\/th>/);
+  assert.match(board, /loadRailGroups\(ids\)/);
+  assert.match(board, /indexGroupCompanies\(groups\)/);
+  assert.match(board, /<CompaniesInGroupCell/);
+  assert.match(chrome, /data-companies-in-group="standalone"/);
+  assert.match(chrome, /data-companies-in-group=\{open \? "open" : "closed"\}/);
+  assert.match(chrome, /aria-expanded=\{open\}/);
+  assert.match(chrome, /companiesInGroupLabel\(companies\.length\)/);
+});
+
+test("the windows download label drops the pilot suffix and keeps the same link", () => {
+  const copy = readFileSync(new URL("../src/lib/landing-copy.ts", import.meta.url), "utf8");
+  const landing = readFileSync(new URL("../src/routes/index.tsx", import.meta.url), "utf8");
+  assert.match(copy, /WINDOWS_PILOT_DOWNLOAD_LABEL = "Download for Windows"/);
+  assert.equal(copy.includes("Download for Windows (pilot)"), false);
+  assert.match(landing, /\{WINDOWS_PILOT_DOWNLOAD_LABEL\}/);
+  assert.match(landing, /href=\{WINDOWS_PILOT_INSTALLER_URL\}/);
+  assert.match(landing, /className="btn btn-cobalt pilot-download"/);
 });
 
 test("group status panel wires combined figures preview for multi-company groups", () => {

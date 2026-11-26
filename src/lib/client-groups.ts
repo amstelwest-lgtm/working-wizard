@@ -98,6 +98,25 @@ export function groupChromeVisible(companyCount: number): boolean {
   return companyCount > 1;
 }
 
+/** All-clients cell. A group of one is a standalone client. */
+export function companiesInGroupLabel(count: number): string {
+  if (!Number.isFinite(count) || count <= 1) return "—";
+  return `${Math.trunc(count)} companies`;
+}
+
+/** Client id → that group's companies. Callers pass multi-company groups only. */
+export function indexGroupCompanies<T extends { id: string }>(
+  groups: readonly { id: string; companies: readonly T[] }[],
+): Map<string, { groupId: string; companies: readonly T[] }> {
+  const next = new Map<string, { groupId: string; companies: readonly T[] }>();
+  for (const group of groups) {
+    for (const company of group.companies) {
+      next.set(company.id, { groupId: group.id, companies: group.companies });
+    }
+  }
+  return next;
+}
+
 /**
  * One new group id per existing client. Callers persist the ids; the helper
  * only proves the backfill shape: every client is grouped, and none share.

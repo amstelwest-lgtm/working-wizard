@@ -44,6 +44,12 @@ function firstRunBook(): boolean {
   return /(?:^|[?&])firstRun=1(?:&|$)/.test(location.search);
 }
 
+/** Screenshot fixture. Default harness clients stay ungrouped. */
+function groupShot(): boolean {
+  if (typeof location === "undefined") return false;
+  return /(?:^|[?&])groupShot=1(?:&|$)/.test(location.search);
+}
+
 /** Hold the profile read so the header's loading paint is visible in screenshots. */
 function headerPaintDelay(): boolean {
   if (typeof location === "undefined") return false;
@@ -402,6 +408,9 @@ function clientRow() {
   return CLIENT_ROW;
 }
 
+const HARNESS_GROUP_ID = "33333333-3333-4333-8333-333333333333";
+const SOLO_GROUP_ID = "44444444-4444-4444-8444-444444444444";
+
 const SECOND_CLIENT = {
   ...CLIENT_ROW,
   id: "harness-client-north",
@@ -554,8 +563,36 @@ function materialize(table: string, mode: Mode): { data: unknown; error: null } 
     const roles = [{ user_id: HARNESS_USER.id, role: "firm_admin" }];
     return { data: mode === "list" ? roles : roles[0], error: null };
   }
+  if (groupShot() && table === "client_groups") {
+    const rows = [
+      { id: HARNESS_GROUP_ID, name: "Harbour group" },
+      { id: SOLO_GROUP_ID, name: "Solo Books" },
+    ];
+    return { data: mode === "list" ? rows : rows[0], error: null };
+  }
   if (table === "clients" && mode === "list" && onPracticeRoute()) {
     if (firstRunBook()) return { data: [], error: null };
+    if (groupShot()) {
+      return {
+        data: [
+          { ...clientRow(), group_id: HARNESS_GROUP_ID },
+          { ...SECOND_CLIENT, group_id: HARNESS_GROUP_ID },
+          {
+            ...CLIENT_ROW,
+            id: "harness-client-yard",
+            name: "Harbour Yard",
+            group_id: HARNESS_GROUP_ID,
+          },
+          {
+            ...CLIENT_ROW,
+            id: "harness-client-solo",
+            name: "Solo Books",
+            group_id: SOLO_GROUP_ID,
+          },
+        ],
+        error: null,
+      };
+    }
     return { data: [clientRow(), SECOND_CLIENT], error: null };
   }
   const row = table === "clients" ? clientRow() : TABLES[table];
