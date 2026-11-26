@@ -2,6 +2,8 @@
  * Ordered next steps at the end of the Implementation Manager interview.
  * Progress is a list of step ids. No network and no storage.
  */
+import { composerPromptText } from "./composer-prompt.ts";
+import { planClientName } from "./im-plan-actions.ts";
 
 export type ImNextStepKind = "link" | "start";
 
@@ -11,12 +13,17 @@ export type ImNextStep = {
   button: string;
   kind: ImNextStepKind;
   href: string | null;
+  /** A second link that opens an agent composer. It does not send. */
+  promptHref?: string | null;
+  promptButton?: string | null;
 };
 
 export type ImNextStepRow = {
   playId: string;
   section: "lead" | "already_covered";
   actionHref: string;
+  actionPrompt?: string;
+  clientName?: string;
 };
 
 const STEP_ORDER = [
@@ -32,6 +39,8 @@ const STEP_ORDER = [
 ] as const;
 
 const CLIENT_ID = /\/clients\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
+const BARE_CLIENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CHAT_AGENTS = new Set(["financial_manager", "analyst", "advisor", "tax_specialist"]);
 
 function clientIdFrom(href: string): string {
   return CLIENT_ID.exec(href)?.[1] ?? "";
@@ -39,6 +48,30 @@ function clientIdFrom(href: string): string {
 
 function clientPath(id: string, search: string): string {
   return id ? `/clients/${id}?${search}` : "/clients";
+}
+
+/** Home chat for one agent. A prompt is percent-encoded and is not sent. */
+export function agentHref(clientId: string, agent: string, prompt?: string | null): string {
+  if (!BARE_CLIENT_ID.test(clientId) || !CHAT_AGENTS.has(agent)) return "/clients";
+  const text = composerPromptText(prompt ?? "");
+  const base = `/clients/${clientId}?tab=home&agent=${agent}`;
+  return text ? `${base}&prompt=${encodeURIComponent(text)}` : base;
+}
+
+function firstClientId(rows: readonly ImNextStepRow[]): string {
+  for (const row of rows) {
+    const id = clientIdFrom(row.actionHref);
+    if (id) return id;
+  }
+  return "";
+}
+
+function firstClientName(rows: readonly ImNextStepRow[]): string {
+  for (const row of rows) {
+    const name = row.clientName?.trim();
+    if (name) return planClientName(name);
+  }
+  return "";
 }
 
 /** First step that is not marked done. Null when every step is done. */
@@ -76,13 +109,16 @@ export function buildImNextSteps(input: {
   sendAgentAllowed: boolean;
 }): ImNextStep[] {
   const lead = new Map(
-    input.rows.filter((row) => row.section === "lead" && row.playId).map((row) => [row.playId, row]),
+    input.rows
+      .filter((row) => row.section === "lead" && row.playId)
+      .map((row) => [row.playId, row]),
   );
   const steps: ImNextStep[] = [];
   for (const id of STEP_ORDER) {
     const row = lead.get(id);
     if (!row) continue;
     const clientId = clientIdFrom(row.actionHref);
+    const prompt = row.actionPrompt?.trim() ?? "";
     if (id === "monthly-client-update" && !input.integrationStarted) {
       steps.push({
         id,
@@ -94,12 +130,15 @@ export function buildImNextSteps(input: {
       continue;
     }
     if (id === "monthly-client-update") {
+      const ask = clientId && prompt ? agentHref(clientId, "advisor", prompt) : "";
       steps.push({
         id,
         title: "Set the month-end client update",
         button: "Set the month-end client update",
         kind: "link",
         href: clientPath(clientId, "tab=portal&section=routines"),
+        promptHref: ask.startsWith("/clients/") ? ask : null,
+        promptButton: ask.startsWith("/clients/") ? "Ask the Advisor" : null,
       });
       continue;
     }
@@ -109,7 +148,7 @@ export function buildImNextSteps(input: {
         title: "Ask the Financial Manager to draft a document request",
         button: "Ask the Financial Manager",
         kind: "link",
-        href: clientPath(clientId, "tab=home&agent=financial_manager"),
+        href: clientId ? agentHref(clientId, "financial_manager", prompt) : "/clients",
       });
       continue;
     }
@@ -145,7 +184,35 @@ export function buildImNextSteps(input: {
                   : id === "action-plan"
                     ? "Open the action plan"
                     : "Open the tax drafts";
-    steps.push({ id, title, button: title, kind: "link", href });
+    const docAsk =
+      id === "document-collection" && clientId && prompt
+        ? agentHref(clientId, "financial_manager", prompt)
+        : "";
+    steps.push({
+      id,
+      title,
+      button: title,
+      kind: "link",
+      href,
+      promptHref: docAsk.startsWith("/clients/") ? docAsk : null,
+      promptButton: docAsk.startsWith("/clients/") ? "Ask the Financial Manager" : null,
+    });
   }
+  const clientId = firstClientId(input.rows);
+  const who = firstClientName(input.rows) || "this client";
+  steps.push({
+    id: "connect-books",
+    title: `Connect ${who}'s books`,
+    button: `Connect ${who}'s books`,
+    kind: "link",
+    href: clientPath(clientId, "tab=portal&section=connections"),
+  });
+  steps.push({
+    id: "needs-attention",
+    title: "Check Needs attention",
+    button: "Check Needs attention",
+    kind: "link",
+    href: "/practice/needs-attention",
+  });
   return steps;
 }

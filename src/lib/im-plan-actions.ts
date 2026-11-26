@@ -11,6 +11,7 @@ export type PlanActionCopy = {
   actionHref: string;
   actionPrompt: string;
   actionApprove: string;
+  clientName: string;
 };
 
 const CLIENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -115,6 +116,7 @@ export function planActionFor(playId: string, client?: PlanClient | null): PlanA
       actionHref: "/clients",
       actionPrompt: "",
       actionApprove: "You approve each draft before it is sent. Nothing is posted or filed.",
+      clientName: "",
     };
   }
   if (!id) {
@@ -123,6 +125,7 @@ export function planActionFor(playId: string, client?: PlanClient | null): PlanA
       actionHref: "/clients",
       actionPrompt: "",
       actionApprove: seed.approve,
+      clientName: "",
     };
   }
   const name = planClientName(client?.name ?? "");
@@ -131,6 +134,7 @@ export function planActionFor(playId: string, client?: PlanClient | null): PlanA
     actionHref: seed.path(id),
     actionPrompt: seed.prompt(name),
     actionApprove: seed.approve,
+    clientName: name,
   };
 }
 

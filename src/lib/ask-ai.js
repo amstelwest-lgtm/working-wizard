@@ -68,6 +68,7 @@ import {
 } from "./trial-ended-billing.ts";
 import { startBrowserSpeech, VOICE_MISSED, VOICE_UNAVAILABLE } from "./browser-speech.ts";
 import { figureDecisionError, figureProposalCardCopy, figureProposalTurn } from "./figure-proposal.ts";
+import { composerPromptText } from "./composer-prompt.ts";
 
 export {
   routeMilonIntent,
@@ -244,6 +245,8 @@ export function mountAskAi(container, options) {
     // Accountant studio: open the deliverable this answer is about, with coach intent.
     onOpenDeliverable = null,
     onPersistedCreate = null,
+    // Plain text for the box. The accountant sends it.
+    initialQuestion = "",
   } = options || {};
   const studio = variant === "studio";
   const accountant = audience === "accountant";
@@ -267,7 +270,8 @@ export function mountAskAi(container, options) {
   let open = studio;
   let loading = false;
   let pendingIntent = null;
-  let question = "";
+  // A link can prefill the box. This does not send.
+  let question = composerPromptText(initialQuestion);
   let answer = "";
   let precardCap = null;
   let precardRemaining = null;

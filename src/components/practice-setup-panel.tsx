@@ -909,6 +909,8 @@ export function PracticeSetupInterview({
               playId: row.playId,
               section: row.section,
               actionHref: row.actionHref,
+              actionPrompt: row.actionPrompt,
+              clientName: row.clientName,
             }))}
             integrationStarted={integrationStarted || firmRunCount > 0}
             sendAgentAllowed={sendAgentFirmAllowed(firmId)}
