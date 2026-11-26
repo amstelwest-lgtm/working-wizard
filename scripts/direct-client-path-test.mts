@@ -265,17 +265,14 @@ function facts(over: Partial<NextStepFacts>): NextStepFacts {
   assert(app.includes("setAdvisoryBump((n) => n + 1)"), "panel writes refresh the Next Step card");
 
   const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
-  const sPanel = studio.indexOf("<RecommendationsPanel");
   const draftsAt = studio.indexOf('id="reports-drafts"');
   const pdfsAt = studio.indexOf('id="reports-pdfs"');
+  const draftsPane = studio.slice(draftsAt, pdfsAt);
   assert(
-    sPanel > draftsAt && sPanel < pdfsAt,
-    "studio mounts recommendations in Reports drafts",
+    !draftsPane.includes("<RecommendationsPanel"),
+    "the Management Report page no longer mounts recommendations",
   );
-  assert(
-    /audience="accountant"\s+canPropose=\{hasFigures\}/.test(studio),
-    "studio panel uses accountant audience",
-  );
+  assert(panel.includes("useServerFn(decideRecommendation)"), "the recommendations panel still decides via server fn");
 
   const fns = readFileSync(resolve("src/lib/recommendations.functions.ts"), "utf8");
   assert(fns.includes("createActionWithoutRpc"), "pre-migration fallback exists");

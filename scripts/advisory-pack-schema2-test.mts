@@ -4,9 +4,6 @@
  * Run: pnpm test:advisory-pack-schema2
  */
 import { readFileSync } from "node:fs";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { ManagementReportView } from "../src/components/management-report-view";
 import { assessClientMetrics } from "../src/lib/client-metrics";
 import { scorecardHealthFromFinancials } from "../src/lib/health-score";
 import { buildBridgeSteps } from "../src/lib/profit-bridge-steps";
@@ -351,7 +348,9 @@ checkClient("Harbour & Co", HARBOUR);
   assert(gather.includes("packBooksForGeneration"), "Drafts generate builds books from the client");
   assert(gather.includes("...(books ? { books } : {})"), "Drafts generate passes books into the pack");
   const panel = readFileSync("src/components/advisory-pack-panel.tsx", "utf8");
-  assert(panel.includes("<ManagementReportView"), "the pack page shows the Management Report");
+  assert(!panel.includes("ManagementReportView"), "the pack page does not render the HTML report");
+  assert(panel.includes("<ManagementReportPdfCard"), "the pack page shows the PDF card");
+  assert(panel.includes("renderAdvisoryPackPdfBlob"), "preview reuses the pack generator");
   assert(panel.includes("PACK_SCHEMA1_LAYOUT_NOTE"), "a schema 1 pack says to generate the new layout");
   assert(panel.includes("onExport={modern ?"), "export is the schema 2 Management Report, not the old PDF");
   const route = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
@@ -360,15 +359,11 @@ checkClient("Harbour & Co", HARBOUR);
     drafts.indexOf("<AdvisoryPackPanel") < drafts.indexOf("<AgentDraftShelf"),
     "the Management Report leads the Advisory pack page",
   );
-  const view = renderToStaticMarkup(
-    createElement(ManagementReportView, { content: frozen, market: ZA_MARKET }),
-  );
-  assert(view.includes('data-management-report=""'), "the report is on the page");
-  assert(view.includes('data-pack-schema="2"'), "the report is schema 2");
-  assert(view.includes("Advisory Management Report"), "the report names itself");
-  assert(view.includes("Chill Pepper Boutique Hotel"), "the report names the client");
-  assert(!view.includes("In one line"), "the report is not the old pack sections");
-  assert(!view.includes("Where the business stands"), "the report is not the old prose pack");
+  const card = readFileSync("src/components/management-report-pdf-card.tsx", "utf8");
+  assert(card.includes("Advisory Management Report"), "the PDF card names the report");
+  assert(card.includes("Preview") && card.includes("Download"), "the PDF card has Preview and Download");
+  assert(card.includes("data-report-client"), "the PDF card names the client");
+  assert(card.includes("data-report-period"), "the PDF card names the period");
 }
 
 console.log("advisory-pack-schema2: ok");

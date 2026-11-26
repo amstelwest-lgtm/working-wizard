@@ -303,7 +303,6 @@ import {
   type CoachDestination,
 } from "@/lib/workflow-coach";
 import { relatedTabForRatio } from "@/lib/ratio-briefing";
-import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { LazyTrialEndedPlanBlock as TrialEndedPlanBlock } from "@/components/lazy-route-panels";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { CompliancePane } from "@/components/compliance-pane";
@@ -5770,12 +5769,13 @@ function ClientView() {
                               pageSignoff={advisorySignoff}
                             />
                           }
+                          clientName={client.name}
                           inputs={
                             <DeliverableInputConfig
-                              className="mb-5"
                               clientId={clientId}
                               deliverableId="advisory"
                               context={deliverableInputContext}
+                              plain
                             />
                           }
                           currentFigures={{
@@ -5791,17 +5791,6 @@ function ClientView() {
                           health={liveScoreSnapshot}
                           onRefresh={homeActivity.refresh}
                           audience="accountant"
-                        />
-                        <RecommendationsPanel
-                          className="mb-5"
-                          clientId={client.id}
-                          firmId={client.firm_id ?? null}
-                          audience="accountant"
-                          canPropose={hasFigures}
-                          refreshKey={advisoryBump}
-                          onChanged={() => setAdvisoryBump((n) => n + 1)}
-                          onOpenActions={() => openHomeSection("plan")}
-                          onAddFigures={() => setFirstDataOpen(true)}
                         />
                         <OutcomesPanel
                           className="mb-5"

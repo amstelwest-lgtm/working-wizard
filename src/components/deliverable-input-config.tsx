@@ -135,6 +135,7 @@ export function DeliverableInputConfig({
   onEngineBoundChange,
   className = "",
   hideSources = false,
+  plain = false,
 }: {
   clientId?: string;
   deliverableId: DeliverableInputId;
@@ -144,6 +145,11 @@ export function DeliverableInputConfig({
   className?: string;
   /** The cash Audit inputs pane lists sources as rows to approve instead. */
   hideSources?: boolean;
+  /**
+   * Sources and assumptions only. The host already has the one inputs panel,
+   * so this does not wrap a second Configure inputs card.
+   */
+  plain?: boolean;
 }) {
   const { def, state, persist } = useDeliverableInputConfig({
     clientId,
@@ -184,14 +190,8 @@ export function DeliverableInputConfig({
     }
   };
 
-  return (
-    <div className={className} data-deliverable-input-config={deliverableId}>
-      <CollapsibleGoldCard
-        icon={Settings2}
-        title="Configure inputs"
-        subtitle={subtitle}
-        defaultOpen={false}
-      >
+  const body = (
+    <>
         {needsRefresh ? (
           <div className="mb-5 flex items-start gap-2 rounded-lg border border-[#0B5FFF]/35 bg-[#0B5FFF]/10 px-3 py-2.5 text-xs leading-relaxed text-slate-800 dark:text-slate-200">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#102A43]" />
@@ -383,7 +383,27 @@ export function DeliverableInputConfig({
             </ul>
           </section>
         ) : null}
-      </CollapsibleGoldCard>
+    </>
+  );
+
+  return (
+    <div
+      className={className}
+      data-deliverable-input-config={deliverableId}
+      data-inputs-plain={plain ? "" : undefined}
+    >
+      {plain ? (
+        body
+      ) : (
+        <CollapsibleGoldCard
+          icon={Settings2}
+          title="Configure inputs"
+          subtitle={subtitle}
+          defaultOpen={false}
+        >
+          {body}
+        </CollapsibleGoldCard>
+      )}
     </div>
   );
 }

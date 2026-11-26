@@ -699,9 +699,11 @@ const S_SEP = snap(
     "owner board: outcomes under recommendations",
   );
   const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
+  const draftsPane = studio.slice(studio.indexOf('id="reports-drafts"'), studio.indexOf('id="reports-draft-tool"'));
+  assert(draftsPane.includes("<OutcomesPanel"), "studio: outcomes stay on the report page");
   assert(
-    studio.indexOf("<OutcomesPanel") > studio.indexOf("<RecommendationsPanel"),
-    "studio: outcomes under recommendations",
+    !draftsPane.includes("<RecommendationsPanel"),
+    "studio: recommendations are not under the Management Report",
   );
   const dash = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
   const practiceAt = dash.indexOf('view === "practice"');

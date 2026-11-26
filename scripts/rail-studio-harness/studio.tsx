@@ -115,7 +115,6 @@ import { derivePeriodWaterfallFallback } from "@/lib/weekly-inputs";
 import { FeatureFinder } from "@/components/feature-finder";
 import { OutcomesPanel } from "@/components/outcomes-panel";
 import { SectionCard } from "@/components/primitives";
-import { RecommendationsPanel } from "@/components/recommendations-panel";
 import {
   accountantClientTabSearch,
   clientNavSearch,
@@ -1627,26 +1626,16 @@ function ReportsPane({ clientId, packView }: { clientId: string; packView?: stri
               />
             ) : null
           }
+          clientName="Harbour Glass"
           inputs={
             <DeliverableInputConfig
               clientId={clientId}
               deliverableId="advisory"
               context={{ financials: HARNESS_FINANCIALS }}
+              plain
             />
           }
           currentFigures={{ runwayLabel: "11 weeks", cash: 186000, healthScore: 72 }}
-        />
-      </PaneBoundary>
-      <PaneBoundary label="Recommendations">
-        <RecommendationsPanel
-          className="mb-5"
-          clientId={clientId}
-          firmId={null}
-          audience="accountant"
-          canPropose
-          onChanged={() => {}}
-          onOpenActions={() => {}}
-          onAddFigures={() => {}}
         />
       </PaneBoundary>
       <PaneBoundary label="Outcomes">

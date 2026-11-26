@@ -29,6 +29,14 @@ import {
 import { toast } from "sonner";
 import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
+import { ManagementReportPdfCard } from "@/components/management-report-pdf-card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { PrecardCapCard } from "@/components/precard-cap-card";
 import { TrialEndedActionNotice, useTrialEndedAction } from "@/components/trial-ended-plan-block";
 import { PRECARD_CAP_CODE } from "@/lib/precard-cap";
@@ -41,8 +49,7 @@ import { recordedActorIdentity, type RecordedActor } from "@/lib/accountant-iden
 import { rewriteDraftMonthStamp, statementSpanLabel } from "@/lib/statement-period";
 import { resolveAdvisorySignoffState, type AdvisorySignoffAction } from "@/lib/advisory-signoff";
 import { packAnswerSentence, packDrawerHint, packStripStatus, type PackAnswerStatus } from "@/lib/plan-pack-copy";
-import { downloadAdvisoryPackPdf } from "@/lib/advisory-pack-pdf";
-import { ManagementReportView } from "@/components/management-report-view";
+import { downloadAdvisoryPackPdf, renderAdvisoryPackPdfBlob } from "@/lib/advisory-pack-pdf";
 import { formatReviewDateTime } from "@/lib/market";
 import {
   isSamplePracticeSignoff,
@@ -118,8 +125,10 @@ type Props = {
   chip?: string | null;
   /** The one Sign off control. The panel does not render a second one. */
   primary?: ReactNode;
-  /** Configure-inputs block. It sits in the closed drawer. */
+  /** Sources and assumptions. They sit in the one inputs panel, not a second card. */
   inputs?: ReactNode;
+  /** Client name on the PDF card. The stored pack name wins when it is set. */
+  clientName?: string | null;
   /**
    * Display-only pack. When set, the panel does not fetch or generate.
    * Harness screenshots use it for Draft, Ready for review, and stale.
@@ -182,6 +191,7 @@ export function AdvisoryPackPanel({
   chip = null,
   primary = null,
   inputs = null,
+  clientName = null,
   fixture = null,
 }: Props) {
   const track = useTrack();
@@ -210,6 +220,8 @@ export function AdvisoryPackPanel({
   const [showDraft, setShowDraft] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [precardOpen, setPrecardOpen] = useState(false);
   const seq = useRef(0);
   const readMarked = useRef<string | null>(null);
@@ -514,6 +526,38 @@ export function AdvisoryPackPanel({
     }
   };
 
+  const openPreview = async () => {
+    if (!clientId || !pack || previewing) return;
+    setPreviewing(true);
+    try {
+      const recordedSigner = identityFor(pack.reviewed_by);
+      const { data: demoRow } = await supabase
+        .from("clients")
+        .select("is_demo")
+        .eq("id", clientId)
+        .maybeSingle();
+      const { blob } = await renderAdvisoryPackPdfBlob({
+        pack,
+        profile,
+        userId: user?.id ?? null,
+        user,
+        market,
+        recordedSigner,
+        sample: Boolean(demoRow?.is_demo),
+        figuresChanged: pack.status === "approved" && signOffGate.figuresChanged,
+        liveHealth,
+      });
+      setPreviewUrl((current) => {
+        if (current) URL.revokeObjectURL(current);
+        return URL.createObjectURL(blob);
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "PDF preview failed");
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
   const comment = () =>
     run(
       "comment",
@@ -624,6 +668,85 @@ export function AdvisoryPackPanel({
     .filter(Boolean)
     .join(" ");
 
+  const reportClient = pack?.content.clientName?.trim() || clientName?.trim() || "";
+  const reportPeriod = fixture
+    ? fixture.periodLabel
+    : pack
+      ? (statementSpanLabel({ periodLabel: pack.period_label, market }) ?? "")
+      : "";
+  const pdfCard = (
+    <ManagementReportPdfCard
+      clientName={reportClient}
+      period={reportPeriod}
+      previewing={previewing}
+      downloading={exportingPdf || busy !== null}
+      disabled={!pack && !fixture}
+      onPreview={() => void openPreview()}
+      onDownload={() => void exportPdf()}
+    />
+  );
+  const closePreview = () => {
+    setPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+  };
+  const previewDialog = (
+    <Dialog
+      open={previewUrl !== null}
+      onOpenChange={(open) => {
+        if (!open) closePreview();
+      }}
+    >
+      <DialogContent className="flex h-[88vh] max-w-5xl flex-col gap-0 border-border bg-background p-0">
+        <DialogHeader className="flex-row items-center justify-between space-y-0 border-b border-border px-5 py-3">
+          <DialogTitle className="text-sm font-semibold text-foreground">
+            Advisory Management Report
+          </DialogTitle>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="gap-1.5 border-border text-xs text-foreground hover:bg-muted"
+            onClick={() => void exportPdf()}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download
+          </Button>
+        </DialogHeader>
+        <div className="flex-1 overflow-hidden bg-slate-100">
+          {previewUrl ? (
+            <iframe src={previewUrl} className="h-full w-full border-0" title="Advisory Management Report" />
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+  const versionControl = fixture?.version ? (
+    <select
+      aria-label="Pack version"
+      defaultValue={String(fixture.version)}
+      className="rounded-md border border-slate-300/70 bg-white px-2 py-1 text-[12px] text-slate-700 dark:border-white/15 dark:bg-transparent dark:text-slate-200"
+    >
+      <option value={String(fixture.version)}>
+        v{fixture.version} · {fixture.status.replace("_", " ")}
+      </option>
+    </select>
+  ) : versions.length > 1 ? (
+    <select
+      value={pack?.id ?? ""}
+      onChange={(e) => void load(e.target.value)}
+      className="rounded-md border border-slate-300/70 bg-white px-2 py-1 text-[12px] text-slate-700 dark:border-white/15 dark:bg-transparent dark:text-slate-200"
+      aria-label="Pack version"
+    >
+      {versions.map((v) => (
+        <option key={v.id} value={v.id}>
+          v{v.version} · {(v.id === pack?.id && shownStatus ? shownStatus : v.status).replace("_", " ")}
+        </option>
+      ))}
+    </select>
+  ) : null;
+
   if (fixture) {
     const sentence = packAnswerSentence(fixture);
     const statusText = packStripStatus(true, fixture);
@@ -654,8 +777,10 @@ export function AdvisoryPackPanel({
           onExport={() => {}}
           exporting={false}
         />
+        {pdfCard}
         <ReviewInputsDrawer hint={packDrawerHint(fixture.version, !fixtureStale)}>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2" data-pack-inputs="">
+            {versionControl}
             {fixtureStale ? null : (
               <button type="button" onClick={() => void doGenerate()} className={GHOST_BTN} data-generate>
                 <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Regenerate
@@ -686,6 +811,7 @@ export function AdvisoryPackPanel({
           </ol>
         ) : null}
         {precardOpen ? <PrecardCapCard /> : null}
+        {previewDialog}
       </section>
     );
   }
@@ -766,23 +892,10 @@ export function AdvisoryPackPanel({
         onExport={modern ? () => void exportPdf() : undefined}
         exporting={exportingPdf || busy !== null}
       />
+      {pdfCard}
       <ReviewInputsDrawer hint={packDrawerHint(pack?.version, canRegenerate && !packIsStale)}>
-        <div className="flex flex-wrap items-center gap-2">
-          {versions.length > 1 ? (
-            <select
-              value={pack?.id ?? ""}
-              onChange={(e) => void load(e.target.value)}
-              className="rounded-md border border-slate-300/70 bg-white px-2 py-1 text-[12px] text-slate-700 dark:border-white/15 dark:bg-transparent dark:text-slate-200"
-              aria-label="Pack version"
-            >
-              {versions.map((v) => (
-                <option key={v.id} value={v.id}>
-                  v{v.version} ·{" "}
-                  {(v.id === pack?.id && shownStatus ? shownStatus : v.status).replace("_", " ")}
-                </option>
-              ))}
-            </select>
-          ) : null}
+        <div className="flex flex-wrap items-center gap-2" data-pack-inputs="">
+          {versionControl}
           {canRegenerate && !packIsStale && modern ? (
             <button
               type="button"
@@ -859,10 +972,6 @@ export function AdvisoryPackPanel({
         >
           {PACK_SCHEMA1_LAYOUT_NOTE}
         </p>
-      ) : null}
-
-      {pack && modern && isAdvisoryPackV2(pack.content) ? (
-        <ManagementReportView content={pack.content} market={market} />
       ) : null}
 
       {pack && expanded ? (
@@ -1086,6 +1195,7 @@ export function AdvisoryPackPanel({
           ))}
         </ol>
       ) : null}
+      {previewDialog}
     </section>
   );
 }

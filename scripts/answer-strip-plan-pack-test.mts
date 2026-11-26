@@ -171,7 +171,12 @@ assert.equal(planPane.includes("point of the tab"), false, "the plan lede no lon
 assert.equal(planPane.includes("PrecardCapCard"), false, "the plan pane does not gain a precard card");
 
 assert.ok(advisoryPane.includes("AdvisoryPackPanel"), "the pack path still mounts the pack");
-assert.ok(advisoryPane.includes("RecommendationsPanel"), "recommendations stay stacked on the pack");
+assert.equal(
+  advisoryPane.includes("RecommendationsPanel"),
+  false,
+  "recommendations leave the Management Report page",
+);
+assert.ok(advisoryPane.includes("plain"), "pack inputs are one panel, not a nested card");
 assert.equal(advisoryPane.includes("AdvisoryDrafter"), false, "the drafter leaves the pack page");
 assert.ok(clientSrc.slice(toolAt, pdfsAt).includes("AdvisoryDrafter"), "the drafter sits on Draft tool");
 assert.equal(advisoryPane.includes("AdvisorySentHistory"), false, "sent history leaves the pack page");
