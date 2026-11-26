@@ -53,7 +53,7 @@ import {
   type PracticeImplementationPlan,
 } from "@/lib/setup-partner-plan";
 import { nextMomTestQuestion } from "../../supabase/functions/setup-partner/firm-interview-prompt.ts";
-import { imResetVisible, planRowStatusFromRuns } from "@/lib/im-setup-hold";
+import { imResetVisible, integrationHeroStatus, planRowStatusFromRuns } from "@/lib/im-setup-hold";
 
 /** User-facing name. Internal ids stay setup_partner. */
 export const IMPLEMENTATION_MANAGER_LABEL = "Implementation Manager";
@@ -866,7 +866,7 @@ export function PracticeSetupInterview({
         subtitle="Maps how your practice runs so Milōn can take on the work"
       />
       <PracticeSetupHero
-        status={status}
+        status={integrationHeroStatus(runningLines) ?? status}
         step={step}
         working={thinkingNow}
         pending={booting}
@@ -1138,7 +1138,7 @@ function PracticeSetupHero({
   pending = false,
   action = null,
 }: {
-  status: ImplementationManagerStatus;
+  status: string;
   step: ImplementationManagerStep;
   working: boolean;
   pending?: boolean;

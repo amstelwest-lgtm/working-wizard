@@ -41,13 +41,16 @@ import {
   attachDraftToLine,
   emptyImSetupHold,
   imResetAllowed,
+  imRunDisplayStatus,
   imSetupHoldRuleText,
+  isImActivationRun,
   isImSampleClient,
   parseImSetupHold,
   pilotFromPlanRows,
   planRowKey,
   presentRunningLines,
   routineLabel,
+  runMapFromHold,
   IM_SETUP_HOLD_EVENT,
   IM_SETUP_HOLD_TASK,
   type ImPilotRef,
@@ -55,8 +58,6 @@ import {
   type ImSetupHold,
 } from "@/lib/im-setup-hold";
 import type { SetupPartnerWorkflowMap } from "@/lib/setup-partner";
-
-const ACTIVATION_RUN_SUMMARY = "Implementation Manager activation — draft only.";
 
 type Row = Record<string, unknown>;
 type DbError = { message: string; code?: string } | null;
@@ -274,6 +275,8 @@ async function enqueueDraftRun(input: {
   periodKey?: string;
   /** Stable plan-row key. Same key never inserts a second run. */
   rowKey?: string;
+  /** Hold row id. Workers rewrite summary and trace, not correlation_id. */
+  correlationId?: string | null;
 }): Promise<DraftRunEnqueue | null> {
   const decision = handoffDecision(input.agent);
   if (!decision.ok) return null;
@@ -292,7 +295,7 @@ async function enqueueDraftRun(input: {
     inputs,
   });
   const inputHash = await agentInputHash(inputs);
-  const correlationId = crypto.randomUUID();
+  const correlationId = input.correlationId?.trim() || crypto.randomUUID();
   const inserted = await db.from("agent_runs").insert({
     agent: input.agent,
     client_id: input.clientId,
@@ -674,7 +677,9 @@ export const startImIntegration = createServerFn({ method: "POST" })
     await assertFirmAccess(userId, data.firmId);
     const existing = (await readSetupHold(data.firmId)) ?? emptyImSetupHold();
     const storedPilot = existing.pilot?.id ? existing.pilot : pilotFromPlanRows(existing.rows);
-    if (existing.started && storedPilot) {
+    const mapped = runMapFromHold(existing);
+    const missingRun = existing.rows.some((row) => !mapped[row.playId]);
+    if (existing.started && storedPilot && !missingRun) {
       const lines = presentRunningLines({
         rows: existing.rows,
         lines: await withDraftLinks(existing.lines),
@@ -724,43 +729,58 @@ export const startImIntegration = createServerFn({ method: "POST" })
           steps: replay.plan.steps.map((row) => ({ step: row.step, bucket: row.bucket })),
           pilot,
         });
+    let holdRow = await readSetupHoldRow(data.firmId);
+    if (!holdRow) {
+      await writeSetupHold(data.firmId, userId, { ...existing, rows, pilot, runs: existing.runs ?? {} });
+      holdRow = await readSetupHoldRow(data.firmId);
+    }
+    const holdId = holdRow?.id ?? "";
     let enqueued = 0;
     const seeded: ImRunningLine[] = [];
-    for (const row of rows) {
-      const rowKey = planRowKey(row.playId);
-      const run = await enqueueDraftRun({
-        agent: agentForPlanBot(row.bot),
-        clientId: pilot.id,
-        firmId: data.firmId,
-        rowKey,
-      });
-      if (run?.created) enqueued += 1;
-      seeded.push({
-        id: run?.runId || rowKey,
-        bot: row.bot,
-        status: "Draft queued",
-        summary: "Draft for your review. Nothing has been sent.",
-        href: "",
-        clientName: pilot.name,
-        clientId: pilot.id,
-        routine: row.routine,
-        rowKey,
-        runId: run?.runId ?? "",
-        draftId: "",
+    const runs: Record<string, string> = { ...(existing.runs ?? {}) };
+    try {
+      for (const row of rows) {
+        const rowKey = planRowKey(row.playId);
+        const run = await enqueueDraftRun({
+          agent: agentForPlanBot(row.bot),
+          clientId: pilot.id,
+          firmId: data.firmId,
+          rowKey,
+          correlationId: holdId || null,
+        });
+        if (run?.runId) runs[row.playId] = run.runId;
+        if (run?.created) enqueued += 1;
+        if (!run?.runId) continue;
+        seeded.push({
+          id: run.runId,
+          bot: row.bot,
+          status: "Draft queued",
+          summary: "Draft for your review. Nothing has been sent.",
+          href: "",
+          clientName: pilot.name,
+          clientId: pilot.id,
+          routine: row.routine,
+          rowKey,
+          runId: run.runId,
+          draftId: "",
+        });
+      }
+    } finally {
+      const lines = presentRunningLines({ rows, lines: seeded, started: true });
+      await writeSetupHold(data.firmId, userId, {
+        pendingMap: null,
+        rows,
+        started: true,
+        lines,
+        pilot,
+        runs,
       });
     }
-    const lines = presentRunningLines({ rows, lines: await withDraftLinks(seeded), started: true });
-    await writeSetupHold(data.firmId, userId, {
-      pendingMap: null,
-      rows,
-      started: true,
-      lines,
-      pilot,
-    });
+    const lines = presentRunningLines({ rows, lines: seeded, started: true });
     return {
       ...result,
       enqueued: result.enqueued + enqueued,
-      runCount: lines.filter((line) => line.runId).length,
+      runCount: Object.keys(runs).length,
       pilotIds: [pilot.id],
       lines,
       started: true as const,
@@ -774,11 +794,7 @@ const BOT_LABEL: Record<string, string> = {
 };
 
 function activationRunStatus(status: string): string {
-  if (status === "queued") return "Draft queued";
-  if (status === "running") return "Running";
-  if (status === "succeeded" || status === "completed") return "Done";
-  if (status === "failed") return "Needs another look";
-  return "Waiting";
+  return imRunDisplayStatus(status);
 }
 
 async function readSetupHoldRow(firmId: string): Promise<{ id: string; hold: ImSetupHold } | null> {
@@ -859,18 +875,29 @@ async function planRowsForPilot(input: {
   return stampPlanActions(built, pilot);
 }
 
-async function loadActivationRuns(firmId: string): Promise<{
+async function loadActivationRuns(
+  firmId: string,
+  marker: { holdId: string | null; runs: Record<string, string> },
+): Promise<{
   runCount: number;
   lines: ImRunningLine[];
 }> {
   const db = admin();
-  const listed = (await db
-    .from("agent_runs")
-    .select("id, agent, status, client_id")
-    .eq("firm_id", firmId)
-    .eq("summary", ACTIVATION_RUN_SUMMARY)
-    .order("queued_at", { ascending: false })
-    .limit(12)) as unknown as { data: Row[] | null; error: DbError };
+  const mappedIds = [...new Set(Object.values(marker.runs).map((id) => id.trim()).filter(Boolean))];
+  const playByRun = new Map(Object.entries(marker.runs).map(([playId, runId]) => [runId, playId]));
+  const selectRuns = () =>
+    db.from("agent_runs").select("id, agent, status, client_id, trigger, correlation_id");
+  // The map is the Start set. Correlation is only the fallback when that write
+  // never landed, so an older Start on the same hold row is not counted twice.
+  const listed = mappedIds.length
+    ? ((await selectRuns().in("id", mappedIds).limit(40)) as unknown as { data: Row[] | null; error: DbError })
+    : marker.holdId
+      ? ((await selectRuns()
+          .eq("firm_id", firmId)
+          .eq("correlation_id", marker.holdId)
+          .eq("trigger", "on_demand")
+          .limit(40)) as unknown as { data: Row[] | null; error: DbError })
+      : { data: [] as Row[], error: null };
   if (listed.error) throw new Error(listed.error.message);
   const clientIds = [
     ...new Set(
@@ -896,12 +923,27 @@ async function loadActivationRuns(firmId: string): Promise<{
     const agent = typeof row.agent === "string" ? row.agent : "";
     const status = typeof row.status === "string" ? row.status : "";
     const clientId = typeof row.client_id === "string" ? row.client_id : "";
+    const trigger = typeof row.trigger === "string" ? row.trigger : "";
+    const correlationId = typeof row.correlation_id === "string" ? row.correlation_id : "";
     if (!id) return [];
+    if (
+      !isImActivationRun({
+        id,
+        trigger,
+        correlationId,
+        holdId: marker.holdId,
+        mappedRunIds: mappedIds,
+      })
+    ) {
+      return [];
+    }
+    const playId = playByRun.get(id) ?? "";
     return [
       {
         id,
         runId: id,
         clientId,
+        rowKey: playId ? planRowKey(playId) : "",
         bot: BOT_LABEL[agent] ?? "Milōn",
         status: activationRunStatus(status),
         summary: "Draft for your review. Nothing has been sent.",
@@ -921,8 +963,12 @@ export const loadImRunningState = createServerFn({ method: "POST" })
     const userId = context.userId;
     if (!userId) throw new Error("Not authenticated");
     await assertFirmAccess(userId, data.firmId);
-    const hold = await readSetupHold(data.firmId);
-    const running = await loadActivationRuns(data.firmId);
+    const holdRow = await readSetupHoldRow(data.firmId);
+    const hold = holdRow?.hold ?? null;
+    const running = await loadActivationRuns(data.firmId, {
+      holdId: holdRow?.id ?? null,
+      runs: runMapFromHold(hold),
+    });
     const started = Boolean(hold?.started) || running.runCount > 0;
     const lines = presentRunningLines({
       rows: hold?.rows ?? [],
@@ -977,7 +1023,8 @@ export const saveImSetupHold = createServerFn({ method: "POST" })
     await assertFirmAccess(userId, data.firmId);
     const existing = (await readSetupHold(data.firmId)) ?? emptyImSetupHold();
     if (data.clearMap) {
-      await writeSetupHold(data.firmId, userId, { ...existing, pendingMap: null });
+      const latest = (await readSetupHold(data.firmId)) ?? existing;
+      await writeSetupHold(data.firmId, userId, { ...latest, pendingMap: null });
       return { ok: true as const };
     }
     const pendingMap = data.pendingMap ?? existing.pendingMap;
@@ -992,11 +1039,15 @@ export const saveImSetupHold = createServerFn({ method: "POST" })
             pilot,
           })
         : existing.rows;
+    const latest = (await readSetupHold(data.firmId)) ?? existing;
+    const keptRows = latest.started ? latest.rows : rows;
     await writeSetupHold(data.firmId, userId, {
-      ...existing,
+      ...latest,
       pendingMap,
-      rows,
-      pilot: pilot ?? pilotFromPlanRows(rows),
+      rows: keptRows,
+      pilot: latest.started ? latest.pilot : pilot ?? pilotFromPlanRows(keptRows),
+      started: latest.started,
+      runs: latest.runs,
     });
     return { ok: true as const };
   });

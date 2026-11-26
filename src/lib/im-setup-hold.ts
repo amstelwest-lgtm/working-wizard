@@ -32,9 +32,17 @@ export type ImSetupHold = {
   started: boolean;
   lines: ImRunningLine[];
   pilot: ImPilotRef | null;
+  /** playId → agent_runs.id. Written at Start. Workers do not own this map. */
+  runs: Record<string, string>;
 };
 
-const PLAN_STATUS = new Set<IntegrationPlanStatus>(["Waiting", "Draft queued", "Running"]);
+const PLAN_STATUS = new Set<IntegrationPlanStatus>([
+  "Waiting",
+  "Draft queued",
+  "Running",
+  "Draft ready",
+  "Needs a look",
+]);
 
 const ROUTINE_LABEL: Record<string, string> = {
   document_chase: "Document chase",
@@ -185,7 +193,49 @@ function lineMatchesRow(line: ImRunningLine, rowClientId: string, rowClientName:
 }
 
 function isRunStatus(status: string | undefined): status is IntegrationPlanStatus {
-  return status === "Waiting" || status === "Draft queued" || status === "Running";
+  return status != null && PLAN_STATUS.has(status as IntegrationPlanStatus);
+}
+
+/** Run status for the plan table. Summary text is not an input. */
+export function imRunDisplayStatus(status: string): IntegrationPlanStatus {
+  if (status === "queued") return "Draft queued";
+  if (status === "running") return "Running";
+  if (status === "succeeded" || status === "completed") return "Draft ready";
+  if (status === "partial" || status === "failed") return "Needs a look";
+  return "Waiting";
+}
+
+/**
+ * An activation run is one Start recorded, or one whose correlation id is the
+ * hold row and whose trigger is still on_demand. A worker may rewrite summary.
+ * A handoff follow-up uses trigger "message" and is not an activation run.
+ */
+export function isImActivationRun(input: {
+  id?: string | null;
+  trigger?: string | null;
+  correlationId?: string | null;
+  summary?: string | null;
+  holdId?: string | null;
+  mappedRunIds?: readonly string[];
+}): boolean {
+  void input.summary;
+  const id = (input.id ?? "").trim();
+  if (id && input.mappedRunIds?.some((runId) => runId === id)) return true;
+  const holdId = (input.holdId ?? "").trim();
+  return Boolean(holdId) && (input.correlationId ?? "").trim() === holdId && input.trigger === "on_demand";
+}
+
+/** One label for the hero once at least one activation run exists. */
+export function integrationHeroStatus(
+  lines: readonly { status?: string; runId?: string }[],
+): IntegrationPlanStatus | null {
+  const real = lines.filter((line) => Boolean(line.runId?.trim()));
+  if (!real.length) return null;
+  if (real.some((line) => line.status === "Running")) return "Running";
+  if (real.some((line) => line.status === "Needs a look")) return "Needs a look";
+  if (real.some((line) => line.status === "Draft queued")) return "Draft queued";
+  if (real.some((line) => line.status === "Draft ready")) return "Draft ready";
+  return null;
 }
 
 /** Plan table status. Waiting until a line is backed by an agent_run for that row. */
@@ -353,7 +403,7 @@ function parseLine(value: unknown): ImRunningLine | null {
   return {
     id,
     bot,
-    status: clip(row.status, 40) || "Draft queued",
+    status: clip(row.status, 40) || "Waiting",
     summary: clip(row.summary, 240) || "Draft for your review. Nothing has been sent.",
     href: href.startsWith("/") ? href : "",
     clientName: clip(row.clientName, 80),
@@ -384,8 +434,22 @@ export function parseImSetupHold(raw: string | null | undefined): ImSetupHold | 
   const pendingMap = parseMap(row.pendingMap);
   const started = row.started === true;
   const pilot = parsePilot(row.pilot) ?? pilotFromPlanRows(rows);
-  if (!pendingMap && rows.length === 0 && !started && lines.length === 0 && !pilot) return null;
-  return { pendingMap, rows, started, lines, pilot };
+  const runs = parseRunMap(row.runs);
+  if (!pendingMap && rows.length === 0 && !started && lines.length === 0 && !pilot && !Object.keys(runs).length) {
+    return null;
+  }
+  return { pendingMap, rows, started, lines, pilot, runs };
+}
+
+function parseRunMap(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    const playId = key.trim();
+    const runId = typeof item === "string" ? item.trim() : "";
+    if (playId && runId) out[playId] = runId;
+  }
+  return out;
 }
 
 function parsePilot(value: unknown): ImPilotRef | null {
@@ -404,9 +468,21 @@ export function imSetupHoldRuleText(hold: ImSetupHold): string {
     started: hold.started,
     lines: hold.lines.slice(0, 8),
     pilot: hold.pilot,
+    runs: hold.runs,
   });
 }
 
+/** playId → run id from the explicit map, then from lines Start already stored. */
+export function runMapFromHold(hold: Pick<ImSetupHold, "runs" | "lines"> | null | undefined): Record<string, string> {
+  const out: Record<string, string> = { ...(hold?.runs ?? {}) };
+  for (const line of hold?.lines ?? []) {
+    const runId = line.runId?.trim() ?? "";
+    const playId = (line.rowKey ?? "").replace(/^im-plan:/, "").trim();
+    if (runId && playId && !out[playId]) out[playId] = runId;
+  }
+  return out;
+}
+
 export function emptyImSetupHold(): ImSetupHold {
-  return { pendingMap: null, rows: [], started: false, lines: [], pilot: null };
+  return { pendingMap: null, rows: [], started: false, lines: [], pilot: null, runs: {} };
 }
