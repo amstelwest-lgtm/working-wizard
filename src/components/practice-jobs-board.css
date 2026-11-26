@@ -8,16 +8,12 @@
   color: #102a43;
 }
 
+/* Wide screens: the main column only insets 28px, and the pencil occupies
+   the rightmost 56px, so the board adds the rest. Phones already inset the
+   pane by the pencil. */
 @media (min-width: 768px) {
   .practice-jobs-board {
     padding-right: 36px;
-  }
-}
-
-@media (max-width: 767px) {
-  .practice-jobs-board {
-    padding-right: 52px;
-    padding-bottom: 72px;
   }
 }
 
