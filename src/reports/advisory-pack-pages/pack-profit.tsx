@@ -6,8 +6,11 @@ import { C, fmtPct } from "@/components/pdf/theme";
 import type { BridgeStep } from "@/lib/profit-bridge-steps";
 import { PACK_SHOWS } from "@/lib/advisory-pack-copy";
 import { P, SANS } from "./pack-type";
+import { registerPackFonts } from "./pack-fonts";
 import type { AdvisoryPackContentV2, PackProfitStep } from "@/lib/advisory-pack-schema";
 import { PackExplainer, PageBand } from "./pack-explainer";
+
+registerPackFonts();
 
 function ruleTitle(title: string) {
   return (

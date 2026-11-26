@@ -1,6 +1,9 @@
 import { Text, View } from "@react-pdf/renderer";
 import { pdfSafeText } from "@/lib/advisory-pack-pdf";
 import { DISPLAY, P, SANS } from "./pack-type";
+import { registerPackFonts } from "./pack-fonts";
+
+registerPackFonts();
 
 export function PackExplainer({
   clientName,

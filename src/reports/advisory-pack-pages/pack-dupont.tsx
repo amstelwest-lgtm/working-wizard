@@ -8,6 +8,9 @@ import { diagnoseDuPont, type DuPontLevers } from "@/reports/narrative";
 import type { AdvisoryPackContentV2, PackDuPontBlock } from "@/lib/advisory-pack-schema";
 import { PackExplainer, PageBand } from "./pack-explainer";
 import { DISPLAY, SANS } from "./pack-type";
+import { registerPackFonts } from "./pack-fonts";
+
+registerPackFonts();
 
 function times(value: number | null): string {
   return value == null ? "—" : `${value.toFixed(2)}×`;

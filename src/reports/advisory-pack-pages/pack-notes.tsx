@@ -4,6 +4,9 @@ import { pdfSafeText } from "@/lib/advisory-pack-pdf";
 import type { AdvisoryPackContentV2 } from "@/lib/advisory-pack-schema";
 import { PageBand } from "./pack-explainer";
 import { DISPLAY, SANS } from "./pack-type";
+import { registerPackFonts } from "./pack-fonts";
+
+registerPackFonts();
 
 function line(label: string, value: string | null | undefined) {
   const text = value?.trim();

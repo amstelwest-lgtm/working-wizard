@@ -210,10 +210,12 @@ export async function downloadTrialAdvisoryPackPdf(
   options?: { signed?: boolean; now?: Date },
 ): Promise<{ filename: string }> {
   const input = trialSamplePackPdfInput(board, options);
-  const [{ pdf }, { AdvisoryPackPDF }] = await Promise.all([
+  const [{ pdf }, { AdvisoryPackPDF }, { ensurePackFonts }] = await Promise.all([
     import("@react-pdf/renderer"),
     import("@/reports/advisory-pack"),
+    import("@/reports/advisory-pack-pages/pack-fonts"),
   ]);
+  await ensurePackFonts();
   const blob = await pdf(
     AdvisoryPackPDF({
       smeData: { name: input.clientName, period: input.period },

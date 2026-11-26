@@ -194,10 +194,12 @@ export async function downloadAdvisoryPackPdf(input: {
   figuresChanged?: boolean;
   liveHealth?: import("@/lib/health-snapshot").HealthScoreSnapshot | null;
 }): Promise<{ blob: Blob; filename: string; signed: boolean }> {
-  const [{ pdf }, { AdvisoryPackPDF }] = await Promise.all([
+  const [{ pdf }, { AdvisoryPackPDF }, { ensurePackFonts }] = await Promise.all([
     import("@react-pdf/renderer"),
     import("@/reports/advisory-pack"),
+    import("@/reports/advisory-pack-pages/pack-fonts"),
   ]);
+  await ensurePackFonts();
 
   const clientName = input.pack.content.clientName.trim() || "Client";
   const filename = advisoryPackPdfFilename(

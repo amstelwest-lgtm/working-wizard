@@ -2,8 +2,11 @@ import { Text, View } from "@react-pdf/renderer";
 import { C, TIER_META } from "@/components/pdf/theme";
 import { pdfSafeText } from "@/lib/advisory-pack-pdf";
 import { SANS } from "./pack-type";
+import { registerPackFonts } from "./pack-fonts";
 import type { AdvisoryPackContentV2 } from "@/lib/advisory-pack-schema";
 import { PageBand } from "./pack-explainer";
+
+registerPackFonts();
 
 const PILLAR_COLOR: Record<string, string> = {
   profit: TIER_META.at_risk.color,
