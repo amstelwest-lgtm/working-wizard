@@ -466,6 +466,78 @@ const refusedUpload = renderToStaticMarkup(
 );
 assert(refusedUpload.includes('role="alert"'), "a refused upload is announced");
 assert(refusedUpload.includes("data-upload-notice"), "a refused upload has a banner");
+assert(refusedUpload.includes("data-upload-error"), "a refused upload is inline with the button");
+
+const chip = renderToStaticMarkup(
+  createElement(ClientAgentMissionVisit, {
+    practiceName: "Theo's practice",
+    mission: {
+      key: "collect_documents",
+      title: "Collect documents",
+      agent: "financial_manager",
+      agentShortName: "Financial Manager",
+      intro: "Hi, I'm the Financial Manager at Theo's practice.",
+      thanks: "Thank you.",
+      messages: [],
+      uploads: [{ id: "file-1", label: "March statement", mime: "application/pdf", sizeBytes: 20480 }],
+    },
+    consented: true,
+    notice: clientConsentNotice("Theo's practice"),
+    completed: false,
+    busy: false,
+    noticeText: null,
+    messages: [],
+    draft: "",
+    uploadLabel: "March statement",
+    onAgree: () => undefined,
+    onDraft: () => undefined,
+    onAsk: () => undefined,
+    onUploadLabel: () => undefined,
+    onUpload: () => undefined,
+    onRemoveUpload: () => undefined,
+    onDone: () => undefined,
+  }),
+);
+assert(chip.includes("data-upload-chip"), "an uploaded file is a chip");
+assert(chip.includes("March statement"), "the chip shows the typed name");
+assert(chip.includes("20 KB"), "the chip shows the file size");
+assert(chip.includes('aria-label="Remove March statement"'), "the chip has a remove control");
+assert(!chip.includes("Uploading"), "a finished upload is not still uploading");
+
+const spinning = renderToStaticMarkup(
+  createElement(ClientAgentMissionVisit, {
+    practiceName: "Theo's practice",
+    mission: {
+      key: "collect_documents",
+      title: "Collect documents",
+      agent: "financial_manager",
+      agentShortName: "Financial Manager",
+      intro: "Hi.",
+      thanks: "Thank you.",
+      messages: [],
+      uploads: [],
+    },
+    consented: true,
+    notice: clientConsentNotice("Theo's practice"),
+    completed: false,
+    busy: true,
+    uploading: true,
+    noticeText: null,
+    messages: [],
+    draft: "",
+    uploadLabel: "",
+    onAgree: () => undefined,
+    onDraft: () => undefined,
+    onAsk: () => undefined,
+    onUploadLabel: () => undefined,
+    onUpload: () => undefined,
+    onDone: () => undefined,
+  }),
+);
+assert(spinning.includes("Uploading"), "the button reads Uploading while a file is saved");
+assert(spinning.includes("data-upload-spinner"), "the button shows a spinner");
+assert(spinning.includes("disabled"), "the button is disabled while uploading");
+assert(!spinning.includes("Upload documents"), "the button does not still say Upload documents");
 
 const mint = read("src/lib/client-agent-send.functions.ts");
 const mintBody = mint.slice(

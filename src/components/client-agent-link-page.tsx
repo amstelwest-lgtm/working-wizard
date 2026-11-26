@@ -62,6 +62,27 @@ export const CLIENT_AGENT_NEXT_HINT =
 
 export const CLIENT_AGENT_LOAD_ERROR = "Couldn't load, try again";
 
+/** Drops a library copy when the same file is already listed with an id. */
+function missionUploads(
+  uploads: Array<{ id?: string; label: string; mime: string; sizeBytes?: number | null }>,
+  sizes: Record<string, number>,
+) {
+  const labeled = new Set(uploads.filter((file) => file.id).map((file) => file.label));
+  const seen = new Set<string>();
+  const chips = [];
+  for (const file of uploads) {
+    if (!file.id && labeled.has(file.label)) continue;
+    const key = file.id ?? file.label;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    chips.push({
+      ...file,
+      sizeBytes: file.sizeBytes ?? sizes[file.label] ?? null,
+    });
+  }
+  return chips;
+}
+
 function TaxSpecialistHero({ clip }: { clip: "curious" | "done" }) {
   const reduced = usePrefersReducedMotion();
   const poster = avatarPoster("tax_specialist");
@@ -550,6 +571,8 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
   const [fileNames, setFileNames] = useState<Record<string, string[]>>({});
   const [thanks, setThanks] = useState(false);
   const [uploadLabel, setUploadLabel] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadSizes, setUploadSizes] = useState<Record<string, number>>({});
   const [missionLocked, setMissionLocked] = useState(false);
   const [missionPassword, setMissionPassword] = useState("");
 
@@ -880,6 +903,7 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
       return;
     }
     setBusy(true);
+    setUploading(true);
     setNotice(files.length === accepted.length ? null : FILE_LINK_BODY);
     try {
       let lockedPick = false;
@@ -893,6 +917,12 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
         }
         const named = uploadLabelOrFileName(uploadLabel, sanitizeClientFileName(file.name));
         const label = named.ok ? named.label : "Document";
+        const fileLabel = sanitizeClientFileName(file.name);
+        setUploadSizes((current) => ({
+          ...current,
+          [label]: file.size,
+          ...(fileLabel ? { [fileLabel]: file.size } : {}),
+        }));
         const prepared = await prepareUpload({
           data: {
             token,
@@ -939,6 +969,31 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
     } catch {
       setNotice("The document could not be saved.");
     } finally {
+      setUploading(false);
+      setBusy(false);
+    }
+  };
+
+  const onRemoveMissionUpload = async (file: { id?: string; label: string }) => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const removed = await removeUpload({
+        data: { token, itemKey: "other", ...(file.id ? { fileId: file.id } : {}) },
+      });
+      if (!removed.ok) {
+        setNotice(removed.body);
+        return;
+      }
+      setUploadSizes((current) => {
+        const next = { ...current };
+        delete next[file.label];
+        return next;
+      });
+      setView(await open({ data: { token } }));
+    } catch {
+      setNotice("That could not be saved.");
+    } finally {
       setBusy(false);
     }
   };
@@ -948,7 +1003,6 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
     return (
       <ClientAgentMissionVisit
         practiceName={shownView.practiceName}
-        mission={mission}
         consented={shownView.consented}
         notice={shownView.notice}
         completed={thanks}
@@ -965,11 +1019,17 @@ export function ClientAgentLinkPage({ token }: { token: string }) {
         }
         draft={chatDraft}
         uploadLabel={uploadLabel}
+        uploading={uploading}
+        mission={{
+          ...mission,
+          uploads: missionUploads(mission.uploads, uploadSizes),
+        }}
         onAgree={() => void onAgree()}
         onDraft={setChatDraft}
         onAsk={() => void onAsk()}
         onUploadLabel={setUploadLabel}
         onUpload={(files) => void uploadMission(files)}
+        onRemoveUpload={(file) => void onRemoveMissionUpload(file)}
         passwordPrompt={missionLocked}
         password={missionPassword}
         onPassword={setMissionPassword}

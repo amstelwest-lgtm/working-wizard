@@ -14,6 +14,15 @@ import {
   markStepDone,
   nextUndoneStep,
 } from "../src/lib/im-next-steps.ts";
+import {
+  allClientsTicked,
+  bankStatementAgentDraft,
+  bankStatementSendNotice,
+  clientsForImBankStatementSend,
+  fanOutBankStatementSends,
+  selectionAfterAllToggle,
+  selectionAfterToggle,
+} from "../src/lib/im-bank-statement-send.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -239,5 +248,61 @@ assert(route.includes("fillAskComposer"), "an open composer receives the prompt 
 assert(!route.includes("ask-ai-send"), "the client page does not press Send");
 const link = readFileSync("src/components/im-plan-link.tsx", "utf8");
 assert(link.includes('to="/practice/needs-attention"'), "Needs attention uses the router link");
+
+const firmClients = [
+  { id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", name: "North & Co", is_demo: false },
+  { id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", name: "Demo Books", is_demo: true },
+  { id: "cccccccc-cccc-cccc-cccc-cccccccccccc", name: "South Yard", is_demo: null },
+];
+const realClients = clientsForImBankStatementSend(firmClients);
+assert(
+  realClients.map((row) => row.name).join(",") === "North & Co,South Yard",
+  "demo clients are skipped the same way as the plan",
+);
+assert(selectionAfterToggle([], realClients[0]!.id).length === 1, "a tick selects that client");
+assert(
+  selectionAfterToggle([realClients[0]!.id], realClients[0]!.id).length === 0,
+  "ticking again clears that client",
+);
+const ids = realClients.map((row) => row.id);
+assert(!allClientsTicked(ids, []), "an empty selection is not all clients");
+const allIds = selectionAfterAllToggle(ids, []);
+assert(allClientsTicked(ids, allIds), "All clients selects every real client");
+assert(selectionAfterAllToggle(ids, allIds).length === 0, "All clients again clears the selection");
+assert(selectionAfterAllToggle([], []).length === 0, "All clients does nothing when there are no clients");
+
+const calls: string[] = [];
+const fan = await fanOutBankStatementSends(realClients, [realClients[0]!.id, realClients[1]!.id], async (client) => {
+  calls.push(client.id);
+  return { ok: client.id !== realClients[1]!.id };
+});
+assert(calls.join(",") === ids.join(","), "send runs once for each ticked client and skips the rest");
+assert(fan.sent.map((row) => row.name).join(",") === "North & Co", "a successful send is counted");
+assert(fan.failed.map((row) => row.name).join(",") === "South Yard", "a failed send is named");
+assert(
+  bankStatementSendNotice(fan) === "Sent to 1 client. Could not send to South Yard.",
+  "the confirmation names the count and the failure",
+);
+const thrown = await fanOutBankStatementSends(realClients, [realClients[0]!.id], async () => {
+  throw new Error("down");
+});
+assert(thrown.failed.length === 1 && thrown.sent.length === 0, "a thrown send is a failure for that client");
+const draft = bankStatementAgentDraft({ id: ids[0]!, name: "North & Co" });
+assert(draft.ok, "the bank statement request builds a draft");
+if (draft.ok) {
+  assert(draft.draft.sent === false && draft.draft.minted === false, "the request stays an unsent draft");
+  assert(draft.draft.checklist[0] === "Bank statements", "the checklist item is the bank statements");
+  assert(
+    draft.draft.message.startsWith("Collect the latest bank statements from North & Co"),
+    "the note asks for the latest bank statements",
+  );
+}
+const saver = readFileSync("src/lib/agent-send-draft.functions.ts", "utf8");
+const saveFn = saver.slice(saver.indexOf("export const saveBankStatementAgentDraft"));
+assert(saveFn.includes("storeUnsentAgentSendDraft"), "the button uses the existing unsent draft store");
+assert(!saveFn.includes("mintClientAgentSend"), "the bank statement button does not mint a link");
+assert(!saveFn.includes("resend") && !saveFn.includes("RESEND"), "the bank statement button does not mail");
+assert(!/\b(xero|quickbooks|sage)\b/i.test(saveFn), "the bank statement button does not touch a ledger");
+assert(!/whatsapp/i.test(saveFn + JSON.stringify(draft)), "accountant copy does not name a chat app");
 
 console.log("im-next-steps-test: ok");

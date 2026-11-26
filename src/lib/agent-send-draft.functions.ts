@@ -8,6 +8,9 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { agentSendApproval, readAgentSendDraft } from "@/lib/agent-send-draft";
+import { bankStatementAgentDraft } from "@/lib/im-bank-statement-send";
+import { storeUnsentAgentSendDraft } from "@/lib/im-routine-scheduler.service";
+import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import { mintClientAgentSend } from "@/lib/client-agent-send.functions";
 
 type Row = Record<string, unknown>;
@@ -171,4 +174,64 @@ export const dismissAgentSendDraft = createServerFn({ method: "POST" })
       .maybeSingle();
     if (updated.error) throw new Error(updated.error.message);
     return { ok: true as const, already: false, reason: "dismissed" as const };
+  });
+
+async function memberOfFirm(userId: string, firmId: string): Promise<boolean> {
+  const db = admin();
+  const owned = await db
+    .from("firms")
+    .select("id")
+    .eq("id", firmId)
+    .eq("owner_user_id", userId)
+    .maybeSingle();
+  if (owned.error) throw new Error(owned.error.message);
+  if (owned.data?.id) return true;
+  const member = await db
+    .from("firm_memberships")
+    .select("firm_id")
+    .eq("firm_id", firmId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (member.error) throw new Error(member.error.message);
+  return Boolean(member.data?.firm_id);
+}
+
+/**
+ * One unsent bank-statement agent draft for one client.
+ * This is the existing agent_send_draft store. It does not mint a link,
+ * send mail, or touch a ledger.
+ */
+export const saveBankStatementAgentDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ clientId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const userId = context.userId;
+    if (!userId) return { ok: false as const, reason: "forbidden" as const };
+    const db = admin();
+    const found = await db
+      .from("clients")
+      .select("id, name, firm_id, is_demo")
+      .eq("id", data.clientId)
+      .maybeSingle();
+    if (found.error) throw new Error(found.error.message);
+    const row = found.data;
+    const firmId = typeof row?.firm_id === "string" ? row.firm_id : "";
+    const name = typeof row?.name === "string" ? row.name : "";
+    if (!row || !firmId || row.is_demo === true)
+      return { ok: false as const, reason: "not_found" as const };
+    if (!sendAgentFirmAllowed(firmId))
+      return { ok: false as const, reason: "not_allowed" as const };
+    if (!(await memberOfFirm(userId, firmId)))
+      return { ok: false as const, reason: "forbidden" as const };
+    const built = bankStatementAgentDraft({ id: data.clientId, name });
+    if (!built.ok) return { ok: false as const, reason: "not_found" as const };
+    const stored = await storeUnsentAgentSendDraft({
+      firmId,
+      clientId: data.clientId,
+      draft: built.draft,
+      inputs: `bank-statement-draft:${data.clientId}:${crypto.randomUUID()}`,
+      summary:
+        "Send an agent draft for bank statements. Unsent. A named accountant approves before anything is minted.",
+    });
+    return { ok: true as const, stored };
   });
