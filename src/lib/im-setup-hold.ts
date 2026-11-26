@@ -184,42 +184,62 @@ function lineMatchesRow(line: ImRunningLine, rowClientId: string, rowClientName:
   return true;
 }
 
-/** One line per plan row. A run keeps its own client, and an older run stays on that client. */
+function isRunStatus(status: string | undefined): status is IntegrationPlanStatus {
+  return status === "Waiting" || status === "Draft queued" || status === "Running";
+}
+
+/** Plan table status. Waiting until a line is backed by an agent_run for that row. */
+export function planRowStatusFromRuns(
+  row: { playId: string },
+  runs: readonly { runId?: string; rowKey?: string; status?: string }[],
+): IntegrationPlanStatus {
+  const key = planRowKey(row.playId);
+  const run = runs.find((line) => Boolean(line.runId?.trim()) && Boolean(key) && line.rowKey === key);
+  if (!run || !isRunStatus(run.status)) return "Waiting";
+  return run.status;
+}
+
+/**
+ * Running lines are agent_runs. A plan row with no run is not a line, and a
+ * line with no run id is not shown. Status and client stay on the run.
+ */
 export function presentRunningLines(input: {
   rows: readonly IntegrationPlanRow[];
   lines: readonly ImRunningLine[];
+  /** When false, plan rows are not turned into lines. */
+  started?: boolean;
 }): ImRunningLine[] {
+  const real = input.lines.filter((line) => Boolean(line.runId?.trim()));
+  if (!input.started) return dedupeRunningLines(real);
   const used = new Set<string>();
-  const fromRows = input.rows.slice(0, 8).map((row) => {
+  const matched = input.rows.slice(0, 8).flatMap((row) => {
     const rowKey = planRowKey(row.playId);
     const rowClientId = clientIdFromHref(row.actionHref);
     const rowClientName = (row.clientName ?? "").trim();
-    const match =
-      input.lines.find(
-        (line) => line.rowKey === rowKey && !used.has(line.id) && lineMatchesRow(line, rowClientId, rowClientName),
-      ) ??
-      input.lines.find(
-        (line) => line.routine === row.routine && !used.has(line.id) && lineMatchesRow(line, rowClientId, rowClientName),
-      );
-    if (match) used.add(match.id);
-    const draftId = match?.draftId?.trim() ?? "";
-    const clientId = knownClientId(match ?? {}) || rowClientId;
-    const clientName = (match?.clientName ?? "").trim() || rowClientName;
-    return {
-      id: match?.runId || match?.id || rowKey,
-      bot: row.bot || match?.bot || "Milōn",
-      routine: row.routine || match?.routine || "",
-      clientName,
-      clientId,
-      rowKey,
-      runId: match?.runId ?? "",
-      draftId,
-      status: match?.status || "Draft queued",
-      summary: match?.summary || "Draft for your review. Nothing has been sent.",
-      href: draftId && clientId ? draftDeepLink(clientId, draftId) : "",
-    } satisfies ImRunningLine;
+    const match = real.find(
+      (line) => line.rowKey === rowKey && !used.has(line.id) && lineMatchesRow(line, rowClientId, rowClientName),
+    );
+    if (!match?.runId) return [];
+    used.add(match.id);
+    const draftId = match.draftId?.trim() ?? "";
+    const clientId = knownClientId(match);
+    return [
+      {
+        id: match.runId || match.id,
+        bot: match.bot || row.bot || "Milōn",
+        routine: match.routine || row.routine || "",
+        clientName: (match.clientName ?? "").trim(),
+        clientId,
+        rowKey: match.rowKey || rowKey,
+        runId: match.runId,
+        draftId,
+        status: isRunStatus(match.status) ? match.status : "Waiting",
+        summary: match.summary || "Draft for your review. Nothing has been sent.",
+        href: draftId && clientId ? draftDeepLink(clientId, draftId) : "",
+      } satisfies ImRunningLine,
+    ];
   });
-  const extras = input.lines
+  const extras = real
     .filter((line) => !used.has(line.id))
     .map((line) => {
       const clientId = knownClientId(line);
@@ -227,11 +247,13 @@ export function presentRunningLines(input: {
       return {
         ...line,
         clientId,
+        clientName: (line.clientName ?? "").trim(),
         draftId,
+        status: isRunStatus(line.status) ? line.status : "Waiting",
         href: draftId && clientId ? draftDeepLink(clientId, draftId) : "",
       };
     });
-  return dedupeRunningLines([...fromRows, ...extras]);
+  return dedupeRunningLines([...matched, ...extras]);
 }
 
 export function dedupeRunningLines(lines: readonly ImRunningLine[]): ImRunningLine[] {

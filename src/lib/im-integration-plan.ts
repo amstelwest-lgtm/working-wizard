@@ -439,11 +439,10 @@ export function buildIntegrationPlanTable(input: {
 }): IntegrationPlanRow[] {
   if (!hasPlanSource(input)) return [];
   const plays = playsForPlan(input.country);
-  const status: IntegrationPlanStatus = input.running
-    ? "Running"
-    : input.started
-      ? "Draft queued"
-      : "Waiting";
+  // A stored plan is Waiting until a real run is matched. `started` does not
+  // invent a queued row.
+  void input.started;
+  const status: IntegrationPlanStatus = input.running ? "Running" : "Waiting";
   const scored = scorePlays(plays, input);
   const byId = new Map(scored.map((row) => [row.play.id, row]));
   const pain = scored

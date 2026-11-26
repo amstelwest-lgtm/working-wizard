@@ -95,6 +95,7 @@ async function mount(
     firmId?: string;
     resetSetupHold?: (firmId: string) => Promise<unknown>;
     loadRunning?: (firmId: string) => Promise<{ runCount: number; started: boolean; lines: [] }>;
+    loadPlanTable?: (input: { firmId: string }) => Promise<{ rows: Array<Record<string, string>> }>;
   },
 ) {
   const rootRoute = createRootRoute({ component: () => createElement(Outlet) });
@@ -118,6 +119,7 @@ async function mount(
         discardRedo,
         resetSetupHold: extra?.resetSetupHold,
         loadRunning: extra?.loadRunning,
+        loadPlanTable: extra?.loadPlanTable as never,
       }),
   });
   const router = createRouter({
@@ -277,5 +279,36 @@ await act(async () => {
 });
 assert(cleared, "reset clears the hold and nothing else");
 await redoReset.unmount();
+
+const waitingPlan = Array.from({ length: 5 }, (_, index) => ({
+  playId: `play-${index}`,
+  problem: `Waiting row ${index}`,
+  milon: "Milōn drafts it",
+  routine: "Monthly",
+  clientSees: "A draft",
+  approve: "You review it",
+  bot: "Analyst",
+  section: "lead",
+  status: "Draft queued",
+  actionLabel: "Open",
+  actionHref: "/clients/51f5a33d-e58f-49cc-ae44-c8481567e883",
+  actionPrompt: "",
+  actionApprove: "You review it",
+  clientName: "Woodwork",
+}));
+const notStarted = await mount({ messages: [], question: "", modelTurns: 0 }, undefined, {
+  loadRunning: async () => ({ runCount: 0, started: false, lines: [] }),
+  loadPlanTable: async () => ({ rows: waitingPlan }),
+});
+await act(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 40));
+});
+const start = button("Start integration") as HTMLButtonElement | undefined;
+assert(start?.tagName === "BUTTON" && start.disabled === false, "Start is enabled");
+assert(document.body.textContent?.includes("Not started"), "an unstarted hold renders Not started");
+assert(!document.body.textContent?.includes("Integration started"), "the page does not say integration started");
+assert(!document.body.textContent?.includes("Draft queued"), "five Waiting rows are not Draft queued");
+assert((document.body.textContent?.match(/Waiting/g) ?? []).length >= 5, "the five plan rows stay Waiting");
+await notStarted.unmount();
 
 console.log("im-redo-reload ok");

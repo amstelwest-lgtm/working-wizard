@@ -24,9 +24,11 @@ import {
   isImSampleClient,
   parseImSetupHold,
   planRowKey,
+  planRowStatusFromRuns,
   presentRunningLines,
   queuedRunningLines,
 } from "../src/lib/im-setup-hold.ts";
+import { buildIntegrationPlanTable } from "../src/lib/im-integration-plan.ts";
 import { reportCardClientName } from "../src/lib/advisory-pack.ts";
 import { practiceChipName } from "../src/lib/accountant-identity.ts";
 import { tourHiddenOnPath } from "../src/components/walkthrough-wizard.tsx";
@@ -203,6 +205,25 @@ assert(held.lines[0]?.status === "Draft queued", "a start without a live run sti
 const woodwork = "11111111-1111-1111-1111-111111111111";
 const karoo = "33333333-3333-3333-3333-333333333333";
 const draft = "22222222-2222-2222-2222-222222222222";
+const waitingRows = Array.from({ length: 5 }, (_, index) => ({
+  ...held.rows[0]!,
+  playId: `play-${index}`,
+  status: "Waiting" as const,
+  clientName: "Woodwork",
+  actionHref: `/clients/${woodwork}?tab=plan&section=open`,
+}));
+const unstarted = presentRunningLines({ rows: waitingRows, lines: [], started: false });
+assert(unstarted.length === 0, "a hold that has not started does not invent running lines");
+assert(!unstarted.some((line) => line.status === "Draft queued"), "an unstarted hold is not Draft queued");
+assert(
+  waitingRows.every((row) => planRowStatusFromRuns(row, []) === "Waiting"),
+  "five Waiting rows stay Waiting until a run exists",
+);
+const ranked = buildIntegrationPlanTable({
+  steps: waitingRows.map((row) => ({ step: row.problem })),
+  started: true,
+});
+assert(ranked.length > 0 && ranked.every((row) => row.status === "Waiting"), "marking the hold started does not label the plan Draft queued");
 const shown = presentRunningLines({
   rows: [
     {
@@ -225,12 +246,13 @@ const shown = presentRunningLines({
     { id: "b", bot: "Financial Manager", status: "Draft queued", summary: "", href: "/clients/karoo", clientName: "Karoo Traders", routine: "Document chase", rowKey: planRowKey("document-collection") },
     { id: "c", bot: "Financial Manager", status: "Draft queued", summary: "", href: "", clientName: "Karoo Traders", routine: "Cash", rowKey: planRowKey("cash-flow"), draftId: draft, runId: "run-1", clientId: karoo },
   ],
+  started: true,
 });
 const woodworkLines = shown.filter((line) => line.clientId === woodwork || line.clientName === "Woodwork");
 const karooLines = shown.filter((line) => line.clientName === "Karoo Traders" || line.clientId === karoo);
-assert(woodworkLines.length === 2, "the plan rows stay on Woodwork");
-assert(karooLines.length >= 1, "an older Karoo run stays on Karoo");
-assert(woodworkLines.every((line) => !line.href.includes(draft)), "a Karoo draft is not opened on Woodwork");
+assert(woodworkLines.length === 0, "a plan row without a run is not a running line");
+assert(karooLines.length === 1 && karooLines[0]?.runId === "run-1", "an older Karoo run stays on Karoo");
+assert(karooLines[0]?.status === "Draft queued" && karooLines[0]?.clientName === "Karoo Traders", "status and client come from the run");
 assert(karooLines.every((line) => !line.href.includes(woodwork)), "a Karoo draft is not relabelled to Woodwork");
 assert(
   shown.some((line) => line.clientId === karoo && line.href.includes(karoo) && line.href.includes(`draft=${draft}`)),

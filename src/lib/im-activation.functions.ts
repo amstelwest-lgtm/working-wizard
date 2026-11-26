@@ -45,7 +45,6 @@ import {
   isImSampleClient,
   parseImSetupHold,
   pilotFromPlanRows,
-  queuedRunningLines,
   planRowKey,
   presentRunningLines,
   routineLabel,
@@ -597,8 +596,8 @@ function resolveStoredPilot(
 ): ImPilotClient | null {
   if (!stored?.id) return null;
   const match = pilots.find((row) => row.id === stored.id);
-  if (match) return { ...match, name: stored.name || match.name };
-  return { id: stored.id, name: stored.name || "Client", hasLedger: false, hasUpload: false };
+  if (!match) return null;
+  return { ...match, name: stored.name || match.name };
 }
 
 async function withDraftLinks(lines: readonly ImRunningLine[]): Promise<ImRunningLine[]> {
@@ -679,6 +678,7 @@ export const startImIntegration = createServerFn({ method: "POST" })
       const lines = presentRunningLines({
         rows: existing.rows,
         lines: await withDraftLinks(existing.lines),
+        started: true,
       });
       return {
         ok: true as const,
@@ -749,7 +749,7 @@ export const startImIntegration = createServerFn({ method: "POST" })
         draftId: "",
       });
     }
-    const lines = presentRunningLines({ rows, lines: await withDraftLinks(seeded) });
+    const lines = presentRunningLines({ rows, lines: await withDraftLinks(seeded), started: true });
     await writeSetupHold(data.firmId, userId, {
       pendingMap: null,
       rows,
@@ -900,6 +900,8 @@ async function loadActivationRuns(firmId: string): Promise<{
     return [
       {
         id,
+        runId: id,
+        clientId,
         bot: BOT_LABEL[agent] ?? "Milōn",
         status: activationRunStatus(status),
         summary: "Draft for your review. Nothing has been sent.",
@@ -912,56 +914,6 @@ async function loadActivationRuns(firmId: string): Promise<{
   return { runCount: lines.length, lines };
 }
 
-async function linesFromArtifacts(firmId: string): Promise<ImRunningLine[]> {
-  const db = admin();
-  const listed = (await db
-    .from("clients")
-    .select("id, name, is_demo")
-    .eq("firm_id", firmId)
-    .order("created_at", { ascending: true })
-    .limit(40)) as unknown as { data: Row[] | null; error: DbError };
-  if (listed.error) return [];
-  const clients = (listed.data ?? []).flatMap((row) => {
-    const id = typeof row.id === "string" ? row.id : "";
-    if (!id) return [];
-    return [{ id, name: typeof row.name === "string" ? row.name : "", isDemo: row.is_demo === true }];
-  });
-  const real = clients.filter((row) => !isImSampleClient(row));
-  const pool = real.length ? real : [];
-  if (!pool.length) return [];
-  const artifacts = (await db
-    .from("client_artifacts")
-    .select("client_id, meta")
-    .in(
-      "client_id",
-      pool.map((row) => row.id),
-    )
-    .or(imRoutineMapArtifactFilter())
-    .limit(20)) as unknown as { data: Row[] | null; error: DbError };
-  if (artifacts.error || !artifacts.data?.length) return [];
-  const names = new Map(pool.map((row) => [row.id, row.name]));
-  const routines = artifacts.data.flatMap((row) => {
-    const meta = row.meta;
-    if (!meta || typeof meta !== "object" || Array.isArray(meta)) return [];
-    const rec = meta as Record<string, unknown>;
-    const routine = typeof rec.routine === "string" ? rec.routine : "";
-    if (!routine) return [];
-    const steps = Array.isArray(rec.steps) ? rec.steps : [];
-    const first = steps[0];
-    const bot =
-      first && typeof first === "object" && !Array.isArray(first)
-        ? String((first as Record<string, unknown>).botOwner ?? "")
-        : "";
-    return [{ routine, bot }];
-  });
-  const pilotId = typeof artifacts.data[0]?.client_id === "string" ? artifacts.data[0].client_id : pool[0]?.id ?? "";
-  if (!pilotId) return [];
-  return queuedRunningLines({
-    pilot: { id: pilotId, name: names.get(pilotId) ?? "" },
-    routines,
-  });
-}
-
 export const loadImRunningState = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ firmId: z.string().uuid() }).parse(input))
@@ -970,21 +922,14 @@ export const loadImRunningState = createServerFn({ method: "POST" })
     if (!userId) throw new Error("Not authenticated");
     await assertFirmAccess(userId, data.firmId);
     const hold = await readSetupHold(data.firmId);
-    const pilot = hold?.pilot?.id ? hold.pilot : pilotFromPlanRows(hold?.rows ?? []);
-    let lines = presentRunningLines({
-      rows: hold?.rows ?? [],
-      lines: await withDraftLinks(hold?.lines ?? []),
-    });
-    let started = Boolean(hold?.started) || lines.length > 0;
-    if (!lines.length) {
-      const recovered = await linesFromArtifacts(data.firmId);
-      if (recovered.length && !pilot) {
-        started = true;
-        lines = recovered;
-      }
-    }
     const running = await loadActivationRuns(data.firmId);
-    return { runCount: running.runCount, started: started || running.runCount > 0, lines };
+    const started = Boolean(hold?.started) || running.runCount > 0;
+    const lines = presentRunningLines({
+      rows: hold?.rows ?? [],
+      lines: await withDraftLinks(running.lines),
+      started,
+    });
+    return { runCount: running.runCount, started, lines };
   });
 
 const resetSchema = z.object({ firmId: z.string().uuid() });
