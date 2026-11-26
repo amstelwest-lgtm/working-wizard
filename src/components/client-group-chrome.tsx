@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ClientGroupPanel } from "@/components/client-group-panel";
-import { companyCountBanner, groupChromeVisible } from "@/lib/client-groups";
+import { companiesInGroupLabel, companyCountBanner, groupChromeVisible } from "@/lib/client-groups";
 import { loadClientGroupNav, loadRailGroups, type GroupNav } from "@/lib/client-group-client";
 
 function CountChip({ count }: { count: number }) {
@@ -285,6 +285,121 @@ export function ClientGroupChrome({
           onClose={() => setStatusId(null)}
           onOpenCompany={onOpenCompany}
         />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Client rail only. A standalone company has no Group tab.
+ * Members use the client route. Status opens the existing group panel.
+ */
+export function ClientGroupTab({ clientId }: { clientId: string }) {
+  const [group, setGroup] = useState<GroupNav | null>(null);
+  const [statusId, setStatusId] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let cancel = false;
+    setGroup(null);
+    void loadClientGroupNav(clientId).then((next) => {
+      if (cancel) return;
+      if (!next || !groupChromeVisible(next.companies.length)) {
+        setGroup(null);
+        return;
+      }
+      setGroup(next);
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [clientId]);
+
+  if (!group) return null;
+
+  return (
+    <div className="nav-heading is-open" data-client-group-tab="">
+      <span className="nav-label">
+        <span className="nav-text">Group</span>
+      </span>
+      <ul className="nav-sub">
+        {group.companies.map((company) => (
+          <li key={company.id}>
+            <Link
+              to="/clients/$clientId"
+              params={{ clientId: company.id }}
+              className="nav-sub-link"
+              aria-current={company.id === clientId ? "page" : undefined}
+            >
+              {company.name}
+            </Link>
+          </li>
+        ))}
+        <li>
+          <button type="button" className="nav-sub-link" onClick={() => setStatusId(group.id)}>
+            Status
+          </button>
+        </li>
+      </ul>
+      {statusId ? (
+        <GroupStatusDialog
+          groupId={statusId}
+          onClose={() => setStatusId(null)}
+          onOpenCompany={(nextId) => {
+            void navigate({ to: "/clients/$clientId", params: { clientId: nextId } });
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** All-clients column. Standalone clients stay an em dash. */
+export function CompaniesInGroupCell({
+  companies,
+  open,
+  onToggle,
+}: {
+  companies: readonly { id: string; name: string }[];
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const label = companiesInGroupLabel(companies.length);
+  if (label === "—") {
+    return (
+      <span data-companies-in-group="standalone" className="text-[#102A43] dark:text-slate-100">
+        —
+      </span>
+    );
+  }
+  return (
+    <div data-companies-in-group={open ? "open" : "closed"}>
+      <button
+        type="button"
+        className="text-left text-sm font-semibold !text-[#0B5FFF] underline decoration-[#DBEAFE] underline-offset-4"
+        aria-expanded={open}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggle();
+        }}
+      >
+        {label}
+      </button>
+      {open ? (
+        <ul className="mt-2 min-w-[10rem] rounded-lg border border-[#DBEAFE] bg-white p-1 dark:border-slate-700 dark:bg-[#0f172a]">
+          {companies.map((company) => (
+            <li key={company.id}>
+              <Link
+                to="/clients/$clientId"
+                params={{ clientId: company.id }}
+                className="block rounded-md px-2 py-1 text-sm font-semibold !text-[#0B5FFF] hover:bg-[#DBEAFE] dark:hover:bg-white/10"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {company.name}
+              </Link>
+            </li>
+          ))}
+        </ul>
       ) : null}
     </div>
   );

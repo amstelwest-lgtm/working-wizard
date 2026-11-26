@@ -30,7 +30,7 @@ function httpsUrl(value: unknown): string {
 export const WINDOWS_PILOT_INSTALLER_URL = httpsUrl(
   import.meta.env.VITE_WINDOWS_PILOT_INSTALLER_URL,
 );
-export const WINDOWS_PILOT_DOWNLOAD_LABEL = "Download for Windows (pilot)";
+export const WINDOWS_PILOT_DOWNLOAD_LABEL = "Download for Windows";
 export const WINDOWS_PILOT_SMARTSCREEN_NOTE =
   "Windows SmartScreen may warn because the pilot is unsigned (More info, then Run anyway).";
 

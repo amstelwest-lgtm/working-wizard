@@ -6,7 +6,7 @@ This folder has its own `package.json`. It is not part of the web app install or
 
 ## Install the Windows build
 
-The website shows **Download for Windows (pilot)** only when `VITE_WINDOWS_PILOT_INSTALLER_URL` is an https URL. Pushes to `main` overwrite `desktop/Milon-Setup.exe` at that host when the `BLOB_READ_WRITE_TOKEN` Actions secret is set. Until then, use the workflow artifact:
+The website shows **Download for Windows** only when `VITE_WINDOWS_PILOT_INSTALLER_URL` is an https URL. Pushes to `main` overwrite `desktop/Milon-Setup.exe` at that host when the `BLOB_READ_WRITE_TOKEN` Actions secret is set. Until then, use the workflow artifact:
 
 1. Open the pull request's **Desktop Windows** workflow run (or run that workflow with "Run workflow").
 2. Download the **milon-windows-exe** artifact. Inside it is `Milon-Setup.exe`.

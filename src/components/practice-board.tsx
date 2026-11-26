@@ -158,6 +158,9 @@ import { useFirmPortfolioRows } from "@/hooks/use-firm-portfolio";
 import { AccountantInbox } from "@/components/accountant-inbox";
 import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
 import { overlayMayHandleKey } from "@/lib/dialog-focus";
+import { CompaniesInGroupCell } from "@/components/client-group-chrome";
+import { loadRailGroups } from "@/lib/client-group-client";
+import { indexGroupCompanies } from "@/lib/client-groups";
 import { PracticeRail } from "@/components/practice-rail";
 import { AgentWork } from "@/components/milon-team/agent-work";
 import { practiceAgentWork } from "@/lib/agent-work";
@@ -1247,6 +1250,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   // ── State ─────────────────────────────────────────────────────────────────
   const warmBook = readPaintedBook<ClientRow>(user?.id, firmId);
   const [clientRows, setClientRows] = useState<ClientRow[]>(() => warmBook ?? []);
+  const [groupsByClient, setGroupsByClient] = useState<
+    Map<string, { groupId: string; companies: readonly { id: string; name: string }[] }>
+  >(() => new Map());
+  const [openGroupClientId, setOpenGroupClientId] = useState<string | null>(null);
   const [loading, setLoading] = useState(() => warmBook == null);
   /** Open queries and follow-ups stay on a loading state until enrichment lands. */
   const [countsReady, setCountsReady] = useState(() => warmBook != null);
@@ -1912,6 +1919,26 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   }, [portalReady, practiceHash, view, bookLoading, clientRows.length]);
   const countsLoading = !countsReady;
   const clientIdKey = clientRows.map((c) => c.id).join("\n");
+  useEffect(() => {
+    if (view !== "clients") return;
+    const ids = clientIdKey.split("\n").filter(Boolean);
+    if (ids.length === 0) {
+      setGroupsByClient(new Map());
+      return;
+    }
+    let cancel = false;
+    void loadRailGroups(ids)
+      .then((groups) => {
+        if (cancel) return;
+        setGroupsByClient(indexGroupCompanies(groups));
+      })
+      .catch(() => {
+        if (!cancel) setGroupsByClient(new Map());
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [view, clientIdKey]);
   useEffect(() => {
     // Slim client ids are in clientRows once `loading` drops. The deadline is
     // armed first: a client list that never settles must not skip this timer.
@@ -2745,6 +2772,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               <thead>
                 <tr>
                   <th>Client</th>
+                  <th>Companies in group</th>
                   <th>Health</th>
                   {showTrendColumn ? <th>Trend</th> : null}
                   <th>Runway</th>
@@ -2807,6 +2835,16 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                             );
                           })()}
                         </div>
+                      </td>
+                      <td data-label="Companies in group" onClick={(event) => event.stopPropagation()}>
+                        <CompaniesInGroupCell
+                          companies={groupsByClient.get(c.id)?.companies ?? []}
+                          open={openGroupClientId === c.id}
+                          onToggle={() => {
+                            if ((groupsByClient.get(c.id)?.companies.length ?? 0) <= 1) return;
+                            setOpenGroupClientId((current) => (current === c.id ? null : c.id));
+                          }}
+                        />
                       </td>
                       <td data-label="Health">
                         <div className="cell-health">
