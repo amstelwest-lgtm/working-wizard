@@ -20,6 +20,7 @@ import {
   dedupeRunningLines,
   draftStaysOnClient,
   imResetAllowed,
+  imResetVisible,
   isImSampleClient,
   parseImSetupHold,
   planRowKey,
@@ -283,6 +284,31 @@ assert(
   "a first name is not the practice chip",
 );
 assert(
+  practiceChipName({
+    firmName: "Theo",
+    profileFirmName: "",
+    personName: "Marlon",
+    personNames: ["Marlon", "Theo", "Theo van der Westhuizen"],
+  }) === "",
+  "brand contact does not hide that the firm row is the person's name",
+);
+assert(
+  practiceChipName({
+    firmName: "Ben Accountants",
+    profileFirmName: "Theo",
+    personName: "Marlon",
+    personNames: ["Theo", "Theo van der Westhuizen"],
+  }) === "Ben Accountants",
+  "the chip keeps the firm row when it is not the person's name",
+);
+assert(imResetVisible("e8f7a440-a541-422c-8e4f-82ba33dd0604", "Redo in progress"), "reset is on a redo");
+assert(imResetVisible("e8f7a440-a541-422c-8e4f-82ba33dd0604", "Saved"), "reset is on a saved plan");
+assert(imResetVisible("e8f7a440-a541-422c-8e4f-82ba33dd0604", "Interviewing"), "reset is while the interview is open");
+assert(imResetVisible("e8f7a440-a541-422c-8e4f-82ba33dd0604", "Map"), "reset is on the map");
+assert(!imResetVisible("e8f7a440-a541-422c-8e4f-82ba33dd0604", "Not started"), "reset stays off Not started");
+assert(!imResetVisible("fca0f102-a597-4ec6-8f45-825c57f78797", "Redo in progress"), "another firm does not get reset");
+assert(!imResetVisible(null, "Redo in progress"), "reset needs a firm");
+assert(
   implementationManagerStatus({ booting: true, phase: "interview", interviewing: false, redo: false }) !== "Not started",
   "loading the hold does not read as Not started",
 );
@@ -292,7 +318,9 @@ assert(
 );
 assert(panel.includes('data-im-status="loading"'), "the hero uses a skeleton while the hold loads");
 assert(panel.includes("const thinkingNow = !booting && loading"), "thinking waits until the hold has loaded");
-assert(/data-im-start=""[\s\S]{0,700}data-im-reset=""/.test(panel), "reset sits with the started control");
+assert(panel.includes("imResetVisible"), "reset follows the setup state");
+assert(panel.includes("data-im-reset"), "reset is rendered on the setup page");
+assert(!panel.includes("integrationStarted && resetSetupHold"), "reset is not only the started flag");
 assert(
   implementationManagerStep({ phase: "done", interviewing: false, firmRunCount: 0 }) === "plan",
   "no agent runs means the stepper is not on what's running",

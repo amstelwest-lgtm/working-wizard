@@ -32,6 +32,7 @@ import {
   authDisplayName,
   practiceGreetingName,
   practiceHeaderName,
+  practicePersonNames,
   resolvePersistedAccountantIdentity,
   type PersistedNameChain,
 } from "@/lib/accountant-identity";
@@ -149,6 +150,8 @@ type AccountantProfileContextValue = {
   greetingSource: string;
   /** Header name. Never the email address. Empty until a real name has loaded. */
   headerName: string;
+  /** Profile, auth, and brand-contact names. The practice chip must not print any of them. */
+  personNames: string[];
 };
 
 const AccountantProfileContext = createContext<AccountantProfileContextValue | null>(null);
@@ -573,6 +576,11 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
     profileFullName: nameChain.profileFullName,
     authFullName: nameChain.authFullName,
   });
+  const personNames = practicePersonNames({
+    accountantName: profile.accountantName,
+    profileFullName: nameChain.profileFullName,
+    authFullName: nameChain.authFullName,
+  });
 
   return (
     <AccountantProfileContext.Provider
@@ -593,6 +601,7 @@ export function AccountantProfileProvider({ children }: { children: ReactNode })
         saveProfile,
         greetingSource,
         headerName,
+        personNames,
       }}
     >
       {children}

@@ -7,15 +7,17 @@ import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { practiceChipName } from "@/lib/accountant-identity";
 
 export function FirmSwitcher({ className, firmId: firmIdProp }: { className?: string; firmId?: string | null }) {
-  const { firmId, firms, setActiveFirm, brandLoading, profile, headerName } = useAccountantProfile();
-  const activeId = firmIdProp || firmId;
+  const { firmId, firms, setActiveFirm, brandLoading, profile, headerName, personNames } = useAccountantProfile();
+  const pinnedFirmId = typeof firmIdProp === "string" && firmIdProp.trim() ? firmIdProp.trim() : null;
+  const activeId = pinnedFirmId || firmId;
   // A client page passes that client's firm. Do not fall back to another firm or the profile name.
   const active =
-    firms.find((firm) => firm.id === activeId) ?? (firmIdProp ? null : firms.length === 1 ? firms[0] : null);
+    firms.find((firm) => firm.id === activeId) ?? (pinnedFirmId ? null : firms.length === 1 ? firms[0] : null);
   const practiceName = practiceChipName({
     firmName: active?.name,
-    profileFirmName: firmIdProp ? "" : profile.firmName,
+    profileFirmName: pinnedFirmId ? "" : profile.firmName,
     personName: headerName || profile.accountantName,
+    personNames,
   });
 
   if (brandLoading && firms.length === 0) {
@@ -27,7 +29,9 @@ export function FirmSwitcher({ className, firmId: firmIdProp }: { className?: st
     );
   }
 
-  if (firms.length <= 1) {
+  // Client pages always use the firm row for that client, even when the
+  // account can switch firms. A person-named row stays blank.
+  if (pinnedFirmId || firms.length <= 1) {
     if (!practiceName) return null;
     return (
       <span className={`firm-chip ${className ?? ""}`.trim()}>

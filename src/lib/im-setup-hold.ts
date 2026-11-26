@@ -252,6 +252,15 @@ export function imResetAllowed(firmId: string): boolean {
   return firmId.trim().toLowerCase().startsWith("e8f7a440");
 }
 
+/**
+ * Reset is on every setup state except the empty "Not started" screen.
+ * Redo, saved, interviewing, and the map all count. Other firms never see it.
+ */
+export function imResetVisible(firmId: string | null | undefined, status: string): boolean {
+  if (!firmId || status === "Not started") return false;
+  return imResetAllowed(firmId);
+}
+
 function clip(value: unknown, max: number): string {
   if (typeof value !== "string") return "";
   return value.replace(/\s+/g, " ").trim().slice(0, max);
