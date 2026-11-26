@@ -53,7 +53,7 @@ import {
   type PracticeImplementationPlan,
 } from "@/lib/setup-partner-plan";
 import { nextMomTestQuestion } from "../../supabase/functions/setup-partner/firm-interview-prompt.ts";
-import { imResetVisible } from "@/lib/im-setup-hold";
+import { imResetVisible, planRowStatusFromRuns } from "@/lib/im-setup-hold";
 
 /** User-facing name. Internal ids stay setup_partner. */
 export const IMPLEMENTATION_MANAGER_LABEL = "Implementation Manager";
@@ -188,6 +188,8 @@ type RunningLine = {
   href?: string;
   clientName?: string;
   routine?: string;
+  runId?: string;
+  rowKey?: string;
 };
 
 type ResetSetupHold = (firmId: string) => Promise<unknown>;
@@ -504,9 +506,10 @@ export function PracticeSetupInterview({
     void loadRunning(firmId)
       .then((res) => {
         if (cancel) return;
-        setFirmRunCount(res.runCount);
-        setRunningLines(res.lines);
-        if (res.started || res.runCount > 0 || res.lines.length > 0) setIntegrationStarted(true);
+        const backed = (res.lines ?? []).filter((line) => Boolean(line.runId?.trim()));
+        setFirmRunCount(res.runCount ?? 0);
+        setRunningLines(backed);
+        if (res.started || (res.runCount ?? 0) > 0) setIntegrationStarted(true);
       })
       .catch(() => undefined);
     return () => {
@@ -528,28 +531,23 @@ export function PracticeSetupInterview({
         coverage: visibleMap?.milonCoverage ?? [],
         interview: interviewKey,
         country: marketCountry,
-        started: integrationStarted || firmRunCount > 0,
-        running: runningLines.some((line) => line.status === "Running"),
-      }),
+      }).map((row) => ({ ...row, status: planRowStatusFromRuns(row, runningLines) })),
     // planKey, coverageKey, and interviewKey are the stable contents.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [planKey, coverageKey, interviewKey, marketCountry, integrationStarted, firmRunCount, runningLines],
+    [planKey, coverageKey, interviewKey, marketCountry, runningLines],
   );
   const tableRows = useMemo(() => {
     const live =
       !opusRows || opusRows.length === 0
         ? localRows
-        : opusRows.map((row) => {
-            const local = localRows.find((item) => item.playId === row.playId);
-            return local ? { ...row, status: local.status } : row;
-          });
+        : opusRows.map((row) => ({ ...row, status: planRowStatusFromRuns(row, runningLines) }));
     const held = heldPlanRef.current;
     if (!held) return live;
     return held.map((row) => {
       const match = live.find((item) => item.playId === row.playId);
-      return match ? { ...row, status: match.status } : row;
+      return { ...row, status: match?.status ?? "Waiting" };
     });
-  }, [localRows, opusRows]);
+  }, [localRows, opusRows, runningLines]);
   const ruleAction = rulesActionFromHref(tableRows[0]?.actionHref);
 
   useEffect(() => {
@@ -973,6 +971,7 @@ export function PracticeSetupInterview({
                 <ImPlanLink href={ruleAction.href} className="im-plan-action" data-im-plan-action="add-rule">
                   {ruleAction.label}
                 </ImPlanLink>
+                {integrationStarted ? null : <span data-im-integration="">Not started</span>}
                 <button
                   type="button"
                   className="setup-partner__primary im-plan-start"

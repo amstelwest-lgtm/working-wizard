@@ -212,6 +212,12 @@ assert(!activationSource.includes("sent_at:") || activationSource.includes("draf
 assert(!activationSource.includes("xero") || activationSource.includes("xero_connections"), "no ledger posts");
 assert(activationSource.includes('countNewlyEnqueuedRun(run)'), "enqueue tally skips duplicate agent_runs");
 assert(activationSource.includes('created: false'), "23505 path marks existing run");
+const pilotFn = activationSource.slice(
+  activationSource.indexOf("function resolveStoredPilot"),
+  activationSource.indexOf("async function withDraftLinks"),
+);
+assert(pilotFn.includes("if (!match) return null"), "a stored pilot must be one of this firm's clients");
+assert(!pilotFn.includes("hasLedger: false"), "a missing pilot is not invented");
 assert(activationSource.includes('rpc("agent_invoke"'), "activation starts runners via agent_invoke");
 assert(!activationSource.includes("resend"), "activation does not send mail");
 assert(!activationSource.includes("accountant_request_respond"), "activation does not post requests");
