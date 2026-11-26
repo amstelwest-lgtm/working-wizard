@@ -14,14 +14,14 @@ function combineSignals(timeout: AbortSignal, parent?: AbortSignal | null): Abor
   return controller.signal;
 }
 
-/** Node fetch used by the desktop Supabase client. Hanging sockets abort instead of pinning sign-in. */
-export function fetchWithDeadline(
-  timeoutMs = SIGN_IN_TIMEOUT_MS,
-): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
+export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+/** Hanging sockets abort instead of pinning sign-in. The desktop app passes Electron's net.fetch. */
+export function fetchWithDeadline(timeoutMs = SIGN_IN_TIMEOUT_MS, baseFetch: FetchLike = fetch): FetchLike {
   return (input, init) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     const signal = combineSignals(controller.signal, init?.signal);
-    return fetch(input, { ...init, signal }).finally(() => clearTimeout(timer));
+    return baseFetch(input, { ...init, signal }).finally(() => clearTimeout(timer));
   };
 }

@@ -7,7 +7,7 @@
   "author": "Milon",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node --test dist/classifier.test.js dist/paths.test.js dist/snippet.test.js dist/external-url.test.js dist/sign-in-error.test.js dist/fetch-deadline.test.js dist/icon-file.test.js",
+    "test": "npm run build && node --test dist/classifier.test.js dist/paths.test.js dist/snippet.test.js dist/external-url.test.js dist/sign-in-error.test.js dist/fetch-deadline.test.js dist/session-recover.test.js dist/icon-file.test.js",
     "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder --win nsis"
   },

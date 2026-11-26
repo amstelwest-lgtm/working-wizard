@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, shell, Tray } from "electron";
 import chokidar, { type FSWatcher } from "chokidar";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { readFile, stat } from "node:fs/promises";
@@ -19,10 +19,17 @@ import { historyHas, loadSettings, rememberUpload, saveSettings, type Settings }
 import { intakeHasSha, sha256Hex, uploadToIntake } from "./intake";
 import { fileExtension, ignoredLocalFile, sizeError, watchedExtension } from "./paths";
 import { allowedPasswordResetUrl, PASSWORD_RESET_URL } from "./external-url";
-import { fetchWithDeadline } from "./fetch-deadline";
+import { fetchWithDeadline, type FetchLike } from "./fetch-deadline";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./public-config";
+import {
+  releaseForPasswordGrant,
+  SESSION_RECOVER_MS,
+  watchSessionRecovery,
+  type InitAuth,
+  type RecoveryWatch,
+} from "./session-recover";
 import { clearSessionFile, encryptionAvailable, secureSessionStorage } from "./session-store";
-import { desktopAuthConfigOk, signInUserMessage } from "./sign-in-error";
+import { desktopAuthConfigOk, redactedSignInFailure, SIGN_IN_TIMEOUT_MS, signInUserMessage } from "./sign-in-error";
 import { firstPageText } from "./snippet";
 
 type Status = "queued" | "uploading" | "uploaded" | "needs answer" | "failed";
@@ -64,6 +71,9 @@ let banner: string | null = null;
 let email: string | null = null;
 let userId: string | null = null;
 let signInAttempt = 0;
+let recoveryAbort: AbortController | null = null;
+let recovering = false;
+let sessionWatch: RecoveryWatch | null = null;
 const inflight = new Set<string>();
 
 function logSignIn(stage: string, error?: unknown): void {
@@ -73,6 +83,74 @@ function logSignIn(stage: string, error?: unknown): void {
       ? (error as { code: string }).code
       : "";
   console.error(`[milon-desktop] sign-in stage=${stage}${name ? ` name=${name}` : ""}${code ? ` code=${code}` : ""}`);
+}
+
+function authState(): SupabaseClient["auth"] & InitAuth {
+  return db().auth as SupabaseClient["auth"] & InitAuth;
+}
+
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
+/** Chromium networking, so Windows proxy and certs apply. Node's fetch does not. */
+const chromiumFetch: FetchLike = (input, init) => {
+  let signal = init?.signal;
+  if (recovering && recoveryAbort) {
+    const recovery = recoveryAbort.signal;
+    signal = signal ? AbortSignal.any([recovery, signal]) : recovery;
+  }
+  return net.fetch(requestUrl(input), { ...init, signal });
+};
+
+function armRecoveryAbort(): void {
+  recoveryAbort = new AbortController();
+  recovering = true;
+}
+
+function abandonRecovery(): void {
+  const controller = recoveryAbort;
+  recovering = false;
+  recoveryAbort = null;
+  controller?.abort();
+}
+
+function disarmRecoveryAbort(): void {
+  recovering = false;
+  recoveryAbort = null;
+}
+
+function dropStoredSession(): void {
+  abandonRecovery();
+  clearSessionFile();
+}
+
+function releasePasswordGrant(): void {
+  if (!supabase) return;
+  if (sessionWatch && !sessionWatch.done) {
+    sessionWatch.done = true;
+    sessionWatch.failed = true;
+    sessionWatch.stop();
+    abandonRecovery();
+  }
+  releaseForPasswordGrant(authState(), sessionWatch, clearSessionFile);
+}
+
+function startSessionRecovery(): void {
+  armRecoveryAbort();
+  const auth = authState();
+  const pending = auth.initialize();
+  sessionWatch = watchSessionRecovery(auth, pending, dropStoredSession);
+  void auth.initializePromise?.then(
+    () => {
+      if (!sessionWatch?.failed) disarmRecoveryAbort();
+    },
+    () => {
+      /* watchSessionRecovery clears session.bin */
+    },
+  );
 }
 
 function assetPath(name: string): string {
@@ -452,11 +530,12 @@ function registerIpc(): void {
       publish();
       return { ok: false, message: banner };
     }
+    releasePasswordGrant();
     try {
       const { data, error } = await db().auth.signInWithPassword({ email: address, password });
       if (attempt !== signInAttempt) return { ok: false, message: "Sign-in was interrupted. Try again." };
       if (error || !data.session) {
-        logSignIn("password-grant", error);
+        console.error(redactedSignInFailure(error));
         try {
           await db().auth.signOut();
         } catch {
@@ -480,7 +559,7 @@ function registerIpc(): void {
       }, 0);
       return { ok: true, message: "" };
     } catch (error) {
-      logSignIn("password-grant", error);
+      console.error(redactedSignInFailure(error));
       clearSessionFile();
       email = null;
       userId = null;
@@ -603,17 +682,19 @@ if (!gotLock) {
     app.setAppUserModelId("finance.milon.desktop");
     settings = loadSettings();
     supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { fetch: fetchWithDeadline() },
+      global: { fetch: fetchWithDeadline(SIGN_IN_TIMEOUT_MS, chromiumFetch) },
       auth: {
         storage: secureSessionStorage,
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: false,
+        skipAutoInitialize: true,
       },
     });
     registerIpc();
     createWindow();
     createTray();
+    startSessionRecovery();
     // Session restore and the folder watcher are not on the sign-in click.
     setTimeout(() => {
       void bootSession().catch((error: unknown) => {

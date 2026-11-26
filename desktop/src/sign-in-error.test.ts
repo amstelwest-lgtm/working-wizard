@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./public-config";
-import { desktopAuthConfigOk, signInUserMessage } from "./sign-in-error";
+import { desktopAuthConfigOk, redactedSignInFailure, signInUserMessage } from "./sign-in-error";
 
 test("the baked desktop config is a live anon client", () => {
   assert.equal(desktopAuthConfigOk(SUPABASE_URL, SUPABASE_ANON_KEY), true);
@@ -25,4 +25,28 @@ test("sign-in failures stay plain", () => {
     "This PC can't encrypt the Milōn session. The password was not saved.",
   );
   assert.equal(signInUserMessage(null), "Can't reach Milōn. Check your connection and try again.");
+});
+
+test("a failed sign-in logs only the error name and code", () => {
+  const error = Object.assign(
+    new Error("ada@example.com hunter2 https://jxclnsbsqpixxqlbcapl.supabase.co/auth/v1/token?apikey=secret eyJhbGciOi.payload.sig"),
+    { name: "AuthApiError", code: "invalid_credentials" },
+  );
+  const line = redactedSignInFailure(error);
+  assert.equal(line, "[milon-desktop] sign-in name=AuthApiError code=invalid_credentials");
+  assert.equal(line.includes("ada@example.com"), false);
+  assert.equal(line.includes("hunter2"), false);
+  assert.equal(line.includes("supabase.co"), false);
+  assert.equal(line.includes("apikey"), false);
+  assert.equal(line.includes("eyJ"), false);
+  const leaked = redactedSignInFailure(
+    Object.assign(new Error("https://example.supabase.co/?apikey=secret"), {
+      name: "https://example.supabase.co/?apikey=secret",
+      code: "https://example.supabase.co/?apikey=secret",
+    }),
+  );
+  assert.equal(leaked, "[milon-desktop] sign-in name=Error code=");
+  assert.equal(leaked.includes("supabase"), false);
+  assert.equal(leaked.includes("apikey"), false);
+  assert.equal(leaked.includes("secret"), false);
 });
