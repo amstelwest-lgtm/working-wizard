@@ -175,7 +175,7 @@ function triggerDownload(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
-export async function downloadAdvisoryPackPdf(input: {
+export async function renderAdvisoryPackPdfBlob(input: {
   pack: AdvisoryPack;
   profile: AccountantProfile;
   userId: string | null;
@@ -279,6 +279,13 @@ export async function downloadAdvisoryPackPdf(input: {
     }) as Parameters<typeof pdf>[0],
   ).toBlob();
 
-  triggerDownload(blob, filename);
   return { blob, filename, signed: Boolean(stamp) };
+}
+
+export async function downloadAdvisoryPackPdf(
+  input: Parameters<typeof renderAdvisoryPackPdfBlob>[0],
+): Promise<{ blob: Blob; filename: string; signed: boolean }> {
+  const result = await renderAdvisoryPackPdfBlob(input);
+  triggerDownload(result.blob, result.filename);
+  return result;
 }

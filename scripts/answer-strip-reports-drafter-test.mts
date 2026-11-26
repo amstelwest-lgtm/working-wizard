@@ -103,7 +103,12 @@ assert.ok(
 assert.equal(reportsPane.includes("DeliverableAnswerStrip"), false, "reports has no sign-off strip");
 assert.equal(reportsPane.includes("Board-ready"), false, "the reports lede leaves the tab");
 assert.ok(draftsPane.includes("AdvisoryPackPanel"), "the pack sits on Advisory pack");
-assert.ok(draftsPane.includes("RecommendationsPanel"), "recommendations sit on Advisory pack");
+assert.equal(
+  draftsPane.includes("RecommendationsPanel"),
+  false,
+  "recommendations leave the Management Report page",
+);
+assert.ok(draftsPane.includes("plain"), "the pack page has one inputs panel");
 assert.ok(draftsPane.includes("OutcomesPanel"), "outcomes sit on Advisory pack");
 assert.equal(draftsPane.includes("AdvisoryDrafter"), false, "the drafter leaves Advisory pack");
 assert.ok(toolPane.includes("AdvisoryDrafter"), "the drafter sits on Draft tool");

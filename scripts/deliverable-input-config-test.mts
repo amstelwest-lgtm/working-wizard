@@ -225,6 +225,12 @@ assert(CASH_RUNWAY_THRESHOLD_RAND === 50_000, "runway default matches engine");
 
 const ui = read("src/components/deliverable-input-config.tsx");
 assert(ui.includes("Configure inputs"), "collapsed title");
+assert(ui.includes("plain"), "a host can keep sources in one panel");
+assert(ui.includes("data-inputs-plain"), "plain inputs skip the second card");
+assert(
+  ui.indexOf("title=\"Configure inputs\"") > ui.indexOf("plain ? ("),
+  "Configure inputs is the card, not the plain body",
+);
 assert(ui.includes("Inputs used"), "sources heading");
 assert(ui.includes("Open questions"), "questions heading");
 assert(ui.includes("Assumptions"), "assumptions heading");

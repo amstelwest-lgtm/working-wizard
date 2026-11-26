@@ -6735,6 +6735,7 @@ function Index() {
                     <AdvisoryPackPanel
                       className="mb-5"
                       clientId={effectiveClientId}
+                      clientName={ownerReportClientName}
                       firmId={clientMeta?.firm_id ?? null}
                       signoff={advisorySignoff}
                       audience="owner"

@@ -708,8 +708,14 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   assert(app.includes("hasFirm={Boolean(clientMeta?.firm_id)}"), "owner board passes firm fact");
   const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
   const sPack = studio.indexOf("<AdvisoryPackPanel");
-  const sRecs = studio.indexOf("<RecommendationsPanel");
-  assert(sPack > 0 && sPack < sRecs, "studio: pack above recommendations on the advisory tab");
+  const draftsStart = studio.indexOf('id="reports-drafts"');
+  const draftsEnd = studio.indexOf('id="reports-draft-tool"');
+  const draftsPane = studio.slice(draftsStart, draftsEnd);
+  assert(sPack > 0 && draftsPane.includes("<AdvisoryPackPanel"), "studio: the pack stays on the report page");
+  assert(
+    !draftsPane.includes("<RecommendationsPanel"),
+    "studio: recommendations are not on the Management Report page",
+  );
   assert(
     /audience="accountant"\s+canGenerate=\{hasFigures\}/.test(studio),
     "studio pack panel is the accountant seat",
