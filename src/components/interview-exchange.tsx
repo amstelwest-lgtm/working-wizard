@@ -1,6 +1,15 @@
 import { useMarketFormat } from "@/contexts/market";
+import { AgentReplyShell } from "@/components/agent-reply/agent-reply-shell";
+import { structureAgentReply, type AgentReply } from "@/lib/agent-reply";
 import { groupInterviewSessions, type FirmInterviewDraft } from "@/lib/firm-interview-draft";
 import type { FirmInterviewMessage } from "@/lib/setup-partner";
+
+/** A plain interview question stays a heading. A formatted reply uses the shared card. */
+function formattedImReply(text: string): AgentReply | null {
+  const reply = structureAgentReply(text);
+  if (reply.figures.length || reply.suggestions.length || reply.kpis.length || reply.detail.trim()) return reply;
+  return null;
+}
 
 export const IMPLEMENTATION_MANAGER_THINKING = "Implementation Manager is thinking…";
 
@@ -52,6 +61,7 @@ export function InterviewExchange({
       : questionTotal && questionTotal > 0
         ? `Question ${questionIndex} of ~${questionTotal}`
         : `Question ${questionIndex}`;
+  const shaped = question && !thinking ? formattedImReply(question) : null;
   return (
     <div className="setup-partner__exchange" data-interview-exchange="">
       {count ? <p className="im-qcount">{count}</p> : null}
@@ -64,6 +74,8 @@ export function InterviewExchange({
           </span>
           {IMPLEMENTATION_MANAGER_THINKING}
         </p>
+      ) : shaped ? (
+        <AgentReplyShell reply={shaped} />
       ) : question ? (
         <div className="im-ask">
           <h2 className="setup-partner__question">{question}</h2>
@@ -126,16 +138,21 @@ export function PastInterviews({
                 </h3>
               ) : null}
               <ol className="setup-partner__transcript">
-                {pairs.map((pair, index) => (
+                {pairs.map((pair, index) => {
+                  const shaped = pair.question ? formattedImReply(pair.question) : null;
+                  return (
                   <li key={`${session.sessionId}-${index}-${pair.question}`} className="im-thread">
-                    {pair.question ? (
+                    {shaped ? (
+                      <AgentReplyShell reply={shaped} />
+                    ) : pair.question ? (
                       <p className="setup-partner__log-q im-bubble im-bubble--ask">
                         <strong>{pair.question}</strong>
                       </p>
                     ) : null}
                     {pair.answer ? <p className="setup-partner__log-a im-bubble">{pair.answer}</p> : null}
                   </li>
-                ))}
+                  );
+                })}
               </ol>
             </section>
           );

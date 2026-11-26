@@ -68,6 +68,7 @@ import {
 } from "./trial-ended-billing.ts";
 import { startBrowserSpeech, VOICE_MISSED, VOICE_UNAVAILABLE } from "./browser-speech.ts";
 import { figureDecisionError, figureProposalCardCopy, figureProposalTurn } from "./figure-proposal.ts";
+import { isMonthEndUpdateAsk } from "./month-end-update.ts";
 import { composerPromptText } from "./composer-prompt.ts";
 
 export {
@@ -383,6 +384,13 @@ export function mountAskAi(container, options) {
           if (proposal) next.proposal = proposal;
           const storedReply = parseStoredAgentReply(turn.reply);
           if (storedReply) next.reply = agentReplyForStorage(storedReply);
+          if (turn.monthEndPdf && turn.monthEndPdf.held === true) {
+            const filename =
+              typeof turn.monthEndPdf.filename === "string" && turn.monthEndPdf.filename.trim()
+                ? turn.monthEndPdf.filename.trim().slice(0, 120)
+                : "month-end-update.pdf";
+            next.monthEndPdf = { held: true, filename };
+          }
           const download = turn.reportDownload;
           if (
             download &&
@@ -420,9 +428,19 @@ export function mountAskAi(container, options) {
         key,
         JSON.stringify({
           key: forecastKey == null ? currentForecastKey() : forecastKey,
-          turns: turns.slice(-16).map((turn) =>
-            turn && turn.reply ? { ...turn, reply: agentReplyForStorage(turn.reply) } : turn,
-          ),
+          turns: turns.slice(-16).map((turn) => {
+            const next = turn && turn.reply ? { ...turn, reply: agentReplyForStorage(turn.reply) } : { ...turn };
+            if (next && next.monthEndPdf) {
+              next.monthEndPdf = {
+                held: true,
+                filename:
+                  typeof next.monthEndPdf.filename === "string" && next.monthEndPdf.filename.trim()
+                    ? next.monthEndPdf.filename.trim().slice(0, 120)
+                    : "month-end-update.pdf",
+              };
+            }
+            return next;
+          }),
         }),
       );
     } catch {
@@ -801,6 +819,15 @@ export function mountAskAi(container, options) {
       root.render(
         createElement(AgentReplyShell, {
           reply,
+          onSuggest: (text) => {
+            if (loading || typeof text !== "string" || !text.trim()) return;
+            question = text.trim();
+            answer = "";
+            answerChips = [];
+            toolHints = [];
+            errorMsg = "";
+            submit();
+          },
           onLoadDetail: async (id) => {
             const lines = howDetails.get(id);
             return lines && lines.length ? { lines } : null;
@@ -848,6 +875,15 @@ export function mountAskAi(container, options) {
       const panel = document.createElement("div");
       panel.className = "ask-ai-panel";
       if (container.dataset.agentReply === "shell") panel.dataset.agentReplyHost = "shell";
+
+      if (fromImplementationPlan()) {
+        const back = document.createElement("a");
+        back.className = "ask-ai-back-plan";
+        back.href = "/practice/setup";
+        back.dataset.backToImplementation = "im";
+        back.textContent = "Back to implementation plan";
+        panel.appendChild(back);
+      }
 
       if (!hideBrand) {
         const brand = document.createElement("div");
@@ -1076,6 +1112,7 @@ export function mountAskAi(container, options) {
           } else {
             paintReply(bubble, replyForTurn(turn));
             appendReportDownload(bubble, turn);
+            appendMonthEndPdf(bubble, turn);
           }
           if (latestAssistant) {
             decorateLatestAnswer(bubble);
@@ -1134,6 +1171,76 @@ export function mountAskAi(container, options) {
     }
 
     container.appendChild(widget);
+  }
+
+  function fromImplementationPlan() {
+    try {
+      return new URLSearchParams(window.location.search).get("from") === "im";
+    } catch {
+      return false;
+    }
+  }
+
+  function appendMonthEndPdf(bubble, turn) {
+    const file = turn && turn.monthEndPdf;
+    if (!file || file.held !== true) return;
+    const card = document.createElement("div");
+    card.className = "ask-ai-pdf-card";
+    card.dataset.monthEndPdf = "held";
+    const note = document.createElement("p");
+    note.className = "ask-ai-pdf-note";
+    note.textContent = "Held for your approval. Not sent.";
+    card.appendChild(note);
+    const name = document.createElement("p");
+    name.className = "ask-ai-pdf-name";
+    name.textContent =
+      typeof file.filename === "string" && file.filename.trim()
+        ? file.filename.trim()
+        : "month-end-update.pdf";
+    card.appendChild(name);
+    const actions = document.createElement("div");
+    actions.className = "ask-ai-pdf-actions";
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "ask-ai-handoff";
+    open.dataset.pdfAction = "open";
+    open.textContent = "Open PDF";
+    const download = document.createElement("button");
+    download.type = "button";
+    download.className = "ask-ai-handoff";
+    download.dataset.pdfAction = "download";
+    download.textContent = "Download PDF";
+    const ensure = async () => {
+      if (typeof file.url === "string" && file.url.startsWith("blob:")) return file.url;
+      const clientId = currentClientId();
+      if (!clientId) return "";
+      const mod = await import("./month-end-pdf.ts");
+      const prepared = await mod.prepareMonthEndPdf(clientId);
+      file.url = URL.createObjectURL(prepared.blob);
+      file.filename = prepared.filename;
+      name.textContent = prepared.filename;
+      return file.url;
+    };
+    open.addEventListener("click", () => {
+      void ensure().then((url) => {
+        if (url) window.open(url, "_blank", "noopener");
+      });
+    });
+    download.addEventListener("click", () => {
+      void ensure().then((url) => {
+        if (!url) return;
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = file.filename || "month-end-update.pdf";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      });
+    });
+    actions.appendChild(open);
+    actions.appendChild(download);
+    card.appendChild(actions);
+    bubble.appendChild(card);
   }
 
   function appendReportDownload(bubble, turn) {
@@ -1564,6 +1671,55 @@ export function mountAskAi(container, options) {
       });
     }
 
+    if (threadAgent === "advisor" && isMonthEndUpdateAsk(q)) {
+      try {
+        const clientId = currentClientId();
+        let headline = "I could not build the month-end PDF. Nothing was sent.";
+        let monthEndPdf = null;
+        if (clientId) {
+          try {
+            const mod = await import("./month-end-pdf.ts");
+            const prepared = await mod.prepareMonthEndPdf(clientId);
+            if (gen !== requestGen) return;
+            headline = prepared.headline;
+            monthEndPdf = {
+              held: true,
+              filename: prepared.filename,
+              url: URL.createObjectURL(prepared.blob),
+            };
+          } catch {
+            if (gen !== requestGen) return;
+          }
+        }
+        if (gen !== requestGen) return;
+        answer = headline;
+        const reply = structureAgentReply(headline, { agent: "advisor" });
+        const assistant = { role: "assistant", content: headline, reply };
+        if (monthEndPdf) assistant.monthEndPdf = monthEndPdf;
+        const mapped = history.map((item) =>
+          item.role === "user" && item.turnId === turnId
+            ? { role: "user", content: item.content, turnId }
+            : item,
+        );
+        history = [...mapped, assistant];
+        if (history.length > 16) history = history.slice(-16);
+        writeThread(boundClientId || currentClientId(), history);
+      } catch {
+        if (gen !== requestGen) return;
+        answer = "I could not build the month-end PDF. Nothing was sent.";
+      } finally {
+        if (gen === requestGen) {
+          loading = false;
+          pendingIntent = null;
+          workingObjective = false;
+          creatingDeliverable = false;
+          proposingFigure = false;
+          safeRender(q);
+        }
+      }
+      return;
+    }
+
     if (reportRoute) {
       const controller = new AbortController();
       let timer = 0;
@@ -1741,7 +1897,6 @@ export function mountAskAi(container, options) {
       if (!precardCap && isStarterTrialEndedMessage(answer)) {
         notifyTrialEnded();
       }
-      answerChips = precardCap ? [] : turn.chips;
       agentRun = turn.run;
       toolHints = turn.tools.map((t) => toolHint(t.name, t.status));
       const capped = Boolean(turn.precardCap && isPrecardLimitKind(turn.precardCap.limit));
@@ -1760,6 +1915,8 @@ export function mountAskAi(container, options) {
         run: outcome ? { outcomeLabel: outcome } : null,
         proposalChips: false,
       });
+      const suggested = new Set(reply.suggestions || []);
+      answerChips = precardCap ? [] : turn.chips.filter((chip) => !suggested.has(chip));
       const assistant = {
         role: "assistant",
         content: answer,

@@ -60,6 +60,11 @@ function clientSections(
             },
           })),
         },
+        {
+          id: "implementation",
+          label: "Implementation Manager",
+          to: { to: "/practice/setup" },
+        },
         ...(showSendAgent
           ? [
               {

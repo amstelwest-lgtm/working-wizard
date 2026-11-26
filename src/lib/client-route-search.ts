@@ -961,6 +961,7 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
   action?: "preview" | "download";
   agent?: string;
   prompt?: string;
+  from?: "im";
   profile?: number;
   view?:
     | "chart"
@@ -992,6 +993,7 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
     action?: "preview" | "download";
     agent?: string;
     prompt?: string;
+    from?: "im";
     profile?: number;
     view?:
       | "chart"
@@ -1027,6 +1029,7 @@ export function accountantClientRouteSearch(search: Record<string, unknown>): {
     const text = composerPromptText(search.prompt);
     if (text) out.prompt = text;
   }
+  if (search.from === "im" && out.agent && (!out.tab || out.tab === "home")) out.from = "im";
   if (search.profile === 1 || search.profile === "1") out.profile = 1;
   if (typeof search.draft === "string" && /^[0-9a-f-]{36}$/i.test(search.draft))
     out.draft = search.draft;

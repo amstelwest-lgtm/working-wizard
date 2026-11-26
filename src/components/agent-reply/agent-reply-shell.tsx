@@ -1,10 +1,19 @@
 /**
- * Answer-first card for an agent reply.
- * The how-trail stays closed until the person opens it, and that open
- * reads a trail already stored with the reply.
+ * The one reply card for every bot: Financial Manager, Analyst, Advisor,
+ * Tax Specialist, the firm thread, the owner thread, and a formatted
+ * Implementation Manager reply. The how-trail stays closed until opened.
  */
-import { useState } from "react";
-import type { AgentReply, AgentReplyDecision, AgentReplyHowDetail } from "@/lib/agent-reply";
+import { useState, type ReactNode } from "react";
+import { advisorReplyBlocks } from "@/lib/advisor-reply-format";
+import {
+  structureAgentReply,
+  type AgentReply,
+  type AgentReplyAgent,
+  type AgentReplyDecision,
+  type AgentReplyHowDetail,
+  type AgentReplySources,
+} from "@/lib/agent-reply";
+import { parseRuns } from "@/lib/owner-reply-format";
 
 export type AgentReplyDecisionAction = "confirm" | "reject" | "approve" | "dismiss";
 
@@ -54,16 +63,69 @@ export function AgentReplyDecisionStrip({
   );
 }
 
+function InlineText({ text }: { text: string }) {
+  return parseRuns(text).map((run, index) =>
+    run.bold ? <strong key={index}>{run.text}</strong> : <span key={index}>{run.text}</span>,
+  );
+}
+
+function ReplyMarkdown({ text }: { text: string }) {
+  const blocks = advisorReplyBlocks(text);
+  return (
+    <div className="agent-reply-md" data-agent-markdown="true">
+      {blocks.map((block, index) => {
+        if (block.kind === "ul" || block.kind === "ol") {
+          const List = block.kind === "ol" ? "ol" : "ul";
+          return (
+            <List key={index} className="agent-reply-md-list">
+              {block.items.map((item) => (
+                <li key={item}>
+                  <InlineText text={item} />
+                </li>
+              ))}
+            </List>
+          );
+        }
+        return (
+          <p key={index}>
+            <InlineText text={block.text} />
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Parse one bot reply and paint the shared card. */
+export function BotReply({
+  text,
+  agent = null,
+  sources,
+  onSuggest,
+  onLoadDetail,
+}: {
+  text: string;
+  agent?: AgentReplyAgent | null;
+  sources?: AgentReplySources;
+  onSuggest?: (suggestion: string) => void;
+  onLoadDetail?: (detailId: string) => Promise<AgentReplyHowDetail | null>;
+}) {
+  const reply = structureAgentReply(text, { ...sources, agent: agent ?? sources?.agent ?? null });
+  return <AgentReplyShell reply={reply} onSuggest={onSuggest} onLoadDetail={onLoadDetail} />;
+}
+
 export function AgentReplyShell({
   reply,
   busy = false,
   onDecide,
   onLoadDetail,
+  onSuggest,
 }: {
   reply: AgentReply;
   busy?: boolean;
   onDecide?: (action: AgentReplyDecisionAction, decision: AgentReplyDecision) => void;
   onLoadDetail?: (detailId: string) => Promise<AgentReplyHowDetail | null>;
+  onSuggest?: (suggestion: string) => void;
 }) {
   const [phase, setPhase] = useState<"closed" | "loading" | "open" | "missing">("closed");
   const [lines, setLines] = useState<string[]>([]);
@@ -92,19 +154,41 @@ export function AgentReplyShell({
     reply.decision && reply.decision.prompt && reply.decision.prompt !== reply.headline
       ? reply.decision.prompt
       : "";
+  const detail = reply.detail?.trim() ?? "";
+  const collapseDetail = detail.length > 320 || detail.split("\n").length > 4;
+  let detailNode: ReactNode = null;
+  if (detail && collapseDetail) {
+    detailNode = (
+      <details className="agent-reply-more" data-agent-more="true">
+        <summary>More detail</summary>
+        <ReplyMarkdown text={detail} />
+      </details>
+    );
+  } else if (detail) {
+    detailNode = (
+      <div data-agent-detail="true">
+        <ReplyMarkdown text={detail} />
+      </div>
+    );
+  }
 
   return (
     <div className="agent-reply" data-agent-reply="true" data-agent={reply.agent ?? ""}>
       {reply.headline ? (
         <p className="agent-reply-headline" data-agent-headline="true">
-          {reply.headline}
+          <InlineText text={reply.headline} />
         </p>
       ) : null}
       {reply.kpis.length ? (
         <ul className="agent-reply-kpis" data-agent-kpis="true">
           {reply.kpis.map((kpi) => (
-            <li key={`${kpi.label}:${kpi.value}`} className="agent-reply-kpi" data-agent-kpi={kpi.label}>
-              <span className="agent-reply-kpi-label">{kpi.label}</span>
+            <li
+              key={`${kpi.label}:${kpi.value}`}
+              className="agent-reply-kpi"
+              data-agent-kpi={kpi.label}
+              aria-label={`${kpi.label} ${kpi.value}`}
+            >
+              <span className="agent-reply-kpi-label">{kpi.label}</span>{" "}
               <span className="agent-reply-kpi-value">{kpi.value}</span>
             </li>
           ))}
@@ -113,9 +197,27 @@ export function AgentReplyShell({
       {reply.bullets.length ? (
         <ul className="agent-reply-bullets" data-agent-bullets="true">
           {reply.bullets.map((bullet, index) => (
-            <li key={`${index}:${bullet}`}>{bullet}</li>
+            <li key={`${index}:${bullet}`}>
+              <InlineText text={bullet} />
+            </li>
           ))}
         </ul>
+      ) : null}
+      {detailNode}
+      {reply.suggestions?.length ? (
+        <div className="agent-reply-suggestions" data-agent-suggestions="true">
+          {reply.suggestions.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              className="ask-ai-chip"
+              data-agent-suggestion={suggestion}
+              onClick={() => onSuggest?.(suggestion)}
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
       ) : null}
       {reply.figures.length ? (
         <ul className="agent-reply-figures" data-agent-figures="true">

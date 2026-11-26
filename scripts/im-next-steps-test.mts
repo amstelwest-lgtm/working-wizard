@@ -205,6 +205,7 @@ assert(
   month?.promptHref?.includes(`prompt=${encodeURIComponent(advisorPrompt)}`),
   "Ask the Advisor encodes the prompt",
 );
+assert(month?.promptHref?.includes("from=im"), "Ask the Advisor keeps the way back to the plan");
 assert(!month?.promptHref?.includes(named), "the client name is encoded on Ask the Advisor");
 assert(
   advisor.find((step) => step.id === "connect-books")?.title === `Connect ${named}'s books`,
