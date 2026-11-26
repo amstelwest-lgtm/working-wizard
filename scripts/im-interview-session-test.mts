@@ -15,7 +15,17 @@ import {
   interviewAnswerCount,
   shouldBuildInterviewMap,
 } from "../src/lib/setup-partner.ts";
-import { isImSampleClient, parseImSetupHold, queuedRunningLines } from "../src/lib/im-setup-hold.ts";
+import {
+  dedupeRunningLines,
+  imResetAllowed,
+  isImSampleClient,
+  parseImSetupHold,
+  pilotFromPlanRows,
+  planRowKey,
+  presentRunningLines,
+  queuedRunningLines,
+} from "../src/lib/im-setup-hold.ts";
+import { practiceChipName } from "../src/lib/accountant-identity.ts";
 import { tourHiddenOnPath } from "../src/components/walkthrough-wizard.tsx";
 import { approvalDraftTitles } from "../src/lib/setup-partner-plan.ts";
 import {
@@ -184,8 +194,51 @@ const held = parseImSetupHold(
 );
 assert(held?.pendingMap?.todaysFlow[0] === "Partner reviews the pack", "the map reloads from the hold");
 assert(held?.rows[0]?.clientName === "Harbour Glass", "the stored plan keeps its pilot");
-assert(held?.started === true && held.lines[0]?.href.includes("/clients/abc"), "start reloads with an openable draft");
+assert(held?.started === true && held.lines[0]?.href === "", "a line without a draft id has no link");
 assert(held.lines[0]?.status === "Draft queued", "a start without a live run still reads as queued");
+const woodwork = "11111111-1111-1111-1111-111111111111";
+const draft = "22222222-2222-2222-2222-222222222222";
+const shown = presentRunningLines({
+  rows: [
+    {
+      ...held.rows[0]!,
+      playId: "document-collection",
+      routine: "Document chase",
+      clientName: "Woodwork",
+      actionHref: `/clients/${woodwork}?tab=plan&section=open`,
+    },
+    {
+      ...held.rows[0]!,
+      playId: "cash-flow",
+      routine: "Cash",
+      clientName: "Woodwork",
+      actionHref: `/clients/${woodwork}?tab=plan&section=open`,
+    },
+  ],
+  lines: [
+    { id: "a", bot: "Financial Manager", status: "Draft queued", summary: "", href: "/clients/karoo", clientName: "Karoo Traders", routine: "Document chase", rowKey: planRowKey("document-collection") },
+    { id: "b", bot: "Financial Manager", status: "Draft queued", summary: "", href: "/clients/karoo", clientName: "Karoo Traders", routine: "Document chase", rowKey: planRowKey("document-collection") },
+    { id: "c", bot: "Financial Manager", status: "Draft queued", summary: "", href: "", clientName: "Karoo Traders", routine: "Cash", rowKey: planRowKey("cash-flow"), draftId: draft, runId: "run-1" },
+  ],
+  pilot: pilotFromPlanRows([
+    { clientName: "Woodwork", actionHref: `/clients/${woodwork}?tab=plan` },
+  ]),
+});
+assert(shown.length === 2, "running lines follow the plan rows, not duplicate runs");
+assert(shown.every((line) => line.clientName === "Woodwork"), "a mismatched snapshot shows the stored pilot");
+assert(shown[0]?.href === "", "no draft yet means no link");
+assert(shown[1]?.href.includes(`draft=${draft}`) && shown[1]?.href.includes(woodwork), "a draft id deep-links that finding");
+assert(dedupeRunningLines(shown).length === 2, "row keys stay unique");
+assert(imResetAllowed("e8f7a440-1111-1111-1111-111111111111"), "the test firm can reset the hold");
+assert(!imResetAllowed("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), "other firms cannot reset the hold");
+assert(
+  practiceChipName({ firmName: "Ben Accountants", profileFirmName: "Theo", personName: "Theo" }) === "Ben Accountants",
+  "the practice chip uses the firm name",
+);
+assert(
+  practiceChipName({ firmName: "", profileFirmName: "Theo", personName: "Theo" }) === "",
+  "the person's name is not a stand-in for the firm",
+);
 assert(
   implementationManagerStep({ phase: "done", interviewing: false, firmRunCount: 0 }) === "plan",
   "no agent runs means the stepper is not on what's running",

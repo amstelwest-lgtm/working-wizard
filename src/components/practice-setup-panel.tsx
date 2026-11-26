@@ -53,6 +53,7 @@ import {
   type PracticeImplementationPlan,
 } from "@/lib/setup-partner-plan";
 import { nextMomTestQuestion } from "../../supabase/functions/setup-partner/firm-interview-prompt.ts";
+import { imResetAllowed } from "@/lib/im-setup-hold";
 
 /** User-facing name. Internal ids stay setup_partner. */
 export const IMPLEMENTATION_MANAGER_LABEL = "Implementation Manager";
@@ -189,6 +190,8 @@ type RunningLine = {
   routine?: string;
 };
 
+type ResetSetupHold = (firmId: string) => Promise<unknown>;
+
 type SaveSetupHold = (input: {
   firmId: string;
   clearMap?: boolean;
@@ -228,11 +231,13 @@ export function PracticeSetupPanel({
   loadPlanTable,
   loadRunning,
   saveSetupHold,
+  resetSetupHold,
 }: {
   startIntegration?: StartIntegration;
   loadPlanTable?: LoadPlanTable;
   loadRunning?: LoadRunning;
   saveSetupHold?: SaveSetupHold;
+  resetSetupHold?: ResetSetupHold;
 } = {}) {
   const { firmId, firmMarket, refreshFirms, firmsLoaded, firmsLoadFailed } = useAccountantProfile();
   return (
@@ -246,6 +251,7 @@ export function PracticeSetupPanel({
       loadPlanTable={loadPlanTable}
       loadRunning={loadRunning}
       saveSetupHold={saveSetupHold}
+      resetSetupHold={resetSetupHold}
     />
   );
 }
@@ -265,6 +271,7 @@ export function PracticeSetupInterview({
   loadPlanTable,
   loadRunning,
   saveSetupHold,
+  resetSetupHold,
 }: {
   firmId: string | null;
   firmMarket: unknown;
@@ -281,6 +288,7 @@ export function PracticeSetupInterview({
   loadPlanTable?: LoadPlanTable;
   loadRunning?: LoadRunning;
   saveSetupHold?: SaveSetupHold;
+  resetSetupHold?: ResetSetupHold;
 }) {
   const [phase, setPhase] = useState<Phase>("interview");
   const [messages, setMessages] = useState<FirmInterviewMessage[]>([]);
@@ -1051,14 +1059,34 @@ export function PracticeSetupInterview({
                   {line.routine ? ` — ${line.routine}` : ""}
                   {line.clientName ? ` for ${line.clientName}` : ""}. {line.status}. {line.summary}
                 </span>
-                {line.href ? (
+                {line.href && line.draftId ? (
                   <ImPlanLink href={line.href} data-im-running-link={line.id}>
                     Open the draft
                   </ImPlanLink>
-                ) : null}
+                ) : (
+                  <span data-im-draft-pending="">Draft in progress</span>
+                )}
               </li>
             ))}
           </ul>
+          {resetSetupHold && imResetAllowed(firmId) ? (
+            <button
+              type="button"
+              className="setup-partner__ghost"
+              data-im-reset=""
+              onClick={() => {
+                void resetSetupHold(firmId).then(() => {
+                  setIntegrationStarted(false);
+                  setRunningLines([]);
+                  setFirmRunCount(0);
+                  setOpusRows(null);
+                  setPlanEpoch((epoch) => epoch + 1);
+                });
+              }}
+            >
+              Reset integration
+            </button>
+          ) : null}
         </section>
       ) : null}
 

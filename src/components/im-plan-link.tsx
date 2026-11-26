@@ -10,6 +10,7 @@ type ClientSearch = {
   action?: "preview" | "download";
   prompt?: string;
   from?: "im";
+  draft?: string;
 };
 
 function clientSearch(params: URLSearchParams): ClientSearch {
@@ -34,6 +35,8 @@ function clientSearch(params: URLSearchParams): ClientSearch {
   const prompt = composerPromptText(params.get("prompt"));
   if (prompt) search.prompt = prompt;
   if (params.get("from") === "im") search.from = "im";
+  const draft = params.get("draft");
+  if (draft && /^[0-9a-f-]{36}$/i.test(draft)) search.draft = draft;
   return search;
 }
 

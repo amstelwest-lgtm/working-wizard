@@ -45,6 +45,24 @@ export function resolvePersistedAccountantIdentity(input: {
   return { firmName, accountantName };
 }
 
+/**
+ * Practice chip. The firm row name wins. A profile firm name is only a
+ * fallback when it is not the signed-in person's name.
+ */
+export function practiceChipName(input: {
+  firmName?: string | null;
+  profileFirmName?: string | null;
+  personName?: string | null;
+}): string {
+  const firm = trimmed(input.firmName);
+  if (firm) return firm;
+  const profile = trimmed(input.profileFirmName);
+  const person = trimmed(input.personName);
+  if (!profile) return "";
+  if (person && profile.localeCompare(person, undefined, { sensitivity: "accent" }) === 0) return "";
+  return profile;
+}
+
 /** Person name safe to paint in the practice header. An email address is not a name. */
 export function practiceHeaderName(input: {
   accountantName?: string | null;

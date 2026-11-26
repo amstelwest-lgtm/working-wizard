@@ -4300,7 +4300,7 @@ function ClientView() {
               <span className="brand">
                 <span className="gold-text">MILŌN</span>
               </span>
-              <FirmSwitcher />
+              <FirmSwitcher firmId={client?.firm_id ?? null} />
               <PeriodPill periodLabel={booksPeriodPillLabel(statementMeta.periodEnd, figuresPeriodLabel)} />
               <FeatureFinder audience="accountant" clientId={clientId} />
               <span className="spacer" />
