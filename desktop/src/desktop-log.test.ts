@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { appendDesktopLog, DESKTOP_LOG_MAX_BYTES, desktopLogPath } from "./desktop-log";
+import { appendDesktopLog, DESKTOP_LOG_MAX_BYTES, desktopLogPath, startupLogLine } from "./desktop-log";
 import { redactedSignInFailure } from "./sign-in-error";
 
 test("desktop.log receives only the redacted sign-in line", () => {
@@ -30,7 +30,27 @@ test("desktop.log receives only the redacted sign-in line", () => {
     assert.equal(readFileSync(file, "utf8"), text);
 
     const main = readFileSync(path.join(__dirname, "../src/main.ts"), "utf8");
-    assert.match(main, /appendDesktopLog\(app\.getPath\("userData"\), line\)/);
+    assert.match(main, /appendDesktopLog\(app\.getPath\("logs"\), line\)/);
+    assert.match(main, /transport: DesktopRealtimeTransport/);
+    assert.match(main, /logReady\(\)/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("startup creates the logs directory and records only the host", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "milon-log-"));
+  try {
+    const logs = path.join(dir, "logs");
+    const line = startupLogLine("0.1.0", "jxclnsbsqpixxqlbcapl.supabase.co", path.join(dir, "userData"));
+    appendDesktopLog(logs, line);
+    const text = readFileSync(desktopLogPath(logs), "utf8");
+    assert.equal(text, `${line}\n`);
+    assert.match(text, /version=0\.1\.0/);
+    assert.match(text, /host=jxclnsbsqpixxqlbcapl\.supabase\.co/);
+    assert.equal(text.includes("eyJ"), false);
+    appendDesktopLog(logs, "[milon-desktop] sign-in email=ada@example.com password=hunter2");
+    assert.equal(readFileSync(desktopLogPath(logs), "utf8"), text);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

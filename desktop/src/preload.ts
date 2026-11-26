@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("milon", {
   getState: () => ipcRenderer.invoke("get-state"),
   signIn: (email: string, password: string) => ipcRenderer.invoke("sign-in", { email, password }),
+  reportSignInFailure: (failure: unknown) => ipcRenderer.invoke("report-sign-in", failure ?? {}),
   openPasswordReset: () => ipcRenderer.invoke("open-password-reset"),
   signOut: () => ipcRenderer.invoke("sign-out"),
   pickFolder: () => ipcRenderer.invoke("pick-folder"),

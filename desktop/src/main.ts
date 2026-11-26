@@ -29,8 +29,8 @@ import {
   type RecoveryWatch,
 } from "./session-recover";
 import { clearSessionFile, encryptionAvailable, secureSessionStorage } from "./session-store";
-import { appendDesktopLog } from "./desktop-log";
-import { desktopAuthConfigOk, redactedSignInFailure, SIGN_IN_TIMEOUT_MS, signInFailureFromThrown, signInUserMessage } from "./sign-in-error";
+import { appendDesktopLog, startupLogLine } from "./desktop-log";
+import { desktopAuthConfigOk, redactedSignInFailure, SIGN_IN_TIMEOUT_MS, signInFailureFromThrown, signInUserMessage, supabaseHost } from "./sign-in-error";
 import { firstPageText } from "./snippet";
 
 type Status = "queued" | "uploading" | "uploaded" | "needs answer" | "failed";
@@ -78,13 +78,29 @@ let sessionWatch: RecoveryWatch | null = null;
 const inflight = new Set<string>();
 
 function reportSignInFailure(error: unknown): void {
-  const line = redactedSignInFailure(error);
+  const line = redactedSignInFailure(error, supabaseHost(SUPABASE_URL));
   console.error(line);
-  try {
-    appendDesktopLog(app.getPath("userData"), line);
-  } catch {
-    /* The sign-in banner still returns if the log file cannot be written. */
-  }
+  appendDesktopLog(app.getPath("logs"), line);
+}
+
+function logReady(): void {
+  appendDesktopLog(
+    app.getPath("logs"),
+    startupLogLine(app.getVersion(), supabaseHost(SUPABASE_URL), app.getPath("userData")),
+  );
+}
+
+/**
+ * Electron 33's main process is Node 20 and has no global WebSocket.
+ * supabase-js constructs a Realtime client during createClient and throws
+ * before the window exists. Password sign-in does not use Realtime.
+ */
+class DesktopRealtimeTransport {
+  constructor(_url?: string, _protocols?: unknown) {}
+  close(): void {}
+  send(_data?: unknown): void {}
+  addEventListener(): void {}
+  removeEventListener(): void {}
 }
 
 function logSignIn(stage: string, error?: unknown): void {
@@ -106,6 +122,19 @@ function requestUrl(input: RequestInfo | URL): string {
   return input.url;
 }
 
+function absoluteHttpsUrl(value: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw Object.assign(new TypeError("Invalid sign-in URL"), { code: "invalid_url" });
+  }
+  if (parsed.protocol !== "https:") {
+    throw Object.assign(new TypeError(`Unsupported sign-in URL scheme ${parsed.protocol}`), { code: "invalid_url" });
+  }
+  return parsed.toString();
+}
+
 /** Chromium networking, so Windows proxy and certs apply. Node's fetch does not. */
 const chromiumFetch: FetchLike = (input, init) => {
   let signal = init?.signal;
@@ -113,7 +142,9 @@ const chromiumFetch: FetchLike = (input, init) => {
     const recovery = recoveryAbort.signal;
     signal = signal ? AbortSignal.any([recovery, signal]) : recovery;
   }
-  return net.fetch(requestUrl(input), { ...init, signal });
+  // Default Request credentials are "same-origin". With no Origin header, Electron's
+  // net.fetch rewrites that to "include", which is the wrong mode for a bearer call.
+  return net.fetch(absoluteHttpsUrl(requestUrl(input)), { ...init, signal, credentials: "omit" });
 };
 
 function armRecoveryAbort(): void {
@@ -522,6 +553,12 @@ function registerIpc(): void {
     const password = String(body?.password ?? "");
     if (body) body.password = "";
     if (!address || !password) return { ok: false, message: "Enter your email and password." };
+    if (!supabase) {
+      reportSignInFailure({ name: "Error", message: "Sign in is not ready.", code: "not_ready" });
+      banner = signInUserMessage({ name: "Error", message: "Sign in is not ready.", code: "not_ready" });
+      publish();
+      return { ok: false, message: banner };
+    }
     if (!desktopAuthConfigOk(SUPABASE_URL, SUPABASE_ANON_KEY)) {
       logSignIn("config");
       banner = signInUserMessage({ code: "config" });
@@ -541,8 +578,8 @@ function registerIpc(): void {
       publish();
       return { ok: false, message: banner };
     }
-    releasePasswordGrant();
     try {
+      releasePasswordGrant();
       const { data, error } = await db().auth.signInWithPassword({ email: address, password });
       if (attempt !== signInAttempt) return { ok: false, message: "Sign-in was interrupted. Try again." };
       if (error || !data.session) {
@@ -578,6 +615,11 @@ function registerIpc(): void {
       publish();
       return { ok: false, message: banner };
     }
+  });
+  ipcMain.handle("report-sign-in", (_event, body: unknown) => {
+    const failure = signInFailureFromThrown(body) ?? { name: "Error", message: "Sign-in failed." };
+    reportSignInFailure(failure);
+    return { ok: false, message: signInUserMessage(failure) };
   });
   ipcMain.handle("open-password-reset", async () => {
     const url = allowedPasswordResetUrl(PASSWORD_RESET_URL);
@@ -690,27 +732,36 @@ if (!gotLock) {
   app.whenReady().then(async () => {
     app.setAppUserModelId("finance.milon.desktop");
     settings = loadSettings();
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { fetch: fetchWithDeadline(SIGN_IN_TIMEOUT_MS, chromiumFetch) },
-      auth: {
-        storage: secureSessionStorage,
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: false,
-        skipAutoInitialize: true,
-      },
-    });
+    logReady();
+    try {
+      supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        realtime: { transport: DesktopRealtimeTransport as unknown as typeof WebSocket },
+        global: { fetch: fetchWithDeadline(SIGN_IN_TIMEOUT_MS, chromiumFetch) },
+        auth: {
+          storage: secureSessionStorage,
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: false,
+          skipAutoInitialize: true,
+        },
+      });
+    } catch (error) {
+      reportSignInFailure(error);
+      banner = signInUserMessage(signInFailureFromThrown(error));
+    }
     registerIpc();
     createWindow();
     createTray();
-    startSessionRecovery();
-    // Session restore and the folder watcher are not on the sign-in click.
-    setTimeout(() => {
-      void bootSession().catch((error: unknown) => {
-        logSignIn("startup-session", error);
-        banner = "Sign in to Milōn.";
-        publish();
-      });
-    }, 0);
+    if (supabase) {
+      startSessionRecovery();
+      // Session restore and the folder watcher are not on the sign-in click.
+      setTimeout(() => {
+        void bootSession().catch((error: unknown) => {
+          logSignIn("startup-session", error);
+          banner = "Sign in to Milōn.";
+          publish();
+        });
+      }, 0);
+    }
   });
 }
