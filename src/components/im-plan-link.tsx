@@ -9,6 +9,7 @@ type ClientSearch = {
   report?: string;
   action?: "preview" | "download";
   prompt?: string;
+  from?: "im";
 };
 
 function clientSearch(params: URLSearchParams): ClientSearch {
@@ -32,6 +33,7 @@ function clientSearch(params: URLSearchParams): ClientSearch {
   if (action === "preview" || action === "download") search.action = action;
   const prompt = composerPromptText(params.get("prompt"));
   if (prompt) search.prompt = prompt;
+  if (params.get("from") === "im") search.from = "im";
   return search;
 }
 

@@ -309,9 +309,11 @@
 .ask-ai-md-table tr:last-child td { border-bottom: none; }
 .ask-ai-md-table tbody tr:nth-child(even) { background: rgba(183, 135, 42, 0.04); }
 
-.ask-ai-answer-chips {
+.ask-ai-answer-chips,
+.agent-reply-suggestions {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 6px;
   min-width: 0;
   max-width: 100%;
@@ -829,4 +831,40 @@
 .agent-reply-how-loading {
   margin: 8px 0 0;
   font-size: 0.85rem;
+}
+.agent-reply-md p,
+.agent-reply-md-list {
+  margin: 0;
+}
+.agent-reply-md p + p,
+.agent-reply-md-list {
+  margin-top: 8px;
+}
+.agent-reply-more {
+  margin: 0;
+}
+.agent-reply-more summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ask-ai-pdf-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  max-width: 100%;
+}
+.ask-ai-pdf-note,
+.ask-ai-pdf-name {
+  margin: 0;
+}
+.ask-ai-pdf-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
 }

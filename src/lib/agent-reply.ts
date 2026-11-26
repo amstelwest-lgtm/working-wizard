@@ -5,6 +5,7 @@
  * Opening "How I got this" reads a stored trail. It does not call the model again.
  */
 
+import { parseAdvisorReply } from "./advisor-reply-format.ts";
 import { stripUnsafeMarkup } from "./owner-reply-format.ts";
 import { libraryRuleChipsFromText } from "./client-management-habits-rules.ts";
 import { figureDeltaLines, FIGURE_SURFACES, type FigureSurface } from "./figure-proposal.ts";
@@ -33,6 +34,10 @@ export type AgentReply = {
   headline: string;
   kpis: AgentReplyKpi[];
   bullets: string[];
+  /** Prose after the first line. Kept so a line break is not thrown away. */
+  detail: string;
+  /** Follow-up questions. They are not part of the body. */
+  suggestions: string[];
   decision: AgentReplyDecision | null;
   how: AgentReplyHow | null;
   figures: AgentReplyFigureChip[];
@@ -144,14 +149,12 @@ function clip(text: string, max: number): string {
   return clean.length > max ? clean.slice(0, max).trim() : clean;
 }
 
+function plain(line: string): string {
+  return line.replace(/\*\*/g, "").replace(/__/g, "").trim();
+}
+
 function cleanLine(line: string): string {
-  return clip(
-    stripUnsafeMarkup(line)
-      .replace(/^#{1,6}\s+/, "")
-      .replace(/\*\*/g, "")
-      .replace(/__/g, ""),
-    400,
-  );
+  return clip(stripUnsafeMarkup(line).replace(/^#{1,6}\s+/, ""), 400);
 }
 
 function headlineFrom(line: string): string {
@@ -165,11 +168,11 @@ function headlineFrom(line: string): string {
 }
 
 function isNextHeading(line: string): boolean {
-  return /^next (?:actions|steps)$/i.test(line.replace(/:$/, "").trim());
+  return /^next (?:actions|steps)$/i.test(plain(line).replace(/:$/, ""));
 }
 
 function statLine(line: string): AgentReplyKpi | null {
-  const match = line.match(/^-\s+([^:\n]{1,48}):\s+(\S.*)$/);
+  const match = plain(line).match(/^-\s+([^:\n]{1,48}):\s+(\S.*)$/);
   if (!match) return null;
   const label = clip(match[1], 48);
   const value = clip(match[2], 80);
@@ -182,7 +185,12 @@ function actionLine(line: string): string | null {
   return match ? clip(match[1], 240) : null;
 }
 
-function cardText(raw: string): { headline: string; kpis: AgentReplyKpi[]; bullets: string[] } {
+function cardText(raw: string): {
+  headline: string;
+  kpis: AgentReplyKpi[];
+  bullets: string[];
+  detail: string;
+} {
   const lines = raw.replace(/\r\n?/g, "\n").split("\n").map(cleanLine);
   const headingAt = lines.findIndex((line) => isNextHeading(line));
   const before = headingAt >= 0 ? lines.slice(0, headingAt) : lines;
@@ -212,7 +220,7 @@ function cardText(raw: string): { headline: string; kpis: AgentReplyKpi[]; bulle
       if (!bullets.includes(line)) bullets.push(line);
     }
   }
-  return { headline, kpis, bullets };
+  return { headline, kpis, bullets, detail: prose.slice(1).join("\n") };
 }
 
 function chipValue(value: unknown): string | null {
@@ -341,15 +349,21 @@ function howOf(sources: AgentReplySources): AgentReplyHow | null {
 /** Turn one model reply plus the payload already on it into the card. */
 export function structureAgentReply(raw: string, sources: AgentReplySources = {}): AgentReply {
   const text = typeof raw === "string" ? raw : "";
-  const card = cardText(text);
+  const parsed = parseAdvisorReply(text);
+  const laidOut = [parsed.prose, ...parsed.figures.map((figure) => `- ${figure.label}: ${figure.value}`)]
+    .filter(Boolean)
+    .join("\n");
+  const card = cardText(laidOut);
   return {
     agent: parseAgentReplyAgent(sources.agent),
-    headline: card.headline,
+    headline: parsed.prose ? card.headline : "",
     kpis: card.kpis,
     bullets: card.bullets,
+    detail: card.detail,
+    suggestions: parsed.suggestions,
     decision: decisionOf(sources),
     how: howOf(sources),
-    figures: figureChips({ ...sources, rawText: text }),
+    figures: figureChips({ ...sources, rawText: parsed.prose }),
   };
 }
 
@@ -357,6 +371,7 @@ export function structureAgentReply(raw: string, sources: AgentReplySources = {}
 export function agentReplyPlainText(reply: AgentReply): string {
   return [
     reply.headline,
+    reply.detail,
     ...reply.kpis.map((kpi) => `${kpi.label}: ${kpi.value}`),
     ...reply.bullets,
     reply.decision?.prompt ?? "",
@@ -436,11 +451,14 @@ export function parseStoredAgentReply(raw: unknown): AgentReply | null {
   const record = asRecord(raw);
   const headline = typeof record?.headline === "string" ? clip(record.headline, 280) : "";
   if (!headline) return null;
+  const detail = typeof record?.detail === "string" ? record.detail.replace(/\u0000/g, "").trim() : "";
   return {
     agent: parseAgentReplyAgent(record?.agent),
     headline,
     kpis: storedKpis(record?.kpis),
     bullets: storedBullets(record?.bullets),
+    detail: detail.length > 1200 ? detail.slice(0, 1200).trim() : detail,
+    suggestions: storedBullets(record?.suggestions).slice(0, 4),
     decision: storedDecision(record?.decision),
     how: storedHow(record?.how),
     figures: storedFigures(record?.figures),

@@ -50,6 +50,7 @@ import {
   type PackReview,
 } from "@/lib/advisory-pack";
 import { PACK_SECTION_V2_KEYS } from "@/lib/advisory-pack-schema";
+import { unsavedDraftPack } from "@/lib/month-end-update";
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { storedOpeningIsMissing } from "@/lib/client-metrics";
 import { clientIndustryDisplay } from "@/lib/profile-signals";
@@ -316,6 +317,48 @@ export const getLatestAdvisoryPack = createServerFn({ method: "GET" })
         period_label: r.period_label, // date-ok: pack version row keeps the stored column
       })),
     };
+  });
+
+export type MonthEndPackPreview =
+  | { ok: true; source: "stored" | "preview"; pack: AdvisoryPack; sample: boolean }
+  | { ok: false; reason: "unavailable" | "no_figures" };
+
+/**
+ * Read the latest Management Report, or build one in memory.
+ * Does not write a pack, send it, or post to a ledger.
+ */
+export const previewMonthEndPack = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ clientId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }): Promise<MonthEndPackPreview> => {
+    const sb = context.supabase as unknown as LooseSb;
+    await assertClientAccess(sb, context.userId, data.clientId);
+    let sample = false;
+    try {
+      const { data: client } = await sb
+        .from("clients")
+        .select("is_demo")
+        .eq("id", data.clientId)
+        .maybeSingle();
+      sample = (client as { is_demo?: boolean } | null)?.is_demo === true;
+    } catch {
+      sample = false;
+    }
+    try {
+      const { rows } = await loadPackRows(sb, data.clientId, { limit: 1 });
+      const stored = rows[0];
+      if (stored) return { ok: true, source: "stored", pack: stored, sample };
+    } catch {
+      return { ok: false, reason: "unavailable" };
+    }
+    try {
+      const inputs = await gatherPackInputs(sb, data.clientId, new Date().toISOString());
+      if (!inputs) return { ok: false, reason: "no_figures" };
+      const content = buildAdvisoryPack(inputs);
+      return { ok: true, source: "preview", pack: unsavedDraftPack(data.clientId, content), sample };
+    } catch {
+      return { ok: false, reason: "unavailable" };
+    }
   });
 
 // ── generate ─────────────────────────────────────────────────────────────────

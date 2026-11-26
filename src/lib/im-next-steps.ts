@@ -54,7 +54,7 @@ function clientPath(id: string, search: string): string {
 export function agentHref(clientId: string, agent: string, prompt?: string | null): string {
   if (!BARE_CLIENT_ID.test(clientId) || !CHAT_AGENTS.has(agent)) return "/clients";
   const text = composerPromptText(prompt ?? "");
-  const base = `/clients/${clientId}?tab=home&agent=${agent}`;
+  const base = `/clients/${clientId}?tab=home&agent=${agent}&from=im`;
   return text ? `${base}&prompt=${encodeURIComponent(text)}` : base;
 }
 

@@ -166,6 +166,7 @@ export function OwnerChat({
                   <AgentReplyShell
                     reply={turn.card ?? structureAgentReply(turn.text, { agent })}
                     onLoadDetail={onLoadDetail}
+                    onSuggest={(suggestion) => onDraft(suggestion)}
                   />
                   <button
                     type="button"
