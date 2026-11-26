@@ -1,0 +1,119 @@
+/* Practice Home jobs board.
+   Header names stay on one line inside the card.
+   The footer stacks inside the card, clear of the notes pencil
+   (40px, 16px from the viewport edge on a wide screen). */
+
+.practice-jobs-board {
+  min-width: 0;
+  color: #102a43;
+}
+
+@media (min-width: 768px) {
+  .practice-jobs-board {
+    padding-right: 36px;
+  }
+}
+
+@media (max-width: 767px) {
+  .practice-jobs-board {
+    padding-right: 52px;
+    padding-bottom: 72px;
+  }
+}
+
+.job-card {
+  min-width: 0;
+  overflow: hidden;
+  background: #ffffff;
+  border-color: #dbeafe;
+  color: #102a43;
+}
+
+.job-card-head,
+.job-faces,
+.job-face-stack {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.job-faces {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.job-face-stack {
+  display: flex;
+  flex: none;
+}
+
+/* Row avatars stay 72px. Header faces are smaller so three fit on one line. */
+.job-faces .owner-presence.is-sm {
+  width: 40px;
+  height: 40px;
+}
+
+.job-face-names {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.job-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 8px 1.25rem;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  white-space: normal;
+}
+
+.job-btn:focus-visible {
+  outline: 2px solid #0b5fff;
+  outline-offset: 2px;
+}
+
+.job-btn-primary {
+  border: 1px solid #0b5fff;
+  background: #0b5fff;
+  color: #ffffff;
+}
+
+.job-btn-primary:hover {
+  background: #2563eb;
+}
+
+.job-btn-secondary {
+  border: 1px solid #0b5fff;
+  background: #ffffff;
+  color: #0b5fff;
+}
+
+.job-btn-secondary:hover {
+  background: #dbeafe;
+}
+
+.job-btn-idle {
+  border: 1px solid #dbeafe;
+  background: #ffffff;
+  color: #102a43;
+}
