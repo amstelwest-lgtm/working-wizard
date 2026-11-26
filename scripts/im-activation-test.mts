@@ -212,6 +212,16 @@ assert(!activationSource.includes("sent_at:") || activationSource.includes("draf
 assert(!activationSource.includes("xero") || activationSource.includes("xero_connections"), "no ledger posts");
 assert(activationSource.includes('countNewlyEnqueuedRun(run)'), "enqueue tally skips duplicate agent_runs");
 assert(activationSource.includes('created: false'), "23505 path marks existing run");
+const reload = activationSource.slice(
+  activationSource.indexOf("export const loadImRunningState"),
+  activationSource.indexOf("const resetSchema"),
+);
+assert(!reload.includes("enqueueDraftRun") && !reload.includes("agent_invoke"), "a reload enqueues 0");
+const panel = readFileSync("src/components/practice-setup-panel.tsx", "utf8");
+const boot = panel.slice(panel.indexOf("void loadRunning(firmId)"), panel.indexOf("const planSteps"));
+assert(boot.includes("loadRunning") && !boot.includes("startIntegration("), "mounting the page does not enqueue");
+assert(activationSource.includes("started: true"), "Start records started on the hold");
+assert(!activationSource.includes("ACTIVATION_RUN_SUMMARY"), "activation runs are not matched on summary text");
 const pilotFn = activationSource.slice(
   activationSource.indexOf("function resolveStoredPilot"),
   activationSource.indexOf("async function withDraftLinks"),

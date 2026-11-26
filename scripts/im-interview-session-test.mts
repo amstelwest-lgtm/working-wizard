@@ -21,6 +21,10 @@ import {
   draftStaysOnClient,
   imResetAllowed,
   imResetVisible,
+  imSetupHoldRuleText,
+  imRunDisplayStatus,
+  integrationHeroStatus,
+  isImActivationRun,
   isImSampleClient,
   parseImSetupHold,
   planRowKey,
@@ -213,6 +217,45 @@ const waitingRows = Array.from({ length: 5 }, (_, index) => ({
   actionHref: `/clients/${woodwork}?tab=plan&section=open`,
 }));
 const unstarted = presentRunningLines({ rows: waitingRows, lines: [], started: false });
+assert(
+  isImActivationRun({
+    id: "run-1",
+    trigger: "on_demand",
+    correlationId: "hold-1",
+    summary: "Recorded one finding: Cash is the weakest pillar",
+    holdId: "hold-1",
+    mappedRunIds: ["run-1"],
+  }),
+  "a worker-rewritten summary still counts as an IM run",
+);
+assert(
+  !isImActivationRun({
+    id: "follow-up",
+    trigger: "message",
+    correlationId: "hold-1",
+    summary: "",
+    holdId: "hold-1",
+  }),
+  "a handoff follow-up is not an activation run",
+);
+assert(imRunDisplayStatus("queued") === "Draft queued", "queued is Draft queued");
+assert(imRunDisplayStatus("running") === "Running", "running is Running");
+assert(imRunDisplayStatus("succeeded") === "Draft ready", "succeeded is Draft ready");
+assert(imRunDisplayStatus("partial") === "Needs a look", "partial needs a look");
+assert(imRunDisplayStatus("failed") === "Needs a look", "failed needs a look");
+assert(
+  integrationHeroStatus([{ runId: "run-1", status: "Draft ready" }]) === "Draft ready",
+  "the hero uses the real run status",
+);
+const startedHold = imSetupHoldRuleText({
+  pendingMap: null,
+  rows: waitingRows,
+  started: true,
+  lines: [],
+  pilot: { id: woodwork, name: "Woodwork" },
+  runs: { "play-0": "run-1" },
+});
+assert(JSON.parse(startedHold).started === true, "Start records started on the hold");
 assert(unstarted.length === 0, "a hold that has not started does not invent running lines");
 assert(!unstarted.some((line) => line.status === "Draft queued"), "an unstarted hold is not Draft queued");
 assert(

@@ -19,7 +19,7 @@ import type { SetupPartnerCountry } from "./setup-partner.ts";
 /** UK is accepted here so HMRC is confined to UK rows. Firm markets in the product stay US and ZA. */
 export type IntegrationPlanCountry = SetupPartnerCountry | "UK";
 
-export type IntegrationPlanStatus = "Waiting" | "Draft queued" | "Running";
+export type IntegrationPlanStatus = "Waiting" | "Draft queued" | "Running" | "Draft ready" | "Needs a look";
 
 export type IntegrationPlanSection = "lead" | "already_covered";
 
@@ -48,7 +48,7 @@ const JARGON =
 
 const BUCKET_LABELS = /\b(Product gap|Client setup|Already covered|Bespoke)\b/;
 
-const STATUSES = new Set<IntegrationPlanStatus>(["Waiting", "Draft queued", "Running"]);
+const STATUSES = new Set<IntegrationPlanStatus>(["Waiting", "Draft queued", "Running", "Draft ready", "Needs a look"]);
 
 const FIT_NOTE =
   /(?:Firm setting for the practice|Fits the universal finance function|Outside the universal finance function|Already in Milōn:).*/i;
