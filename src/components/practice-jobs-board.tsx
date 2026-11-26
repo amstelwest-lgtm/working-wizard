@@ -2,14 +2,25 @@
  * Practice Home: three job cards, one sign-off line, agent rows under them.
  *
  * The firm sees jobs and outcomes. Agents appear as the people on each job,
- * with chat demoted to an "Ask" link. All counts arrive from the practice
- * board; this component reads nothing from the database.
+ * with chat demoted to an "Ask" link. Counts and picker rows arrive from the
+ * practice board. Opening Tax also reads drafts with the tax page's loader.
  */
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { agentShortName } from "@/lib/milon-team";
-import { JOB_META, LIVE_JOB_KEYS, type JobKey, type JobsBoardCount } from "@/lib/milon-jobs";
+import {
+  JOB_META,
+  LIVE_JOB_KEYS,
+  jobPickerRows,
+  type JobKey,
+  type JobPickerRow,
+  type JobsBoardClient,
+  type JobsBoardCount,
+  type JobsBoardDraft,
+} from "@/lib/milon-jobs";
 import { clientNavSearch } from "@/lib/client-route-search";
+import { isCurrentTaxDraft, loadTaxFormDrafts } from "@/lib/tax-specialist/forms/drafts";
 import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
 import "@/components/owner-door/owner-door.css";
 import "@/components/practice-jobs-board.css";
@@ -22,16 +33,14 @@ export type JobsBoardAgentRow = {
   finding: string;
 };
 
-/** Where each job's button lands inside a client file. */
-function jobSearch(job: JobKey): Record<string, unknown> {
-  if (job === "collect") return clientNavSearch({}, "send-agent");
-  if (job === "tax") return clientNavSearch({}, "tax");
-  if (job === "advise") return clientNavSearch({}, "reports");
-  return clientNavSearch({}, "books", "connections");
-}
-
 function agentName(agent: StageAgentKey): string {
   return agent === TAX_AGENT ? stageAgentShortName(agent) : agentShortName(agent as AgentKey);
+}
+
+function emptyPickerLine(job: "collect" | "tax" | "advise"): string {
+  if (job === "tax") return "No return is due.";
+  if (job === "collect") return "Nothing outstanding.";
+  return "No pack is ready.";
 }
 
 function JobCard({
@@ -40,17 +49,18 @@ function JobCard({
   loading,
   showTax,
   onAsk,
+  onOpen,
 }: {
   job: JobKey;
   count: JobsBoardCount;
   loading: boolean;
   showTax: boolean;
   onAsk: (agent: StageAgentKey) => void;
+  onOpen: () => void;
 }) {
   const meta = JOB_META[job];
   const agents = meta.agents.filter((a) => showTax || a !== TAX_AGENT);
   const live = job !== "books";
-  const hasTarget = live && count.clientId != null;
   return (
     <section
       className="job-card flex flex-col gap-3 rounded-2xl border p-5 shadow-sm"
@@ -97,16 +107,16 @@ function JobCard({
       </div>
       <p className="m-0 text-[13px] leading-snug text-[var(--milon-ink-muted)]">{meta.outcome}</p>
       <div className="job-card-footer">
-        {hasTarget ? (
-          <Link
-            to="/clients/$clientId"
-            params={{ clientId: count.clientId as string }}
-            search={jobSearch(job) as never}
+        {live ? (
+          <button
+            type="button"
             className="job-btn job-btn-primary"
             data-job-action={job}
+            disabled={loading}
+            onClick={onOpen}
           >
             {meta.action}
-          </Link>
+          </button>
         ) : (
           <span className="job-btn job-btn-idle" aria-disabled="true" data-job-action={job}>
             {meta.action}
@@ -127,8 +137,25 @@ function JobCard({
   );
 }
 
+function pickerDrafts(rows: Awaited<ReturnType<typeof loadTaxFormDrafts>>, clientId: string): JobsBoardDraft[] {
+  const out: JobsBoardDraft[] = [];
+  for (const row of rows) {
+    if (!isCurrentTaxDraft(row)) continue;
+    if (row.form_code !== "IRP6" && row.form_code !== "ITR14" && row.form_code !== "ITR12") continue;
+    out.push({
+      clientId,
+      form: row.form_code,
+      period: row.period,
+      status: row.status,
+    });
+  }
+  return out;
+}
+
 export function PracticeJobsBoard({
   counts,
+  clients = [],
+  drafts,
   loading,
   showTax,
   agentRows,
@@ -136,6 +163,10 @@ export function PracticeJobsBoard({
   onAsk,
 }: {
   counts: Record<JobKey, JobsBoardCount>;
+  /** Book already loaded for the board. The picker does not choose one of these itself. */
+  clients?: readonly JobsBoardClient[];
+  /** When set, Tax uses these drafts and does not read again. */
+  drafts?: readonly JobsBoardDraft[];
   loading: boolean;
   /** ZA firms see the Tax card and the Tax Specialist row. */
   showTax: boolean;
@@ -145,6 +176,36 @@ export function PracticeJobsBoard({
   onAsk: (agent: StageAgentKey) => void;
 }) {
   const jobs = LIVE_JOB_KEYS.filter((job) => showTax || job !== "tax");
+  const [openJob, setOpenJob] = useState<"collect" | "tax" | "advise" | null>(null);
+  const [readDrafts, setReadDrafts] = useState<readonly JobsBoardDraft[] | null>(null);
+  const taxClientKey = clients
+    .filter((client) => client.taxEnabled && client.id)
+    .map((client) => client.id)
+    .join("\n");
+  useEffect(() => {
+    if (openJob !== "tax" || drafts) return;
+    const ids = taxClientKey ? taxClientKey.split("\n") : [];
+    let cancel = false;
+    void Promise.all(ids.map(async (id) => pickerDrafts(await loadTaxFormDrafts(id), id))).then(
+      (groups) => {
+        if (!cancel) setReadDrafts(groups.flat());
+      },
+    );
+    return () => {
+      cancel = true;
+    };
+  }, [openJob, drafts, taxClientKey]);
+  const pickerDraftList = drafts ?? readDrafts ?? [];
+  const pickerRows: JobPickerRow[] =
+    openJob == null ? [] : jobPickerRows(openJob, clients, new Date(), pickerDraftList);
+  useEffect(() => {
+    if (!openJob) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenJob(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openJob]);
   return (
     <div className="practice-jobs-board flex flex-col gap-6" data-practice-jobs-board="">
       <div className="flex flex-col gap-1">
@@ -166,9 +227,58 @@ export function PracticeJobsBoard({
             loading={loading}
             showTax={showTax}
             onAsk={onAsk}
+            onOpen={() => {
+              if (job === "books") return;
+              setReadDrafts(null);
+              setOpenJob(job);
+            }}
           />
         ))}
       </div>
+
+      {openJob ? (
+        <div className="job-picker-backdrop" onClick={() => setOpenJob(null)}>
+          <div
+            className="job-picker"
+            role="dialog"
+            aria-modal="true"
+            aria-label={JOB_META[openJob].action}
+            data-job-picker={openJob}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <p className="job-picker-title">{JOB_META[openJob].action}</p>
+            {pickerRows.length === 0 ? (
+              <p className="job-picker-empty" data-job-picker-empty="">
+                {emptyPickerLine(openJob)}
+              </p>
+            ) : (
+              <ul className="job-picker-list">
+                {pickerRows.map((row) => (
+                  <li key={row.key}>
+                    <Link
+                      to="/clients/$clientId"
+                      params={{ clientId: row.clientId }}
+                      search={clientNavSearch({}, row.headingId) as never}
+                      className="job-picker-row"
+                      data-job-picker-row={row.clientId}
+                      data-job-picker-form={row.form}
+                    >
+                      <span className="job-picker-name">{row.name}</span>
+                      {row.form ? <span className="job-picker-form">{row.form}</span> : null}
+                      {row.due ? <span>{row.due}</span> : null}
+                      {row.status ? <span>{row.status}</span> : null}
+                      {row.detail ? <span>{row.detail}</span> : null}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button type="button" className="job-btn job-btn-secondary" onClick={() => setOpenJob(null)}>
+              Close
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <section
         className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-[var(--milon-border)] px-5 py-4"

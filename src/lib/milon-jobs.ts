@@ -8,6 +8,12 @@
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { RoutineActionKind } from "@/lib/client-routines";
 import type { StageAgentKey } from "@/lib/tax-specialist/agents";
+import {
+  companyYearEndFromOperatingProfile,
+  isTaxDeadlineApproachingWindow,
+  lastBusinessDayOnOrBeforeYmd,
+} from "@/lib/im-routine-tax-deadlines";
+import { formatSampleDate, companyTaxDeadlines } from "@/lib/tax-specialist/sample-compute";
 
 export const JOB_KEYS = ["collect", "tax", "advise", "books"] as const;
 export type JobKey = (typeof JOB_KEYS)[number];
@@ -98,6 +104,10 @@ export type JobsBoardClient = {
   reportsReady: number;
   /** True once figures are on file from a ledger sync or an upload. */
   hasFigures: boolean;
+  /** Operating profile already on the client row. Deadlines are read from it. */
+  operatingProfile?: unknown;
+  /** Individual or sole prop. The annual return is ITR12. */
+  individual?: boolean;
 };
 
 export type JobsBoardCount = {
@@ -187,6 +197,159 @@ export function jobsBoardCounts(
       clientId: null,
     },
   };
+}
+
+// ── Client picker ─────────────────────────────────────────────────────────────
+
+export const TAX_PICKER_FORMS = ["IRP6", "ITR14", "ITR12"] as const;
+export type TaxPickerForm = (typeof TAX_PICKER_FORMS)[number];
+
+export type JobsBoardDraft = {
+  clientId: string;
+  form: TaxPickerForm;
+  period?: number | null;
+  status: "draft" | "approved" | "downloaded";
+};
+
+export type JobPickerRow = {
+  key: string;
+  clientId: string;
+  name: string;
+  /** Client file heading. The row never opens a route without clientId. */
+  headingId: "send-agent" | "tax" | "reports";
+  form?: TaxPickerForm;
+  due?: string;
+  status?: string;
+  detail?: string;
+};
+
+const DRAFT_STATUS_LABEL: Record<JobsBoardDraft["status"], string> = {
+  draft: "Draft",
+  approved: "Approved",
+  downloaded: "Downloaded",
+};
+
+function draftStatus(
+  drafts: readonly JobsBoardDraft[],
+  clientId: string,
+  form: TaxPickerForm,
+  period: number | null,
+): string {
+  const hit = drafts.find(
+    (row) =>
+      row.clientId === clientId &&
+      row.form === form &&
+      (form !== "IRP6" || row.period == null || period == null || row.period === period),
+  );
+  return hit ? DRAFT_STATUS_LABEL[hit.status] : "No draft";
+}
+
+/** The annual return due now belongs to the previous year end. */
+function previousYearEnd(yearEnd: string): string | null {
+  const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(yearEnd);
+  if (!match) return null;
+  const year = Number(match[1]) - 1;
+  const month = Number(match[2]);
+  const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return `${year}-${match[2]}-${String(last).padStart(2, "0")}`;
+}
+
+function taxRows(
+  clients: readonly JobsBoardClient[],
+  now: Date,
+  drafts: readonly JobsBoardDraft[],
+): JobPickerRow[] {
+  const rows: Array<JobPickerRow & { sortDue: string }> = [];
+  for (const client of clients) {
+    if (!client.taxEnabled || !client.id) continue;
+    const yearEnd = companyYearEndFromOperatingProfile(client.operatingProfile, now);
+    if (!yearEnd) continue;
+    const yearEnds = [yearEnd, previousYearEnd(yearEnd)].filter((value): value is string => Boolean(value));
+    for (const end of yearEnds) for (const deadline of companyTaxDeadlines(end)) {
+      if (!isTaxDeadlineApproachingWindow(deadline.due, now)) continue;
+      const period = deadline.id === "irp6-1" ? 1 : deadline.id === "irp6-2" ? 2 : deadline.id === "irp6-3" ? 3 : null;
+      const form: TaxPickerForm = deadline.form === "ITR14" && client.individual ? "ITR12" : deadline.form;
+      rows.push({
+        key: `${client.id}:${form}:${deadline.due}`,
+        clientId: client.id,
+        name: client.name,
+        headingId: "tax",
+        form,
+        due: formatSampleDate(lastBusinessDayOnOrBeforeYmd(deadline.due)),
+        status: draftStatus(drafts, client.id, form, period),
+        sortDue: deadline.due,
+      });
+    }
+  }
+  rows.sort((a, b) => a.sortDue.localeCompare(b.sortDue) || a.name.localeCompare(b.name));
+  return rows.map((row) => ({
+    key: row.key,
+    clientId: row.clientId,
+    name: row.name,
+    headingId: row.headingId,
+    form: row.form,
+    due: row.due,
+    status: row.status,
+  }));
+}
+
+function overdueCount(client: JobsBoardClient): number {
+  return client.chaseActions.filter((item) => item.overdue).length;
+}
+
+function collectRows(clients: readonly JobsBoardClient[]): JobPickerRow[] {
+  return clients
+    .filter((client) => client.id && ((client.openQueries ?? 0) > 0 || client.chaseActions.length > 0))
+    .sort(
+      (a, b) => overdueCount(b) - overdueCount(a) || (b.openQueries ?? 0) - (a.openQueries ?? 0),
+    )
+    .map((client) => {
+      const overdue = overdueCount(client);
+      const queries = client.openQueries ?? 0;
+      const detail =
+        overdue > 0 && queries > 0
+          ? `${overdue} overdue, ${queries} open`
+          : overdue > 0
+            ? `${overdue} overdue`
+            : `${queries} open`;
+      return {
+        key: client.id,
+        clientId: client.id,
+        name: client.name,
+        headingId: "send-agent" as const,
+        detail,
+      };
+    });
+}
+
+function adviseRows(clients: readonly JobsBoardClient[]): JobPickerRow[] {
+  const ready = clients
+    .filter((client) => client.id && client.hasFigures && client.reportsReady > 0)
+    .sort((a, b) => b.reportsReady - a.reportsReady || a.name.localeCompare(b.name));
+  const figures = clients
+    .filter((client) => client.id && client.hasFigures && client.reportsReady <= 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return [...ready, ...figures].map((client) => ({
+    key: client.id,
+    clientId: client.id,
+    name: client.name,
+    headingId: "reports" as const,
+    detail: client.reportsReady > 0 ? `${client.reportsReady} ready` : "Figures on file",
+  }));
+}
+
+/**
+ * Pure. One row per client choice. An empty list is the empty state.
+ * No row is missing a client id, and none of these open a generic draft.
+ */
+export function jobPickerRows(
+  job: "collect" | "tax" | "advise",
+  clients: readonly JobsBoardClient[],
+  now: Date,
+  drafts: readonly JobsBoardDraft[] = [],
+): JobPickerRow[] {
+  const rows = job === "tax" ? taxRows(clients, now, drafts) : job === "collect" ? collectRows(clients) : adviseRows(clients);
+  return rows.filter((row) => row.clientId.trim().length > 0);
 }
 
 // ── First run ─────────────────────────────────────────────────────────────────

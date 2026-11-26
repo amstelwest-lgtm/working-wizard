@@ -113,3 +113,77 @@
   background: #ffffff;
   color: #102a43;
 }
+
+.job-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(16, 42, 67, 0.28);
+}
+
+.job-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(32rem, 100%);
+  max-height: min(70vh, 32rem);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #ffffff;
+  color: #102a43;
+}
+
+.job-picker-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.job-picker > .job-btn {
+  align-self: flex-start;
+}
+
+.job-picker-empty {
+  margin: 0;
+  min-height: 44px;
+  font-size: 15px;
+  line-height: 44px;
+}
+
+.job-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.job-picker-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  color: #102a43;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.job-picker-row:hover {
+  background: #dbeafe;
+}
+
+.job-picker-form {
+  color: #0b5fff;
+}

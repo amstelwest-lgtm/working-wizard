@@ -2116,7 +2116,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   );
 
   // ── Jobs board ────────────────────────────────────────────────────────────
-  const jobCounts = useMemo(() => {
+  const jobClients = useMemo(() => {
     const now = new Date();
     const rows: JobsBoardClient[] = clientRows.map((row) => ({
       id: row.id,
@@ -2129,9 +2129,12 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       taxDeadlineNear: imTaxDeadlineApproaching(now, row.operating_profile),
       reportsReady: clientReportsReadyCount(row.financials),
       hasFigures: row.financials != null && Object.keys(row.financials).length > 0,
+      operatingProfile: row.operating_profile,
+      individual: row.business_type === "individual" || row.business_type === "sole_prop",
     }));
-    return jobsBoardCounts(rows);
+    return rows;
   }, [clientRows]);
+  const jobCounts = useMemo(() => jobsBoardCounts(jobClients), [jobClients]);
   const jobAgentRows = useMemo<JobsBoardAgentRow[]>(() => {
     const agents: StageAgentKey[] = [...AGENT_ORDER];
     if (firmCountry === "ZA") agents.push(TAX_AGENT);
@@ -2365,6 +2368,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             />
             <PracticeJobsBoard
               counts={jobCounts}
+              clients={jobClients}
               loading={bookLoading}
               showTax={firmCountry === "ZA"}
               agentRows={jobAgentRows}
