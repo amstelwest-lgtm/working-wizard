@@ -71,7 +71,6 @@ import { LiteYouTube } from "@/components/lite-youtube";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { readSignupQuotes } from "@/lib/pricing/price-quote.functions";
 import { useSignupQuotes } from "@/lib/pricing/use-signup-quotes";
-import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { visitorMarketHint, withVisitorMarketHint } from "@/lib/pricing/visitor-market-hint";
 import {
   ACCOUNTANT_TEASER,
@@ -168,7 +167,6 @@ const LandingRegisterForm = lazy(() =>
 export const Route = createFileRoute("/")({
   loader: async () => {
     const visitor = await readMarketingVisitor();
-    const saPricing = visitor.showSaPricing ? await readSaPricingCopy() : null;
     const hinted =
       resolveVisitorDraft({
         geoCountry: visitor.geoZa ? "ZA" : null,
@@ -177,8 +175,10 @@ export const Route = createFileRoute("/")({
       }).country === "ZA"
         ? "ZA"
         : "US";
-    const signupQuotes = await readSignupQuotes({ data: { country: hinted } });
-    return { ...visitor, saPricing, signupQuotes };
+    // This page does not publish a local list price. The signup form still knows the country.
+    const signupQuotes =
+      hinted === "ZA" ? null : await readSignupQuotes({ data: { country: hinted } });
+    return { ...visitor, signupQuotes };
   },
   component: LandingPage,
   head: ({ loaderData }) => {
@@ -285,8 +285,8 @@ function applyLandingTheme(theme: "light" | "dark") {
 /* ─────────────────────────────────────────────────────────────── */
 
 function LandingPage() {
-  const { showSaPricing, saPricing, urlDraft, copyPack, geoZa, signupQuotes } = Route.useLoaderData();
-  const homeFaq = homepageFaqItems(showSaPricing, saPricing?.ownerHomepageCost ?? null);
+  const { urlDraft, copyPack, geoZa, signupQuotes } = Route.useLoaderData();
+  const homeFaq = homepageFaqItems(false);
   const { user, loading } = useAuth();
   const [firmId, setFirmId] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -425,13 +425,16 @@ function LandingPage() {
     }),
   );
   const marketReady = useRef(false);
-  // Hero and pricing copy follow the server pack, not this draft. The draft
-  // is the practice-location form, applied after mount. The signup price
-  // lines follow the country select.
+  // Sample spelling follows the server pack. Published prices on this page
+  // stay on the USD catalog. The signup form follows the country select.
+  // A ZA practice is not shown a listed amount.
   const copyMarket = { copyPack };
   const signupPack = useSignupQuotes(draftMarket.country, signupQuotes);
-  const signupOwnerNote =
-    signupPack?.ownerPayLine ?? firmSignupOwnerPayLine(draftMarket.country);
+  const listedRand = (draftMarket.country ?? "").trim().toUpperCase() === "ZA";
+  const signupOwnerNote = listedRand
+    ? firmSignupOwnerPayLine("ZA", "")
+    : (signupPack?.ownerPayLine ?? firmSignupOwnerPayLine(draftMarket.country));
+  const signupStarterMonthly = listedRand ? "" : (signupPack?.starterMonthly ?? "");
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -2062,7 +2065,7 @@ function LandingPage() {
             {WINDOWS_PILOT_INSTALLER_URL ? (
               <p className="hero-cta-note">{WINDOWS_PILOT_SMARTSCREEN_NOTE}</p>
             ) : null}
-            <p className="hero-cta-note">{saPricing?.heroNote ?? HERO_CTA_NOTE}</p>
+            <p className="hero-cta-note">{HERO_CTA_NOTE}</p>
             <ul className="hero-points">
               {HERO_POINTS.map((point) => (
                 <li key={point}>{point}</li>
@@ -2076,7 +2079,7 @@ function LandingPage() {
                   goToOwnerSpark();
                 }}
               >
-                {saPricing?.ownerHeroLink ?? HERO_OWNER_LINK}
+                {HERO_OWNER_LINK}
               </a>
             </p>
           </div>
@@ -2317,7 +2320,7 @@ function LandingPage() {
                   goToOwnerSpark();
                 }}
               >
-                {saPricing?.ownerHeroLink ?? HERO_OWNER_LINK}
+                {HERO_OWNER_LINK}
               </a>
             </article>
           </div>
@@ -2670,7 +2673,7 @@ function LandingPage() {
         <div className="wrap">
           <div className="section-head center">
             <span className="eyebrow">Pricing for firms</span>
-            <h2>{saPricing?.heading ?? PRICING_H2_USD}</h2>
+            <h2>{PRICING_H2_USD}</h2>
             <p className="sub">{PRICING_INTRO}</p>
           </div>
 
@@ -2678,21 +2681,19 @@ function LandingPage() {
             interval={firmInterval}
             onIntervalChange={setFirmInterval}
             onSelectBand={startFirmPlan}
-            showSaPricing={showSaPricing}
-            saLabels={saPricing?.labels}
-            trialAfter={saPricing?.trialAfter}
             marketHint={visitorMarketHint(draftMarket.country)}
           />
 
+          <div className="owner-spark-path local-pricing-cta">
+            <p className="local-pricing-cta-title">
+              <a href={HERO_CONTACT_HREF}>Pricing in rand: talk to us</a>
+            </p>
+            <p>We price local firms individually.</p>
+          </div>
+
           <div className="owner-spark-path">
             <p className="owner-offer-label">{OWNER_OFFER_LABEL}</p>
-            <p>
-              <RegionCopy
-                pack={copyMarket.copyPack}
-                us={PRICING_OWNER_BAR_US}
-                za={saPricing?.ownerBar ?? PRICING_OWNER_BAR_US}
-              />
-            </p>
+            <p>{PRICING_OWNER_BAR_US}</p>
             <a
               className="btn btn-ghost"
               href={withVisitorMarketHint("/?signup=owner#register", draftMarket.country)}
@@ -2763,7 +2764,7 @@ function LandingPage() {
             <Suspense fallback={<div className="reg-shell" style={{ minHeight: 480 }} />}>
               <LandingRegisterForm
                 ownerNote={signupOwnerNote}
-                starterMonthly={signupPack?.starterMonthly ?? ""}
+                starterMonthly={signupStarterMonthly}
                 inviteClientId={inviteClientId}
                 inviteBusiness={inviteBusiness}
                 inviteFirmName={inviteFirmName}
@@ -2814,7 +2815,7 @@ function LandingPage() {
             <span style={{ fontSize: 12, color: "var(--ink-dim)" }}>
               An AI finance team
               <br />
-              {saPricing?.footerTagline ?? DUAL_MARKET_TAGLINE}
+              {DUAL_MARKET_TAGLINE}
             </span>
           </div>
           <nav className="fnav" aria-label="Footer navigation">
@@ -2863,7 +2864,7 @@ function LandingPage() {
                 AI notice
               </a>
               {" · "}
-              {saPricing?.footerBuilt ?? DUAL_MARKET_BUILT}
+              {DUAL_MARKET_BUILT}
             </span>
             <span>
               <a href={PREFERRED_SOURCE_HREF} target="_blank" rel="noopener">

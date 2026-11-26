@@ -263,7 +263,12 @@ assert(!landing.includes("health tool that diagnoses the"), "old run-on hero led
 assert(!landing.includes("Give every business"), "old give-every-business hero is gone");
 assert(landing.includes("Create firm account"), "home has a firm signup CTA");
 assert(landing.includes("PRICING_H2_USD"), "home pricing leads with firm bands");
-assert(landing.includes("saPricing?.heading"), "home pricing can show the rand heading");
+assert(landing.includes("Pricing in rand: talk to us"), "home pricing points rand firms to talk to us");
+assert(
+  landing.includes("We price local firms individually."),
+  "home pricing says local firms are priced individually",
+);
+assert(!landing.includes("saPricing?.heading"), "home pricing does not swap in the rand heading");
 assert(
   PRICING_H2_USD === "Flat USD pricing by active clients, Starter to Scale.",
   "USD band heading names Starter through Scale",
@@ -313,7 +318,7 @@ assert(landing.includes("Gross Profit / Labor"), "marquee lists Gross Profit / L
 assert(landing.includes("TRUST_ITEMS"), "trust strip uses the shared fact list");
 assert(TRUST_HANDOFF.includes("reviews and approves"), "trust line is the hand-off benefit");
 assert(!/claude/i.test(TRUST_HANDOFF), "trust line does not name a model vendor");
-assert(landing.includes("showSaPricing"), "landing gates SA pricing on server geo");
+assert(!landing.includes("showSaPricing"), "landing does not gate a rand price table on geo");
 assert(landing.includes("FirmBandPricingTable"), "landing pricing uses the shared band table");
 assert(!landing.includes("FOUNDING_CALLOUT"), "landing does not render the ungated founding callout");
 assert(!landing.includes("raw amounts removed"), "landing FAQ does not claim amounts are stripped");
