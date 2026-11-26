@@ -6,8 +6,12 @@ import { LiteYouTube } from "@/components/lite-youtube";
 import { firmSignupHref, FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
 import { visitorMarketHint } from "@/lib/pricing/visitor-market-hint";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
-import { ACCOUNTANT_TEASER, FIRM_NOT_A_BOOKKEEPER, FIRM_TEAM_BULLETS } from "@/lib/landing-copy";
-import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
+import {
+  ACCOUNTANT_TEASER,
+  FIRM_NOT_A_BOOKKEEPER,
+  FIRM_TEAM_BULLETS,
+  HERO_CONTACT_HREF,
+} from "@/lib/landing-copy";
 import { visitorMarketBootScript } from "@/lib/market";
 import { stashPendingCheckout } from "@/lib/pending-checkout";
 import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
@@ -16,11 +20,7 @@ import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/for-accountants")({
-  loader: async () => {
-    const visitor = await readMarketingVisitor();
-    const saPricing = visitor.showSaPricing ? await readSaPricingCopy() : null;
-    return { ...visitor, saPricing };
-  },
+  loader: async () => readMarketingVisitor(),
   component: ForAccountantsPage,
   head: ({ loaderData }) => ({
     ...pageHead(SEO_PAGES.forAccountants),
@@ -30,7 +30,7 @@ export const Route = createFileRoute("/for-accountants")({
 });
 
 function ForAccountantsPage() {
-  const { saPricing, copyPack, geoZa } = Route.useLoaderData();
+  const { copyPack, geoZa } = Route.useLoaderData();
   const navigate = useNavigate();
   const [interval, setInterval] = useState<FirmInterval>("month");
   const marketHint = visitorMarketHint(copyPack === "za" ? "ZA" : "US");
@@ -62,8 +62,8 @@ function ForAccountantsPage() {
         <>
           Every practice knows which clients need a real conversation. The problem is that finding
           out takes a morning per client, so it only happens at year-end, and by then the advice is
-          history rather than help. {saPricing?.accountantsLead ??
-            "Management accounts, 13-week cash and advisory drafts. Milōn connects with Xero, QuickBooks and Sage."}
+          history rather than help. Management accounts, 13-week cash and advisory drafts.
+          Milōn connects with Xero, QuickBooks and Sage.
         </>
       }
       heroCta={{ label: FIRM_TRIAL_CTA_LABEL, href: signupHref }}
@@ -78,7 +78,6 @@ function ForAccountantsPage() {
       }
       ctaLabel="Set up your firm account ✦"
       ctaHref={signupHref}
-      footerLine={saPricing?.footerLine}
       copyPack={copyPack}
       geoZa={geoZa}
     >
@@ -224,21 +223,23 @@ function ForAccountantsPage() {
         />
       </figure>
 
-      <h2>{saPricing?.heading ?? "Pricing for firms"}</h2>
+      <h2>Pricing for firms</h2>
       <p>
-        {saPricing
-          ? saPricing.accountantsIntro
-          : "Flat USD monthly or annual bands by active client count. Less time per client, and a Financial Manager, Analyst and Advisor for a small monthly fee."}
+        Flat USD monthly or annual bands by active client count. Less time per client, and a
+        Financial Manager, Analyst and Advisor for a small monthly fee.
       </p>
       <FirmBandPricingTable
         interval={interval}
         onIntervalChange={setInterval}
         onSelectBand={startBand}
-        showSaPricing={Boolean(saPricing)}
-        saLabels={saPricing?.labels}
-        trialAfter={saPricing?.trialAfter}
         marketHint={marketHint}
       />
+      <div className="mk-card local-pricing-cta">
+        <p className="local-pricing-cta-title">
+          <a href={HERO_CONTACT_HREF}>Pricing in rand: talk to us</a>
+        </p>
+        <p>We price local firms individually.</p>
+      </div>
       <div className="mk-note">
         Where we are honest about being early: our first pilots are running now, so we are not
         showing you case studies from firms that do not exist. If you want to be one of the first

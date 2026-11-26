@@ -5,7 +5,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { HOMEPAGE_FAQ_ITEMS } from "../src/lib/marketing-faq";
-import { loadSaPricingCopy } from "../src/lib/pricing/za-pricing-chunk.server";
 import { FIRM_TRIAL_SENTENCE } from "../src/lib/stripe-plans";
 import {
   FIRM_TRIAL_EXPLORE,
@@ -114,15 +113,14 @@ assert(!faq.includes("AI_IDENTIFIERS_LINE") || !HOMEPAGE_FAQ_ITEMS.some((item) =
 assert(!HOMEPAGE_FAQ_ITEMS.some((item) => /claude/i.test(item.question + item.answer)), "no Claude on homepage FAQ");
 
 const usCost = homepageFaqItems(false).find((item) => item.question === HOMEPAGE_COST_QUESTION);
-const zaCost = homepageFaqItems(true, loadSaPricingCopy().ownerHomepageCost).find(
-  (item) => item.question === HOMEPAGE_COST_QUESTION,
-);
-assert(usCost != null && zaCost != null, "cost answers exist");
+assert(usCost != null, "cost answer exists");
 assert(!/FOUNDING|50% off|\bZAR\b|Adaptive Pricing/i.test(usCost!.answer), "US cost answer has no SA pricing");
 assert(usCost!.answer.includes("Business owners pay $39/mo"), "US owners see the dollar price");
 assert(!usCost!.answer.includes("R299") && !usCost!.answer.includes("R799"), "US owners do not see a rand price");
-assert(zaCost!.answer.includes("Business owners pay R299/mo"), "SA owners see the rand price");
-assert(!zaCost!.answer.includes("Business owners pay $39/mo"), "SA owners do not see the dollar owner price");
+assert(index.includes("homepageFaqItems(false)"), "homepage FAQ stays on the USD cost answer");
+assert(!index.includes("ownerHomepageCost"), "homepage FAQ does not swap in a rand owner price");
+assert(index.includes("Pricing in rand: talk to us"), "rand pricing on the landing is the talk-to-us line");
+assert(index.includes("We price local firms individually."), "rand pricing subline is on the landing");
 assert(
   PRICING_TRIAL_AFTER === "On Starter. You add a card once you have seen your first result. Then $39/mo.",
   "VERIFY-2 trial sentence lives on the pricing section",

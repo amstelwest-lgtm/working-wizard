@@ -452,6 +452,28 @@ html .mk .mk-card p {
   color: var(--ink-dim) !important;
 }
 
+html .mk .local-pricing-cta {
+  border-color: var(--line);
+  margin: 22px 0;
+  text-align: center;
+}
+
+html .mk .local-pricing-cta .local-pricing-cta-title {
+  margin: 0 0 6px;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--cobalt) !important;
+  -webkit-text-fill-color: var(--cobalt);
+}
+
+html .mk .local-pricing-cta .local-pricing-cta-title a {
+  color: inherit !important;
+  -webkit-text-fill-color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .mk .mk-list {
   list-style: none;
   padding: 0;

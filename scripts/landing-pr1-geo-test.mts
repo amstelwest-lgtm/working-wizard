@@ -144,7 +144,13 @@ assert(
 assert(count(privacy, DISCLOSURE) === 0, "/privacy no longer uses the legacy disclosure sentence");
 
 const accountants = readFileSync(resolve("src/routes/for-accountants.tsx"), "utf8");
-assert(accountants.includes("showSaPricing"), "for-accountants threads the server geo gate");
+assert(!accountants.includes("showSaPricing"), "for-accountants does not show a rand price table");
+assert(accountants.includes("Pricing in rand: talk to us"), "for-accountants points rand firms to talk to us");
+assert(
+  accountants.includes("We price local firms individually."),
+  "for-accountants says local firms are priced individually",
+);
+assert(accountants.includes("HERO_CONTACT_HREF"), "for-accountants reuses the hello@ contact");
 const invitePanel = readFileSync(resolve("src/components/owner-invite-signup-panel.tsx"), "utf8");
 assert(!/claude/i.test(invitePanel), "invite signup microcopy does not name Claude");
 

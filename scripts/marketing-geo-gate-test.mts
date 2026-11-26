@@ -12,20 +12,18 @@ import { FirmBandPricingTable } from "../src/components/firm-band-pricing";
 import { MarketingShell, RegionCopy } from "../src/components/marketing-shell";
 import { marketingPackForGeo } from "../src/lib/geo-country";
 import { visitorMarketBootScript } from "../src/lib/market/marketing";
-import { loadSaPricingCopy } from "../src/lib/pricing/za-pricing-chunk.server";
 import { resolveFirmCheckoutMarket } from "../src/lib/stripe-checkout.core";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
-const LEAK = /R299|R799|\brand\b|ZAR|South Africa/i;
+const LIST_PRICE = /R\d|ZAR/;
 
 function accountantsMarkup(geo: string, marketParam: string | null): string {
   const pack = marketingPackForGeo(geo, marketParam);
   const geoZa = geo === "ZA";
-  const sa = pack === "za" ? loadSaPricingCopy() : null;
-  const lead: ReactNode = sa?.accountantsLead ?? "Built for firms in the United States.";
+  const lead: ReactNode = "Built for firms in the United States.";
   const hero = renderToStaticMarkup(
     createElement(RegionCopy, {
       pack,
@@ -44,19 +42,12 @@ function accountantsMarkup(geo: string, marketParam: string | null): string {
         ctaBody: "Set up a firm account.",
         copyPack: pack,
         geoZa,
-        footerLine: sa?.footerLine,
       },
-      createElement("h2", null, sa?.heading ?? "Pricing for firms"),
-      createElement(
-        "p",
-        null,
-        sa ? sa.accountantsIntro : "Flat USD monthly or annual bands by active client count.",
-      ),
-      createElement(FirmBandPricingTable, {
-        interval: "month",
-        showSaPricing: pack === "za",
-        saLabels: sa?.labels ?? null,
-      }),
+      createElement("h2", null, "Pricing for firms"),
+      createElement("p", null, "Flat USD monthly or annual bands by active client count."),
+      createElement(FirmBandPricingTable, { interval: "month" }),
+      createElement("a", { href: "mailto:hello@milonfinance.com" }, "Pricing in rand: talk to us"),
+      createElement("p", null, "We price local firms individually."),
     ),
   );
   return `${page}\n${hero}`;
@@ -71,36 +62,35 @@ assert(marketingPackForGeo("ZA", "US") === "us", "ZA geo may opt into the US vie
 assert(marketingPackForGeo("ZA", "us") === "us", "ZA opt-out is case-insensitive");
 
 const usQuery = accountantsMarkup("US", "ZA");
-assert(!LEAK.test(usQuery), `US + ?market=ZA leaked: ${usQuery.match(LEAK)?.[0]}`);
+assert(!LIST_PRICE.test(usQuery), `US + ?market=ZA leaked a list price: ${usQuery.match(LIST_PRICE)?.[0]}`);
+assert(!usQuery.includes("South Africa"), "US + ?market=ZA does not name that country");
 assert(!usQuery.includes("mk-market-switch"), "US + ?market=ZA renders no switcher");
 assert(
   usQuery.includes("$39/mo") && usQuery.includes("about $8 per client"),
   "US + ?market=ZA still shows the USD starter price",
 );
 assert(usQuery.includes("$99/mo"), "US + ?market=ZA still shows the USD solo price");
+assert(usQuery.includes("Pricing in rand: talk to us"), "US view keeps the talk-to-us line");
 assert(usQuery.includes("$ thousands"), "US hero micro-copy stays in dollars");
 
 const usPlain = accountantsMarkup("US", null);
-assert(!LEAK.test(usPlain), "US geo renders no rand copy");
+assert(!LIST_PRICE.test(usPlain), "US geo renders no rand list price");
 assert(!usPlain.includes("mk-market-switch"), "US geo renders no switcher");
 
 const za = accountantsMarkup("ZA", null);
-assert(
-  za.includes("R799/mo") && za.includes("about R53 per client"),
-  "ZA geo renders the solo rand price",
-);
-assert(
-  za.includes("R299/mo") && za.includes("about R60 per client"),
-  "ZA geo renders the Starter rand line",
-);
-assert(/\brand\b/i.test(za), "ZA geo renders the rand word");
+assert(!LIST_PRICE.test(za), `ZA geo leaked a list price: ${za.match(LIST_PRICE)?.[0]}`);
+assert(za.includes("$39/mo") && za.includes("about $8 per client"), "ZA geo shows the USD starter price");
+assert(za.includes("$99/mo"), "ZA geo shows the USD solo price");
+assert(za.includes("Pricing in rand: talk to us"), "ZA geo shows the talk-to-us line");
+assert(za.includes("We price local firms individually."), "ZA geo shows the individual-pricing line");
 assert(za.includes("mk-market-switch"), "ZA geo may link to the US view");
 assert(za.includes("United States"), "ZA switch points at the US view");
 assert(!za.includes(">South Africa<"), "ZA pricing view does not offer a switch into ZA");
 
 const zaOptOut = accountantsMarkup("ZA", "US");
-const RAND = /R799|\brand\b|ZAR/i;
-assert(!RAND.test(zaOptOut), `ZA visitor who asked for US sees no rand copy: ${zaOptOut.match(RAND)?.[0]}`);
+assert(!LIST_PRICE.test(zaOptOut), `ZA visitor who asked for US sees no rand list price: ${zaOptOut.match(LIST_PRICE)?.[0]}`);
+assert(zaOptOut.includes("$39/mo"), "ZA visitor who asked for US still sees the USD starter price");
+assert(zaOptOut.includes("Pricing in rand: talk to us"), "the talk-to-us line stays on the US view");
 assert(zaOptOut.includes("mk-market-switch"), "ZA visitor can switch back");
 assert(zaOptOut.includes("South Africa"), "the way back is only offered to a ZA visitor");
 
