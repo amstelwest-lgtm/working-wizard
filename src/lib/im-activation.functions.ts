@@ -8,7 +8,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { agentIdempotencyKey, agentInputHash } from "@/lib/agent-bus";
 import { handoffDecision, runnerEnabled, AGENT_RUNNERS } from "@/lib/owner-handoff";
-import { buildActivationPlan, pickPilotClients, type ImPilotClient } from "@/lib/im-activation-planner";
+import { buildActivationPlan, type ImPilotClient } from "@/lib/im-activation-planner";
+import { imRoutineRunnerAgentForStep } from "@/lib/im-activation-triggers";
 import { replayImplementationPlan } from "@/lib/im-replay";
 import { currentQuarterLabel, defaultTargetDate } from "@/lib/action-plan-counts";
 import {
@@ -37,15 +38,20 @@ import {
   type IntegrationPlanRow,
 } from "@/lib/im-integration-plan";
 import {
-  draftHref,
+  draftDeepLink,
   emptyImSetupHold,
+  imResetAllowed,
   imSetupHoldRuleText,
   isImSampleClient,
   parseImSetupHold,
+  pilotFromPlanRows,
   queuedRunningLines,
+  planRowKey,
+  presentRunningLines,
   routineLabel,
   IM_SETUP_HOLD_EVENT,
   IM_SETUP_HOLD_TASK,
+  type ImPilotRef,
   type ImRunningLine,
   type ImSetupHold,
 } from "@/lib/im-setup-hold";
@@ -265,8 +271,10 @@ async function enqueueDraftRun(input: {
   agent: "financial_manager" | "analyst" | "advisor";
   clientId: string;
   firmId: string;
-  actionItemId: string;
+  actionItemId?: string;
   periodKey?: string;
+  /** Stable plan-row key. Same key never inserts a second run. */
+  rowKey?: string;
 }): Promise<DraftRunEnqueue | null> {
   const decision = handoffDecision(input.agent);
   if (!decision.ok) return null;
@@ -275,7 +283,9 @@ async function enqueueDraftRun(input: {
   if (setting.error || !runnerEnabled(setting.data?.value)) return null;
 
   const periodKey = input.periodKey ?? imRoutinePeriodKey();
-  const inputs = scheduledRunInputs(input.actionItemId, periodKey);
+  const inputs = input.rowKey
+    ? `im-plan-row:${input.firmId}:${input.clientId}:${input.rowKey}`
+    : scheduledRunInputs(input.actionItemId ?? "", periodKey);
   const idempotencyKey = await agentIdempotencyKey({
     agent: input.agent,
     clientId: input.clientId,
@@ -294,7 +304,7 @@ async function enqueueDraftRun(input: {
     input_hash: inputHash,
     correlation_id: correlationId,
     status: "queued",
-    action_item_id: input.actionItemId,
+    ...(input.actionItemId ? { action_item_id: input.actionItemId } : {}),
     attempt: 1,
     summary: "Implementation Manager activation — draft only.",
     trace: [
@@ -302,6 +312,7 @@ async function enqueueDraftRun(input: {
         tool: "activation",
         label: "Queued from Implementation Manager activation",
         status: "queued",
+        im_row_key: input.rowKey ?? "",
         im_design_model: CLAUDE_OPUS_55,
         im_execution_model: CLAUDE_SONNET_55,
       },
@@ -380,6 +391,8 @@ const acceptSchema = z.object({
       hoursSavedPerRun: z.number().positive().max(40).optional().nullable(),
     }),
   ),
+  /** Start passes false and enqueues once per stored plan row instead. */
+  enqueueRuns: z.boolean().optional(),
 });
 
 async function acceptImActivationHandler(
@@ -539,7 +552,9 @@ async function acceptImActivationHandler(
         wrote += 1;
       }
 
-      for (const row of enqueues) {
+      if (data.enqueueRuns === false) {
+        /* The caller enqueues one run per plan row. */
+      } else for (const row of enqueues) {
         const actionItemId =
           actionIdByKey.get(row.actionMoveKey) ??
           (await db
@@ -572,6 +587,44 @@ export const acceptImActivation = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => acceptSchema.parse(input))
   .handler(async ({ data, context }) => acceptImActivationHandler(data, context));
 
+function agentForPlanBot(bot: string): "financial_manager" | "analyst" | "advisor" {
+  return imRoutineRunnerAgentForStep(bot) ?? "advisor";
+}
+
+function resolveStoredPilot(
+  stored: ImPilotRef | null,
+  pilots: readonly ImPilotClient[],
+): ImPilotClient | null {
+  if (!stored?.id) return null;
+  const match = pilots.find((row) => row.id === stored.id);
+  if (match) return { ...match, name: stored.name || match.name };
+  return { id: stored.id, name: stored.name || "Client", hasLedger: false, hasUpload: false };
+}
+
+async function withDraftLinks(lines: readonly ImRunningLine[]): Promise<ImRunningLine[]> {
+  const runIds = [...new Set(lines.map((line) => line.runId?.trim() ?? "").filter(Boolean))];
+  if (!runIds.length) return lines.map((line) => ({ ...line, href: line.draftId ? draftDeepLink(line.clientId ?? "", line.draftId) : "" }));
+  const db = admin();
+  const found = (await db
+    .from("agent_findings")
+    .select("id, run_id")
+    .in("run_id", runIds)
+    .limit(40)) as unknown as { data: Row[] | null; error: DbError };
+  const draftByRun = new Map<string, string>();
+  if (!found.error) {
+    for (const row of found.data ?? []) {
+      const runId = typeof row.run_id === "string" ? row.run_id : "";
+      const id = typeof row.id === "string" ? row.id : "";
+      if (runId && id && !draftByRun.has(runId)) draftByRun.set(runId, id);
+    }
+  }
+  return lines.map((line) => {
+    const draftId = line.draftId?.trim() || (line.runId ? draftByRun.get(line.runId) ?? "" : "");
+    const href = draftId ? draftDeepLink(line.clientId ?? "", draftId) : "";
+    return { ...line, draftId, href };
+  });
+}
+
 const startSchema = z.object({
   firmId: z.string().uuid(),
   country: z.enum(["US", "ZA"]).optional(),
@@ -589,22 +642,38 @@ export const startImIntegration = createServerFn({ method: "POST" })
     const userId = context.userId;
     if (!userId) throw new Error("Not authenticated");
     await assertFirmAccess(userId, data.firmId);
-    const pilots = pickPilotClients(await loadPilots(data.firmId));
-    if (pilots.length < 1) throw new Error("Add a client, then start integration.");
+    const existing = (await readSetupHold(data.firmId)) ?? emptyImSetupHold();
+    const storedPilot = existing.pilot?.id ? existing.pilot : pilotFromPlanRows(existing.rows);
+    if (existing.started && storedPilot) {
+      const lines = await withDraftLinks(presentRunningLines({ rows: existing.rows, lines: existing.lines, pilot: storedPilot }));
+      return {
+        ok: true as const,
+        wrote: 0,
+        enqueued: 0,
+        runCount: lines.filter((line) => line.runId).length,
+        pilotIds: storedPilot.id ? [storedPilot.id] : [],
+        lines,
+        started: true as const,
+      };
+    }
+    const pilots = await loadPilots(data.firmId);
+    const pilot = resolveStoredPilot(storedPilot, pilots);
+    if (!pilot) throw new Error("Add a client, then start integration.");
     const rules = await activePlanRules(data.firmId);
     const replay = replayImplementationPlan({ confirmRules: rules, meta: { country: data.country } });
     if (replay.status === "needs_questions") throw new Error("Finish the Implementation Manager plan first.");
     const activation = buildActivationPlan({
       plan: replay.plan,
       country: replay.country,
-      pilots,
+      pilots: [pilot],
       manifest: replay.manifest,
     });
     const result = await acceptImActivationHandler(
       {
         firmId: data.firmId,
         country: data.country,
-        pilotIds: pilots.map((row) => row.id),
+        pilotIds: [pilot.id],
+        enqueueRuns: false,
         accepts: activation.routineMaps.map((map) => ({
           routine: map.routine,
           accepted: true,
@@ -613,33 +682,52 @@ export const startImIntegration = createServerFn({ method: "POST" })
       },
       context,
     );
-    const running = await loadActivationRuns(data.firmId);
-    const pilot = pilots[0] ?? null;
-    const queued = queuedRunningLines({
-      pilot: pilot ? { id: pilot.id, name: pilot.name } : null,
-      routines: activation.routineMaps.map((map) => ({
-        routine: map.routine,
-        bot: map.steps[0]?.botOwner ?? "Milōn",
-      })),
-    });
-    const lines =
-      running.lines.length > 0
-        ? queued.map((line, index) => {
-            const run = running.lines[index];
-            return run ? { ...line, id: run.id, status: run.status } : line;
-          })
-        : queued;
-    await rememberIntegrationStart({
-      firmId: data.firmId,
-      userId,
-      country: data.country,
+    const rows = existing.rows.length
+      ? existing.rows
+      : await planRowsForPilot({
+          firmId: data.firmId,
+          country: data.country,
+          steps: replay.plan.steps.map((row) => ({ step: row.step, bucket: row.bucket })),
+          pilot,
+        });
+    let enqueued = 0;
+    const seeded: ImRunningLine[] = [];
+    for (const row of rows) {
+      const rowKey = planRowKey(row.playId);
+      const run = await enqueueDraftRun({
+        agent: agentForPlanBot(row.bot),
+        clientId: pilot.id,
+        firmId: data.firmId,
+        rowKey,
+      });
+      if (run?.created) enqueued += 1;
+      seeded.push({
+        id: run?.runId || rowKey,
+        bot: row.bot,
+        status: "Draft queued",
+        summary: "Draft for your review. Nothing has been sent.",
+        href: "",
+        clientName: pilot.name,
+        clientId: pilot.id,
+        routine: row.routine,
+        rowKey,
+        runId: run?.runId ?? "",
+        draftId: "",
+      });
+    }
+    const lines = await withDraftLinks(presentRunningLines({ rows, lines: seeded, pilot }));
+    await writeSetupHold(data.firmId, userId, {
+      pendingMap: null,
+      rows,
+      started: true,
       lines,
-      steps: replay.plan.steps.map((row) => ({ step: row.step, bucket: row.bucket })),
+      pilot,
     });
     return {
       ...result,
-      runCount: running.runCount,
-      pilotIds: pilots.map((row) => row.id),
+      enqueued: result.enqueued + enqueued,
+      runCount: lines.filter((line) => line.runId).length,
+      pilotIds: [pilot.id],
       lines,
       started: true as const,
     };
@@ -716,12 +804,13 @@ async function writeSetupHold(firmId: string, userId: string, hold: ImSetupHold)
   if (inserted.error) throw new Error(inserted.error.message);
 }
 
-async function planRowsForHold(input: {
+async function planRowsForPilot(input: {
   firmId: string;
   country?: "US" | "ZA";
   interview?: string;
   map?: SetupPartnerWorkflowMap | null;
   steps?: { step: string; bucket?: string }[];
+  pilot?: ImPilotRef | null;
 }): Promise<IntegrationPlanRow[]> {
   const steps =
     input.steps ??
@@ -732,26 +821,8 @@ async function planRowsForHold(input: {
     interview: input.interview,
     country: input.country,
   });
-  return stampPlanActions(built, await firstPlanClient(input.firmId));
-}
-
-async function rememberIntegrationStart(input: {
-  firmId: string;
-  userId: string;
-  country?: "US" | "ZA";
-  lines: ImRunningLine[];
-  steps: { step: string; bucket?: string }[];
-}): Promise<void> {
-  const existing = (await readSetupHold(input.firmId)) ?? emptyImSetupHold();
-  const rows = existing.rows.length
-    ? existing.rows
-    : await planRowsForHold({ firmId: input.firmId, country: input.country, steps: input.steps });
-  await writeSetupHold(input.firmId, input.userId, {
-    pendingMap: null,
-    rows,
-    started: true,
-    lines: input.lines,
-  });
+  const pilot = input.pilot?.id ? input.pilot : await firstPlanClient(input.firmId);
+  return stampPlanActions(built, pilot);
 }
 
 async function loadActivationRuns(firmId: string): Promise<{
@@ -798,7 +869,7 @@ async function loadActivationRuns(firmId: string): Promise<{
         bot: BOT_LABEL[agent] ?? "Milōn",
         status: activationRunStatus(status),
         summary: "Draft for your review. Nothing has been sent.",
-        href: clientId ? draftHref(clientId) : "/clients",
+        href: "",
         clientName: clientId ? (names.get(clientId) ?? "") : "",
         routine: routineLabel("monthly_pack"),
       },
@@ -865,17 +936,40 @@ export const loadImRunningState = createServerFn({ method: "POST" })
     if (!userId) throw new Error("Not authenticated");
     await assertFirmAccess(userId, data.firmId);
     const hold = await readSetupHold(data.firmId);
-    const running = await loadActivationRuns(data.firmId);
-    let lines = hold?.lines.length ? hold.lines : running.lines;
-    let started = Boolean(hold?.started) || running.runCount > 0;
-    if (!started || lines.length === 0) {
+    const pilot = hold?.pilot?.id ? hold.pilot : pilotFromPlanRows(hold?.rows ?? []);
+    let lines = presentRunningLines({
+      rows: hold?.rows ?? [],
+      lines: hold?.lines ?? [],
+      pilot,
+    });
+    let started = Boolean(hold?.started) || lines.length > 0;
+    if (!lines.length) {
       const recovered = await linesFromArtifacts(data.firmId);
-      if (recovered.length) {
+      if (recovered.length && !pilot) {
         started = true;
-        if (!lines.length) lines = recovered;
+        lines = recovered;
       }
     }
-    return { runCount: running.runCount, started, lines };
+    lines = await withDraftLinks(lines);
+    const running = await loadActivationRuns(data.firmId);
+    return { runCount: running.runCount, started: started || running.runCount > 0, lines };
+  });
+
+const resetSchema = z.object({ firmId: z.string().uuid() });
+
+/** Clears the stored plan hold only. Runs and ledger rows stay. Test firm only. */
+export const resetImSetupHold = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => resetSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const userId = context.userId;
+    if (!userId) throw new Error("Not authenticated");
+    if (!imResetAllowed(data.firmId)) throw new Error("Reset is not available for this practice.");
+    await assertFirmAccess(userId, data.firmId);
+    const existing = await readSetupHoldRow(data.firmId);
+    if (!existing) return { ok: true as const, cleared: false };
+    await writeSetupHold(data.firmId, userId, emptyImSetupHold());
+    return { ok: true as const, cleared: true };
   });
 
 const holdSchema = z.object({
@@ -910,16 +1004,23 @@ export const saveImSetupHold = createServerFn({ method: "POST" })
       return { ok: true as const };
     }
     const pendingMap = data.pendingMap ?? existing.pendingMap;
+    const pilot = existing.pilot?.id ? existing.pilot : pilotFromPlanRows(existing.rows);
     const rows =
       pendingMap && !existing.started
-        ? await planRowsForHold({
+        ? await planRowsForPilot({
             firmId: data.firmId,
             country: data.country,
             interview: data.interview,
             map: pendingMap,
+            pilot,
           })
         : existing.rows;
-    await writeSetupHold(data.firmId, userId, { ...existing, pendingMap, rows });
+    await writeSetupHold(data.firmId, userId, {
+      ...existing,
+      pendingMap,
+      rows,
+      pilot: pilot ?? pilotFromPlanRows(rows),
+    });
     return { ok: true as const };
   });
 

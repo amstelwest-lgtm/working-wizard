@@ -9,6 +9,7 @@ import { useAccountantProfile } from "@/contexts/accountant-profile";
 import {
   draftImIntegrationPlan,
   loadImRunningState,
+  resetImSetupHold,
   saveImSetupHold,
   startImIntegration,
 } from "@/lib/im-activation.functions";
@@ -27,6 +28,7 @@ function PracticeSetupPage() {
   const loadPlanTable = useServerFn(draftImIntegrationPlan);
   const loadRunning = useServerFn(loadImRunningState);
   const saveSetupHold = useServerFn(saveImSetupHold);
+  const resetSetupHold = useServerFn(resetImSetupHold);
   return (
     <div className="accountant-portal premium-shell practice-home">
       <main className="shell">
@@ -38,6 +40,7 @@ function PracticeSetupPage() {
               loadPlanTable={(input) => loadPlanTable({ data: input })}
               loadRunning={(id) => loadRunning({ data: { firmId: id } })}
               saveSetupHold={(input) => saveSetupHold({ data: input })}
+              resetSetupHold={(id) => resetSetupHold({ data: { firmId: id } })}
             />
             {firmId ? (
               <details

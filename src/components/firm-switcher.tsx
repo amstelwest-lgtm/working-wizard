@@ -4,9 +4,17 @@
  */
 
 import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { practiceChipName } from "@/lib/accountant-identity";
 
-export function FirmSwitcher({ className }: { className?: string }) {
-  const { firmId, firms, setActiveFirm, brandLoading, profile } = useAccountantProfile();
+export function FirmSwitcher({ className, firmId: firmIdProp }: { className?: string; firmId?: string | null }) {
+  const { firmId, firms, setActiveFirm, brandLoading, profile, headerName } = useAccountantProfile();
+  const activeId = firmIdProp || firmId;
+  const active = firms.find((firm) => firm.id === activeId) ?? (firms.length === 1 ? firms[0] : null);
+  const practiceName = practiceChipName({
+    firmName: active?.name,
+    profileFirmName: profile.firmName,
+    personName: headerName || profile.accountantName,
+  });
 
   if (brandLoading && firms.length === 0) {
     return (
@@ -17,20 +25,11 @@ export function FirmSwitcher({ className }: { className?: string }) {
     );
   }
 
-  if (firms.length === 0) {
-    if (!profile.firmName) return null;
+  if (firms.length <= 1) {
+    if (!practiceName) return null;
     return (
       <span className={`firm-chip ${className ?? ""}`.trim()}>
-        Practice · <b>{profile.firmName}</b>
-      </span>
-    );
-  }
-
-  if (firms.length === 1) {
-    const only = firms[0]!;
-    return (
-      <span className={`firm-chip ${className ?? ""}`.trim()}>
-        Practice · <b>{only.name || profile.firmName || "—"}</b>
+        Practice · <b>{practiceName}</b>
       </span>
     );
   }
@@ -40,7 +39,7 @@ export function FirmSwitcher({ className }: { className?: string }) {
       <span className="firm-switcher-label">Practice</span>
       <select
         aria-label="Active firm"
-        value={firmId ?? firms[0]?.id ?? ""}
+        value={activeId ?? firms[0]?.id ?? ""}
         onChange={(e) => {
           const next = e.target.value;
           if (next) void setActiveFirm(next);
