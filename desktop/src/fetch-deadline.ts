@@ -16,12 +16,36 @@ function combineSignals(timeout: AbortSignal, parent?: AbortSignal | null): Abor
 
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
-/** Hanging sockets abort instead of pinning sign-in. The desktop app passes Electron's net.fetch. */
+function deadlineError(): Error {
+  const error = new Error("timeout");
+  error.name = "TimeoutError";
+  return Object.assign(error, { code: "timeout" });
+}
+
+/**
+ * Hanging sockets abort instead of pinning sign-in. The desktop app passes
+ * Electron's net.fetch. The signal is aborted at the deadline, and the race
+ * still rejects if net.fetch ignores the signal.
+ */
 export function fetchWithDeadline(timeoutMs = SIGN_IN_TIMEOUT_MS, baseFetch: FetchLike = fetch): FetchLike {
   return (input, init) => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
     const signal = combineSignals(controller.signal, init?.signal);
-    return baseFetch(input, { ...init, signal }).finally(() => clearTimeout(timer));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(deadlineError());
+      }, timeoutMs);
+    });
+    const request = Promise.resolve()
+      .then(() => baseFetch(input, { ...init, signal }))
+      .finally(() => {
+        if (timer !== undefined) clearTimeout(timer);
+      });
+    void request.catch(() => {
+      /* The deadline may already have settled the race. */
+    });
+    return Promise.race([request, deadline]);
   };
 }

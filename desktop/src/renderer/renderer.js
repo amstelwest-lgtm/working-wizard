@@ -1,7 +1,7 @@
 /* global milon */
 const app = document.getElementById("app");
 const drafts = new Map();
-const RENDERER_TIMEOUT_MS = 16000;
+const RENDERER_TIMEOUT_MS = 25000;
 let signingIn = false;
 let loginEmail = "";
 let loginError = "";
@@ -60,7 +60,7 @@ function signInOrTimeout(email, password) {
       if (settled) return;
       settled = true;
       console.error("[milon-desktop] sign-in name=TimeoutError code=renderer_timeout");
-      resolve({ ok: false, message: "Can't reach Milōn. Check your connection and try again." });
+      resolve({ ok: false, message: "Can't reach Milōn. Check your connection and try again. (timeout)" });
     }, RENDERER_TIMEOUT_MS);
     milon.signIn(email, password).then(
       (result) => {
@@ -77,7 +77,7 @@ function signInOrTimeout(email, password) {
         settled = true;
         clearTimeout(timer);
         console.error("[milon-desktop] sign-in name=Error code=renderer_rejected");
-        resolve({ ok: false, message: "Can't reach Milōn. Check your connection and try again." });
+        resolve({ ok: false, message: "Can't reach Milōn. Check your connection and try again. (network)" });
       },
     );
   });
