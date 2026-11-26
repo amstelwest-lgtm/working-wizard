@@ -59,7 +59,7 @@ function signInOrTimeout(email, password) {
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
-      console.error("[milon-desktop] sign-in stage=renderer-timeout");
+      console.error("[milon-desktop] sign-in name=TimeoutError code=renderer_timeout");
       resolve({ ok: false, message: "Can't reach Milōn. Check your connection and try again." });
     }, RENDERER_TIMEOUT_MS);
     milon.signIn(email, password).then(
@@ -70,14 +70,13 @@ function signInOrTimeout(email, password) {
         }
         settled = true;
         clearTimeout(timer);
-        if (!result.ok) console.error(`[milon-desktop] sign-in stage=renderer message=${result.message || "failed"}`);
         resolve(result);
       },
       () => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        console.error("[milon-desktop] sign-in stage=renderer-rejected");
+        console.error("[milon-desktop] sign-in name=Error code=renderer_rejected");
         resolve({ ok: false, message: "Can't reach Milōn. Check your connection and try again." });
       },
     );

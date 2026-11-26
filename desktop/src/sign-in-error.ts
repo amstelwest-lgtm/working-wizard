@@ -55,3 +55,22 @@ export function signInUserMessage(failure: SignInFailure | null | undefined): st
   if (!failure) return UNREACHABLE;
   return "Could not sign in.";
 }
+
+function safeName(value: string): string {
+  return /^[A-Za-z][A-Za-z0-9_]{0,80}$/.test(value) ? value : "Error";
+}
+
+function safeCode(value: string): string {
+  return /^[A-Za-z0-9_]{1,64}$/.test(value) ? value : "";
+}
+
+/** One console line for a failed password grant. Name and code only. */
+export function redactedSignInFailure(error: unknown): string {
+  const name = error instanceof Error ? error.name : "Error";
+  let code = "";
+  if (error && typeof error === "object" && "code" in error) {
+    const value = (error as { code?: unknown }).code;
+    if (typeof value === "string" || typeof value === "number") code = String(value);
+  }
+  return `[milon-desktop] sign-in name=${safeName(name)} code=${safeCode(code)}`;
+}
