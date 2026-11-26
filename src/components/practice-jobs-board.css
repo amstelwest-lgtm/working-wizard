@@ -159,29 +159,72 @@
 .job-picker-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+.job-picker-list > li {
+  display: flex;
+}
+
 .job-picker-row {
   display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
   box-sizing: border-box;
+  width: 100%;
   min-height: 44px;
   padding: 8px 12px;
-  border-radius: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #ffffff;
   color: #102a43;
   font-size: 15px;
   font-weight: 600;
   text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 120ms,
+    border-color 120ms,
+    box-shadow 120ms,
+    transform 120ms,
+    color 120ms;
+}
+
+.job-picker-row::after {
+  content: "›";
+  margin-left: auto;
+  color: #3d5270;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .job-picker-row:hover {
+  background: #eff6ff;
+  border-color: #0b5fff;
+  box-shadow: 0 2px 8px rgba(16, 42, 67, 0.12);
+  transform: translateY(-1px);
+}
+
+.job-picker-row:hover::after {
+  color: #0b5fff;
+}
+
+.job-picker-row:focus-visible {
+  outline: 2px solid #0b5fff;
+  outline-offset: 2px;
+}
+
+.job-picker-row:active {
   background: #dbeafe;
+  border-color: #0b5fff;
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 .job-picker-form {
