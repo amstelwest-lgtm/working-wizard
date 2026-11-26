@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import {
   ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY,
@@ -364,6 +365,11 @@ function isAccountantTour(variant: WalkthroughVariant): boolean {
   return variant.startsWith("accountant-");
 }
 
+/** The practice tour sits on top of Implementation Manager. Keep it off that page. */
+export function tourHiddenOnPath(pathname: string): boolean {
+  return /\/practice\/setup\/?$/.test(pathname);
+}
+
 /** Shown once, then remembered. The empty orientations still wait for Skip or Finish. */
 function remembersOnShow(variant: WalkthroughVariant): boolean {
   return variant === "accountant-dashboard" || variant === "accountant-client";
@@ -372,7 +378,13 @@ function remembersOnShow(variant: WalkthroughVariant): boolean {
 /** Menu, the rail or drawer, and Ask stay clickable for the whole accountant tour. */
 function protectedSelectors(variant: WalkthroughVariant): string[] {
   if (!isAccountantTour(variant)) return [];
-  const selectors = ["#accountant-menu", "#accountant-nav", "[data-ask]"];
+  const selectors = [
+    "#accountant-menu",
+    "#accountant-nav",
+    "[data-ask]",
+    "[data-practice-setup-link]",
+    "[data-practice-setup-panel]",
+  ];
   if (variant === "accountant-dashboard-empty") selectors.push("#wizard-first-client");
   return selectors;
 }
@@ -448,8 +460,33 @@ function settleTourCard(
     }
   });
   const settled = { top, maxHeight: Math.max(140, maxHeight) };
-  if (variant !== "accountant-dashboard-empty") return settled;
-  return clearOfFirstClient(settled);
+  const withFirstClient = variant === "accountant-dashboard-empty" ? clearOfFirstClient(settled) : settled;
+  return clearOfSelector(withFirstClient, "[data-practice-setup-link], [data-practice-setup-panel]");
+}
+
+function clearOfSelector(
+  pos: { top: number; maxHeight: number },
+  selector: string,
+): { top: number; maxHeight: number } {
+  const el = document.querySelector(selector);
+  if (!(el instanceof HTMLElement)) return pos;
+  const rect = el.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return pos;
+  const margin = 12;
+  const gap = 16;
+  const cardBottom = pos.top + pos.maxHeight;
+  if (cardBottom <= rect.top || pos.top >= rect.bottom) return pos;
+  const below = rect.bottom + gap;
+  const spaceBelow = window.innerHeight - below - margin;
+  if (spaceBelow >= 160) return { top: below, maxHeight: Math.min(pos.maxHeight, spaceBelow) };
+  const spaceAbove = rect.top - gap - margin;
+  if (spaceAbove >= 160) {
+    return {
+      top: Math.max(margin, rect.top - gap - Math.min(pos.maxHeight, spaceAbove)),
+      maxHeight: Math.min(pos.maxHeight, spaceAbove),
+    };
+  }
+  return pos;
 }
 
 /** Lit feature, plus any extra controls that must stay clickable during the tour. */
@@ -599,6 +636,8 @@ export function WalkthroughWizard({
   /** Signed-in user. The long accountant tours are remembered per user. */
   userId?: string | null;
 }) {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const hideTour = tourHiddenOnPath(pathname);
   const variant: WalkthroughVariant =
     variantProp ??
     (userRole === "accountant" || userRole === "firm_admin" ? "accountant-dashboard" : "owner");
@@ -632,7 +671,7 @@ export function WalkthroughWizard({
   onTabChangeRef.current = onTabChange;
 
   useEffect(() => {
-    if (!ready) {
+    if (!ready || hideTour) {
       setVisible(false);
       return;
     }
@@ -641,7 +680,7 @@ export function WalkthroughWizard({
     if (!remembersOnShow(variant)) return;
     const id = window.setTimeout(() => markTourSeen(storageKey, userId), 0);
     return () => window.clearTimeout(id);
-  }, [ready, storageKey, userId, variant]);
+  }, [ready, storageKey, userId, variant, hideTour]);
 
   useEffect(() => {
     if (!visible || !isAccountantTour(variant)) {
@@ -849,7 +888,7 @@ export function WalkthroughWizard({
     onComplete?.();
   };
 
-  if (!visible || !ready || drawerOpen) return null;
+  if (!visible || !ready || drawerOpen || hideTour) return null;
 
   const s = STEPS[step];
   if (!s) return null;

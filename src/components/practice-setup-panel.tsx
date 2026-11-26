@@ -19,6 +19,7 @@ import {
   firmInterviewTranscript,
   firmSetupPartnerSummary,
   firmInterviewUserError,
+  INTERVIEW_MAP_OFFER_ANSWERS,
   interviewAnswerCount,
   questionAsWritten,
   shouldBuildInterviewMap,
@@ -123,9 +124,9 @@ export function implementationManagerStep(input: {
   /** Activation agent_runs for this firm. The running step stays off until this is at least 1. */
   firmRunCount?: number;
 }): ImplementationManagerStep {
-  if (input.interviewing || input.phase === "interview") return "interview";
   if ((input.firmRunCount ?? 0) > 0) return "running";
   if (input.integrationStarted) return "access";
+  if (input.interviewing || input.phase === "interview") return "interview";
   return "plan";
 }
 
@@ -157,6 +158,14 @@ function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
 
 type Phase = "interview" | "map" | "done";
 
+function presentableMap(map: SetupPartnerWorkflowMap): SetupPartnerWorkflowMap {
+  return {
+    ...map,
+    todaysFlow: map.todaysFlow.filter((line) => !line.includes("{") && !line.includes("`")),
+    checklist: map.checklist.filter((line) => !line.includes("{") && !line.includes("`")),
+  };
+}
+
 type BuildMap = typeof buildSetupPartnerFirmMap;
 type ConfirmMap = typeof confirmSetupPartnerFirmMap;
 type LoadSaved = (firmId: string) => Promise<PracticeImplementationPlan | null>;
@@ -170,7 +179,23 @@ type AskTurn = (input: {
 }) => Promise<{ question: string; done: boolean; modelTurns: number; sessionId?: string }>;
 type DiscardRedo = (firmId: string) => Promise<void>;
 
-type RunningLine = { id: string; bot: string; status: string; summary: string };
+type RunningLine = {
+  id: string;
+  bot: string;
+  status: string;
+  summary: string;
+  href?: string;
+  clientName?: string;
+  routine?: string;
+};
+
+type SaveSetupHold = (input: {
+  firmId: string;
+  clearMap?: boolean;
+  interview?: string;
+  country?: "US" | "ZA";
+  pendingMap?: SetupPartnerWorkflowMap | null;
+}) => Promise<unknown>;
 
 type StartIntegration = (input: {
   firmId: string;
@@ -192,16 +217,22 @@ type LoadPlanTable = (input: {
   coverage?: { agent: string; owns: string }[];
 }) => Promise<{ rows: IntegrationPlanRow[] }>;
 
-type LoadRunning = (firmId: string) => Promise<{ runCount: number; lines: RunningLine[] }>;
+type LoadRunning = (firmId: string) => Promise<{
+  runCount: number;
+  started?: boolean;
+  lines: RunningLine[];
+}>;
 
 export function PracticeSetupPanel({
   startIntegration,
   loadPlanTable,
   loadRunning,
+  saveSetupHold,
 }: {
   startIntegration?: StartIntegration;
   loadPlanTable?: LoadPlanTable;
   loadRunning?: LoadRunning;
+  saveSetupHold?: SaveSetupHold;
 } = {}) {
   const { firmId, firmMarket, refreshFirms, firmsLoaded, firmsLoadFailed } = useAccountantProfile();
   return (
@@ -214,6 +245,7 @@ export function PracticeSetupPanel({
       startIntegration={startIntegration}
       loadPlanTable={loadPlanTable}
       loadRunning={loadRunning}
+      saveSetupHold={saveSetupHold}
     />
   );
 }
@@ -232,6 +264,7 @@ export function PracticeSetupInterview({
   startIntegration,
   loadPlanTable,
   loadRunning,
+  saveSetupHold,
 }: {
   firmId: string | null;
   firmMarket: unknown;
@@ -247,6 +280,7 @@ export function PracticeSetupInterview({
   startIntegration?: StartIntegration;
   loadPlanTable?: LoadPlanTable;
   loadRunning?: LoadRunning;
+  saveSetupHold?: SaveSetupHold;
 }) {
   const [phase, setPhase] = useState<Phase>("interview");
   const [messages, setMessages] = useState<FirmInterviewMessage[]>([]);
@@ -278,6 +312,7 @@ export function PracticeSetupInterview({
   const [momDraft, setMomDraft] = useState("");
   /** Rows already on screen when Start was clicked. Later Opus replies do not replace them. */
   const heldPlanRef = useRef<IntegrationPlanRow[] | null>(null);
+  const [planEpoch, setPlanEpoch] = useState(0);
   const country = parseMarketSelection(firmMarket)?.country ?? null;
   const marketCountry: SetupPartnerCountry | null =
     country === "US" || country === "ZA" ? country : null;
@@ -300,15 +335,20 @@ export function PracticeSetupInterview({
         PRACTICE_SETUP_INTERVIEW_MS,
       );
       setModelTurns(built.modelTurns);
-      const nextMap = built.map;
-      setMap({
-        ...nextMap,
-        todaysFlow: nextMap.todaysFlow.filter((line) => !line.includes("{") && !line.includes("`")),
-        checklist: nextMap.checklist.filter((line) => !line.includes("{") && !line.includes("`")),
-      });
+      const nextMap = presentableMap(built.map);
+      setMap(nextMap);
       setMomAnswered([]);
       setMomDraft("");
       if (!redoOpen) setPhase("map");
+      if (saveSetupHold) {
+        await saveSetupHold({
+          firmId,
+          pendingMap: nextMap,
+          interview: firmInterviewTranscript(history),
+          country: marketCountry === "US" || marketCountry === "ZA" ? marketCountry : undefined,
+        });
+        setPlanEpoch((epoch) => epoch + 1);
+      }
     } catch (err) {
       setError(
         firmInterviewUserError(
@@ -407,6 +447,22 @@ export function PracticeSetupInterview({
           const stamped = draft as FirmInterviewDraft & { recordedAt?: string | null };
           if (draft.savedAt || stamped.recordedAt) setRecordedAt(draft.savedAt ?? stamped.recordedAt ?? null);
         }
+        if (draft?.pendingMap && (!hasPlan || draft.sessionKind === "redo")) {
+          setMap(presentableMap(draft.pendingMap));
+          if (hasPlan) {
+            setRedoOpen(true);
+            setSessionKind("redo");
+          } else setPhase("map");
+          return;
+        }
+        if (
+          !hasPlan &&
+          draft &&
+          draft.sessionKind !== "redo" &&
+          interviewAnswerCount(draft.messages) >= INTERVIEW_MAP_OFFER_ANSWERS
+        ) {
+          return mapFrom(draft.messages, draft.modelTurns);
+        }
         if (draft?.question) {
           setQuestion(draft.question);
           setModelTurns(draft.modelTurns);
@@ -442,7 +498,7 @@ export function PracticeSetupInterview({
         if (cancel) return;
         setFirmRunCount(res.runCount);
         setRunningLines(res.lines);
-        if (res.runCount > 0) setIntegrationStarted(true);
+        if (res.started || res.runCount > 0 || res.lines.length > 0) setIntegrationStarted(true);
       })
       .catch(() => undefined);
     return () => {
@@ -509,7 +565,7 @@ export function PracticeSetupInterview({
     };
     // Reload Opus when the workflows or interview change, not when a row's status flips.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firmId, loadPlanTable, planKey, coverageKey, interviewKey, marketCountry]);
+  }, [firmId, loadPlanTable, planKey, coverageKey, interviewKey, marketCountry, planEpoch]);
 
   const redo = () => {
     heldPlanRef.current = null;
@@ -537,6 +593,7 @@ export function PracticeSetupInterview({
     try {
       if (discardRedo) await discardRedo(firmId);
       else await discardSetupPartnerRedo(firmId);
+      if (saveSetupHold) await saveSetupHold({ firmId, clearMap: true });
       if (messages.some((message) => message.role === "user")) {
         setPastDrafts((prev) => [
           ...prev,
@@ -631,6 +688,7 @@ export function PracticeSetupInterview({
     setError(null);
     try {
       const saved = await confirmMap(firmId, visibleMap);
+      if (saveSetupHold) await saveSetupHold({ firmId, clearMap: true });
       setPlan(saved.plan ? { steps: dedupePracticeSteps(saved.plan.steps) } : null);
       setRedoOpen(false);
       setPhase("done");
@@ -717,7 +775,9 @@ export function PracticeSetupInterview({
             onClick={() => void mapFrom(messages, modelTurns)}
           >
             <MapIcon size={15} aria-hidden />
-            {"That's enough, map it"}
+            {interviewAnswerCount(messages) >= INTERVIEW_MAP_OFFER_ANSWERS
+              ? "Map it now"
+              : "That's enough, map it"}
           </button>
         </>
       ) : null}
@@ -946,8 +1006,22 @@ export function PracticeSetupInterview({
         </div>
       ) : null}
 
-      {!booting && integrationStarted ? (
+      {!booting && (integrationStarted || step === "access") ? (
         <section data-im-access="" aria-label="Checklist and access">
+          <ul className="im-checks" data-im-access-list="">
+            <li>Documents</li>
+            <li>
+              <Link to="/clients">Client list</Link>
+            </li>
+            <li>Google Drive</li>
+            <li>OneDrive</li>
+            <li>
+              <Link to="/settings/desktop-sync">Desktop folder sync</Link>
+            </li>
+            <li>
+              <Link to="/clients">Books connection</Link>
+            </li>
+          </ul>
           <ImCloudAccessPanel firmId={firmId ?? undefined} />
           <div className="im-card mt-3" data-im-desktop-sync="">
             <h3>Desktop folder sync</h3>
@@ -965,19 +1039,23 @@ export function PracticeSetupInterview({
         </section>
       ) : null}
 
-      {!booting && firmRunCount > 0 ? (
+      {!booting && (integrationStarted || firmRunCount > 0) && runningLines.length > 0 ? (
         <section className="im-card" data-im-running="" aria-label="What's running now">
           <h2 className="im-card__title">What&apos;s running now</h2>
           <ul className="im-checks">
-            {(runningLines.length > 0
-              ? runningLines
-              : [{ id: "queued", bot: "Milōn", status: "Draft queued", summary: "Draft for your review. Nothing has been sent." }]
-            ).map((line) => (
+            {runningLines.map((line) => (
               <li key={line.id}>
                 <Check size={16} aria-hidden />
                 <span>
-                  {line.bot} — {line.status}. {line.summary}
+                  {line.bot}
+                  {line.routine ? ` — ${line.routine}` : ""}
+                  {line.clientName ? ` for ${line.clientName}` : ""}. {line.status}. {line.summary}
                 </span>
+                {line.href ? (
+                  <ImPlanLink href={line.href} data-im-running-link={line.id}>
+                    Open the draft
+                  </ImPlanLink>
+                ) : null}
               </li>
             ))}
           </ul>

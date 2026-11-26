@@ -52,6 +52,13 @@ const pilots = pickPilotClients(
   ],
 );
 assert(pilots.length >= 2 && pilots[0]?.hasLedger, "pilot defaults prefer ledger/upload");
+assert(
+  pickPilotClients([
+    { id: clientA, name: "New York Yankees", hasLedger: true, hasUpload: true },
+    { id: clientB, name: "Harbour Glass", hasLedger: false, hasUpload: false },
+  ]).every((row) => row.name !== "New York Yankees"),
+  "a sample client is not the pilot",
+);
 
 const replay = replayImplementationPlan({
   confirmRules: [{ rule_text: "Practice: Month-end close pack [|covered]", status: "active", source_event: "setup_partner_confirm" }],
