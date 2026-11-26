@@ -5,8 +5,11 @@ import { C, fmtRandCompact } from "@/components/pdf/theme";
 import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { PACK_SHOWS } from "@/lib/advisory-pack-copy";
 import { P, SANS } from "./pack-type";
+import { registerPackFonts } from "./pack-fonts";
 import type { AdvisoryPackContentV2 } from "@/lib/advisory-pack-schema";
 import { PackExplainer, PageBand } from "./pack-explainer";
+
+registerPackFonts();
 
 function rowsOf(content: AdvisoryPackContentV2): CashWeekRow[] {
   const forecast = content.forecast;

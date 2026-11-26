@@ -17,7 +17,7 @@ import {
 } from "@/lib/advisory-pack-pdf";
 import { isAdvisoryPackV2, PACK_SCHEMA1_LAYOUT_NOTE } from "@/lib/advisory-pack-schema";
 import type { AdvisoryPackContent } from "@/lib/advisory-pack";
-import "./advisory-pack-pages/pack-fonts";
+import { registerPackFonts } from "./advisory-pack-pages/pack-fonts";
 import { PackCover } from "./advisory-pack-pages/pack-cover";
 import { PackSummary } from "./advisory-pack-pages/pack-summary";
 import { PackHealth } from "./advisory-pack-pages/pack-health";
@@ -104,6 +104,7 @@ export function AdvisoryPackPDF({
   sample,
   market,
 }: AdvisoryPackPDFProps) {
+  registerPackFonts();
   const notice = staleNotice?.trim() ? pdfSafeText(staleNotice.trim()) : null;
   const disclosure =
     notice || reviewSignoff ? null : (draftDisclosure ?? ADVISORY_PACK_DRAFT_DISCLOSURE);

@@ -1,6 +1,9 @@
 import { Circle, Path, Svg, Text, View } from "@react-pdf/renderer";
 import { TIER_META, tierForScore } from "@/components/pdf/theme";
 import { DISPLAY, P, SANS } from "./pack-type";
+import { registerPackFonts } from "./pack-fonts";
+
+registerPackFonts();
 
 function arcPath(cx: number, cy: number, r: number, pct: number): string {
   const start = -Math.PI / 2;

@@ -9,6 +9,9 @@ import type { AdvisoryPackContentV2 } from "@/lib/advisory-pack-schema";
 import { PackExplainer, PageBand } from "./pack-explainer";
 import { ScoreRing } from "./score-ring";
 import { DISPLAY, P, SANS } from "./pack-type";
+import { registerPackFonts } from "./pack-fonts";
+
+registerPackFonts();
 
 export function PackHealth({ content }: { content: AdvisoryPackContentV2 }) {
   const health = content.health;

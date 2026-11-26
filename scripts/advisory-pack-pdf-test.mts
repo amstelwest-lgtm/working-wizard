@@ -87,10 +87,16 @@ const recorded = advisoryPackPdfStamp({
   recordedSignerName: "James Fleming",
   recordedFirmName: "Ben Accountants",
 });
-assert(recorded?.signedOffByName === "James Fleming", "a recorded signer is named for every viewer");
+assert(
+  recorded?.signedOffByName === "James Fleming",
+  "a recorded signer is named for every viewer",
+);
 assert(recorded?.signedOffByInitials === "JF", "recorded initials come from the signer");
 assert(recorded?.firmName === "Ben Accountants", "the recorded firm wins over the viewer firm");
-assert(recorded?.signatureData == null, "another viewer's signature is not copied onto a recorded sign-off");
+assert(
+  recorded?.signatureData == null,
+  "another viewer's signature is not copied onto a recorded sign-off",
+);
 
 const sampleRecorded = advisoryPackPdfStamp({
   status: "approved",
@@ -139,7 +145,42 @@ async function textOf(buf: Buffer): Promise<string> {
   }
 }
 
-const { renderToBuffer } = await import("@react-pdf/renderer");
+const { Document, Page, Text, renderToBuffer } = await import("@react-pdf/renderer");
+const { displayFamily, ensurePackFonts, sansFamily } =
+  await import("../src/reports/advisory-pack-pages/pack-fonts");
+await ensurePackFonts();
+assert(sansFamily() === "Noto Sans", `sans face: ${sansFamily()}`);
+assert(displayFamily() === "Cormorant Garamond", `display face: ${displayFamily()}`);
+
+const face = sansFamily();
+const fontProbe = await renderToBuffer(
+  createElement(
+    Document,
+    null,
+    createElement(
+      Page,
+      { size: "A4" },
+      createElement(
+        Text,
+        { style: { fontFamily: face, fontSize: 12 } },
+        "Advisory Management Report",
+      ),
+      createElement(Text, { style: { fontFamily: face, fontWeight: 700, fontSize: 12 } }, "Bold"),
+      createElement(
+        Text,
+        { style: { fontFamily: face, fontWeight: 600, fontSize: 12 } },
+        "Semibold",
+      ),
+      createElement(
+        Text,
+        { style: { fontFamily: face, fontStyle: "italic", fontSize: 12 } },
+        "Italic",
+      ),
+    ),
+  ) as Parameters<typeof renderToBuffer>[0],
+);
+assert(fontProbe.length > 500, "shared font module rendered");
+
 const { AdvisoryPackPDF } = await import("../src/reports/advisory-pack");
 
 const profile = {
@@ -195,7 +236,10 @@ assert(
   signedText.includes("Reviewed & signed off · Alex Accountant"),
   "signed pdf uses the report footer stamp",
 );
-assert(!signedText.includes("· AA ·") && !/\bAA\b/.test(signedText), "footer drops the initials token");
+assert(
+  !signedText.includes("· AA ·") && !/\bAA\b/.test(signedText),
+  "footer drops the initials token",
+);
 assert(signedText.includes("North Books"), "firm is on the footer");
 assert(
   !signedText.includes(ADVISORY_PACK_DRAFT_DISCLOSURE),
@@ -211,7 +255,10 @@ const approvedPeriod = advisoryPackPdfPeriodLine({
   content: { periodLabel: null } as AdvisoryPack["content"],
 });
 assert(approvedPeriod === "v10 · Signed off · September 2026", approvedPeriod);
-assert(!approvedPeriod.includes("With your accountant") && !approvedPeriod.includes("Draft"), approvedPeriod);
+assert(
+  !approvedPeriod.includes("With your accountant") && !approvedPeriod.includes("Draft"),
+  approvedPeriod,
+);
 
 const staleLine =
   "Signed off by James Fleming · Ben Accountants · Oct 7, 2026, 7:01 PM ET — figures have changed since; regenerate and re-review";
@@ -247,5 +294,45 @@ assert(staleText.includes("Signed off"), staleText);
 assert(!staleText.includes("NOT SIGNED OFF"), staleText);
 assert(!staleText.includes("Draft for accountant review"), staleText);
 assert(!staleText.includes("With your accountant"), staleText);
+
+const management = await renderToBuffer(
+  createElement(AdvisoryPackPDF, {
+    smeData: { name: "QA US Test LLC", period: "v1 · Draft · Sep 2026" },
+    accountantProfile: profile,
+    draftDisclosure: ADVISORY_PACK_DRAFT_DISCLOSURE,
+    content: {
+      schema: 2,
+      generatedAt: "2026-09-30T12:00:00.000Z",
+      clientName: "QA US Test LLC",
+      periodLabel: "Sep 2026",
+      priorPeriodLabel: null,
+      figuresAsOf: null,
+      reviewer: "accountant",
+      health: null,
+      ratios: [],
+      dupont: null,
+      forecast: null,
+      profit: null,
+      cashCycle: null,
+      outcomes: [],
+      recommendations: [],
+      dataGaps: [],
+      assumptions: [],
+      sourceLabel: null,
+      sections: [
+        { key: "summary", meaning: "Stable.", actions: [], approved: true, verdict: "Stable." },
+        { key: "health", meaning: "", actions: [], approved: true },
+        { key: "dupont", meaning: "", actions: [], approved: true },
+        { key: "cash", meaning: "", actions: [], approved: true },
+        { key: "profit", meaning: "", actions: [], approved: true },
+        { key: "priorities", meaning: "", actions: [], approved: true },
+        { key: "notes", meaning: "", actions: [], approved: true },
+      ],
+    },
+  }),
+);
+assert(management.length > 1000, "management report rendered");
+const managementText = await textOf(management);
+assert(managementText.includes("Advisory Management Report"), managementText);
 
 console.log("advisory-pack-pdf: all checks passed");

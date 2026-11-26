@@ -1,5 +1,5 @@
 /** Pack-only colour and type. Brand system v1.1. Other reports keep theme.ts. */
-import "./pack-fonts";
+import { displayFamily, sansFamily } from "./pack-fonts";
 
 export const P = {
   navy: "#102A43",
@@ -14,5 +14,7 @@ export const P = {
   gold: "#B0893E",
 } as const;
 
-export const SANS = "Noto Sans";
-export const DISPLAY = "Cormorant Garamond";
+/** Noto Sans after registration, or Helvetica if that face did not load. */
+export const SANS = sansFamily();
+/** Cormorant Garamond after registration, or Helvetica if that face did not load. */
+export const DISPLAY = displayFamily();

@@ -4,6 +4,9 @@ import { pdfSafeText } from "@/lib/advisory-pack-pdf";
 import type { AdvisoryPackContentV2 } from "@/lib/advisory-pack-schema";
 import { ScoreRing } from "./score-ring";
 import { DISPLAY, P, SANS } from "./pack-type";
+import { registerPackFonts } from "./pack-fonts";
+
+registerPackFonts();
 
 export function PackCover({
   content,
