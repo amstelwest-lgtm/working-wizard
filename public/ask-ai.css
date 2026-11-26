@@ -850,12 +850,6 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.ask-ai-back-plan {
-  display: block;
-  margin: 0 0 12px;
-  font-weight: 650;
-  text-decoration: underline;
-}
 .ask-ai-pdf-card {
   display: flex;
   flex-direction: column;

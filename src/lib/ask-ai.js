@@ -878,10 +878,14 @@ export function mountAskAi(container, options) {
 
       if (fromImplementationPlan()) {
         const back = document.createElement("a");
-        back.className = "ask-ai-back-plan";
+        back.className = "client-subpage-back";
         back.href = "/practice/setup";
         back.dataset.backToImplementation = "im";
-        back.textContent = "Back to implementation plan";
+        const mark = document.createElement("span");
+        mark.setAttribute("aria-hidden", "true");
+        mark.textContent = "←";
+        back.appendChild(mark);
+        back.appendChild(document.createTextNode("Back to implementation plan"));
         panel.appendChild(back);
       }
 
