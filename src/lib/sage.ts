@@ -41,9 +41,9 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-/** Basic auth header. Unicode passwords are encoded as UTF-8, not Latin-1. */
+/** Basic auth header. The email is trimmed; the password is not. Unicode is UTF-8. */
 export function sageBasicAuthorization(username: string, password: string): string {
-  const token = bytesToBase64(new TextEncoder().encode(`${username}:${password}`));
+  const token = bytesToBase64(new TextEncoder().encode(`${username.trim()}:${password}`));
   return `Basic ${token}`;
 }
 
@@ -55,7 +55,7 @@ export function sageCompanyValidateUrl(companyId: string, apiKey: string): strin
   const url = new URL(
     `${sageApiBase()}/Company/Get/${encodeURIComponent(normalizeSageCompanyId(companyId))}`,
   );
-  url.searchParams.set("apikey", apiKey);
+  url.searchParams.set("apikey", apiKey.trim());
   url.searchParams.set("companyid", normalizeSageCompanyId(companyId));
   return url.toString();
 }
@@ -66,7 +66,7 @@ export function sageCompanyValidateUrl(companyId: string, apiKey: string): strin
  */
 export function sageCompanyListUrl(apiKey: string): string {
   const url = new URL(`${sageApiBase()}/Company/Get`);
-  url.searchParams.set("apikey", apiKey);
+  url.searchParams.set("apikey", apiKey.trim());
   return url.toString();
 }
 

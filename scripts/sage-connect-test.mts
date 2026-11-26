@@ -141,6 +141,54 @@ assert(seenAuth.startsWith("Basic "), "validate sends Basic auth");
 assert(!seenUrl.includes("s3cret"), "password is not put on the URL");
 assert(!seenUrl.includes("ProfitAndLoss") && !seenUrl.includes("BalanceSheet"), "validate does not pull statements");
 
+const paddedKey = " \n{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}\n ";
+const paddedEmail = "  owner@example.co.za \n";
+const paddedPassword = " s3cret ";
+function basicParts(header: string) {
+  const decoded = atob(header.slice("Basic ".length));
+  const colon = decoded.indexOf(":");
+  return { username: decoded.slice(0, colon), password: decoded.slice(colon + 1) };
+}
+const paddedLogin = await validateSageLogin(
+  {
+    username: paddedEmail,
+    password: paddedPassword,
+    companyId: "42",
+    apiKey: paddedKey,
+  },
+  async (input, init) => {
+    const headers = init?.headers as Record<string, string>;
+    const parts = basicParts(headers.Authorization);
+    const sentKey = new URL(String(input)).searchParams.get("apikey");
+    assert(sentKey === paddedKey.trim(), "Company/Get apikey query param is trimmed");
+    assert(!sentKey?.includes(" ") && !sentKey?.includes("\n"), "Company/Get apikey has no surrounding whitespace");
+    assert(parts.username === paddedEmail.trim(), "Company/Get Basic auth username is trimmed");
+    assert(parts.password === paddedPassword, "Company/Get Basic auth password is not trimmed");
+    return new Response(JSON.stringify({ ID: 42, Name: "Cape Books" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  },
+);
+assert(paddedLogin.ok === true, "a padded key and email still validate");
+
+const paddedList = await listSageCompanies(
+  { username: paddedEmail, password: paddedPassword, apiKey: paddedKey },
+  async (input, init) => {
+    const headers = init?.headers as Record<string, string>;
+    const parts = basicParts(headers.Authorization);
+    const sentKey = new URL(String(input)).searchParams.get("apikey");
+    assert(sentKey === paddedKey.trim(), "company list apikey query param is trimmed");
+    assert(parts.username === paddedEmail.trim(), "company list Basic auth username is trimmed");
+    assert(parts.password === paddedPassword, "company list Basic auth password is not trimmed");
+    return new Response(JSON.stringify({ Results: [{ ID: 42, Name: "Cape Books" }] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  },
+);
+assert(paddedList.ok === true && paddedList.companies.length === 1, "a padded key and email still list companies");
+
 globalThis.fetch = async () => new Response("no", { status: 401 });
 const rejected = await validateSageLogin({
   username: "owner@example.co.za",
