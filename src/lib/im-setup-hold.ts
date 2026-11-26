@@ -113,58 +113,134 @@ export function queuedRunningLines(input: {
   });
 }
 
-/** One line per plan row, named for the stored pilot, linked only when a draft id exists. */
+function clientIdFromHref(href: string | undefined): string {
+  const raw = /\/clients\/([^/?#]+)/.exec(href ?? "")?.[1]?.trim() ?? "";
+  if (!raw) return "";
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+function knownClientId(line: { clientId?: string; href?: string }): string {
+  return (line.clientId ?? "").trim() || clientIdFromHref(line.href);
+}
+
+function namesDisagree(left: string | undefined, right: string | undefined): boolean {
+  const a = (left ?? "").trim();
+  const b = (right ?? "").trim();
+  if (!a || !b) return false;
+  return a.localeCompare(b, undefined, { sensitivity: "accent" }) !== 0;
+}
+
+/** A finding is listed only on the client that owns it. */
+export function draftStaysOnClient(
+  rowClientId: string | null | undefined,
+  pageClientId: string | null | undefined,
+): boolean {
+  const row = (rowClientId ?? "").trim();
+  const page = (pageClientId ?? "").trim();
+  if (!row || !page) return false;
+  return row === page;
+}
+
+/**
+ * Keep a draft on the run's client. A stored pilot must not replace that client
+ * or point the draft at a different client's page.
+ */
+export function attachDraftToLine(
+  line: ImRunningLine,
+  draft: { id: string; clientId: string } | null,
+  run: { clientId: string; clientName?: string } | null,
+): ImRunningLine {
+  const runClientId = (run?.clientId ?? "").trim();
+  const runName = (run?.clientName ?? "").trim();
+  const stampedId = (line.clientId ?? "").trim();
+  const clientId = runClientId || stampedId;
+  const stampedWrong = Boolean(runClientId && stampedId && runClientId !== stampedId);
+  const clientName = runName || (stampedWrong ? "" : line.clientName);
+  const draftClient = (draft?.clientId ?? "").trim();
+  const draftIdRaw = (draft?.id ?? "").trim() || (line.draftId ?? "").trim();
+  const owned =
+    Boolean(draftIdRaw) &&
+    (!draftClient || !clientId || draftClient === clientId) &&
+    (!runClientId || !draftClient || draftClient === runClientId) &&
+    !(stampedWrong && !draft);
+  const draftId = owned ? draftIdRaw : "";
+  return {
+    ...line,
+    clientId,
+    clientName,
+    draftId,
+    href: draftId && clientId ? draftDeepLink(clientId, draftId) : "",
+  };
+}
+
+function lineMatchesRow(line: ImRunningLine, rowClientId: string, rowClientName: string): boolean {
+  const lineId = knownClientId(line);
+  if (lineId && rowClientId && lineId !== rowClientId) return false;
+  if (namesDisagree(line.clientName, rowClientName)) return false;
+  return true;
+}
+
+/** One line per plan row. A run keeps its own client, and an older run stays on that client. */
 export function presentRunningLines(input: {
   rows: readonly IntegrationPlanRow[];
   lines: readonly ImRunningLine[];
-  pilot?: ImPilotRef | null;
 }): ImRunningLine[] {
-  const pilot = input.pilot?.name ? input.pilot : pilotFromPlanRows(input.rows);
   const used = new Set<string>();
   const fromRows = input.rows.slice(0, 8).map((row) => {
     const rowKey = planRowKey(row.playId);
+    const rowClientId = clientIdFromHref(row.actionHref);
+    const rowClientName = (row.clientName ?? "").trim();
     const match =
-      input.lines.find((line) => line.rowKey === rowKey) ??
-      input.lines.find((line) => line.routine === row.routine && !used.has(line.id));
+      input.lines.find(
+        (line) => line.rowKey === rowKey && !used.has(line.id) && lineMatchesRow(line, rowClientId, rowClientName),
+      ) ??
+      input.lines.find(
+        (line) => line.routine === row.routine && !used.has(line.id) && lineMatchesRow(line, rowClientId, rowClientName),
+      );
     if (match) used.add(match.id);
     const draftId = match?.draftId?.trim() ?? "";
-    const clientId = pilot?.id || "";
+    const clientId = knownClientId(match ?? {}) || rowClientId;
+    const clientName = (match?.clientName ?? "").trim() || rowClientName;
     return {
       id: match?.runId || match?.id || rowKey,
       bot: row.bot || match?.bot || "Milōn",
       routine: row.routine || match?.routine || "",
-      clientName: pilot?.name || row.clientName || "",
+      clientName,
       clientId,
       rowKey,
       runId: match?.runId ?? "",
       draftId,
       status: match?.status || "Draft queued",
-      summary: "Draft for your review. Nothing has been sent.",
-      href: draftId ? draftDeepLink(clientId, draftId) : "",
+      summary: match?.summary || "Draft for your review. Nothing has been sent.",
+      href: draftId && clientId ? draftDeepLink(clientId, draftId) : "",
     } satisfies ImRunningLine;
   });
-  if (fromRows.length) return dedupeRunningLines(fromRows);
-  return dedupeRunningLines(
-    input.lines.map((line) => {
+  const extras = input.lines
+    .filter((line) => !used.has(line.id))
+    .map((line) => {
+      const clientId = knownClientId(line);
       const draftId = line.draftId?.trim() ?? "";
-      const clientId = pilot?.id || line.clientId || "";
       return {
         ...line,
-        clientName: pilot?.name || line.clientName,
         clientId,
         draftId,
-        href: draftId ? draftDeepLink(clientId, draftId) : "",
+        href: draftId && clientId ? draftDeepLink(clientId, draftId) : "",
       };
-    }),
-  );
+    });
+  return dedupeRunningLines([...fromRows, ...extras]);
 }
 
 export function dedupeRunningLines(lines: readonly ImRunningLine[]): ImRunningLine[] {
   const seen = new Set<string>();
   const out: ImRunningLine[] = [];
   for (const line of lines) {
-    const key = line.rowKey?.trim() || line.routine || line.id;
-    if (!key || seen.has(key)) continue;
+    const row = line.rowKey?.trim() || line.routine || line.id;
+    const key = `${line.clientId ?? ""}:${row}`;
+    if (!row || seen.has(key)) continue;
     seen.add(key);
     out.push(line);
   }

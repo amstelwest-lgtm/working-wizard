@@ -104,17 +104,17 @@ export function draftContinuesInterview(
   return !messages.slice(at + 1).some((message) => message.role === "user");
 }
 
-/** Status words follow the live state. Saved is only the idle saved plan. */
+/** Status words follow the live state. Saved is only the idle saved plan. Boot is a skeleton, not "Not started". */
 export function implementationManagerStatus(input: {
   booting: boolean;
   phase: "interview" | "map" | "done";
   interviewing: boolean;
   redo: boolean;
 }): ImplementationManagerStatus {
-  if (input.booting) return "Not started";
   if (input.redo) return "Redo in progress";
-  if (input.interviewing || input.phase === "interview") return "Interviewing";
+  if (!input.booting && (input.interviewing || input.phase === "interview")) return "Interviewing";
   if (input.phase === "done") return "Saved";
+  if (input.booting) return "Map";
   return "Map";
 }
 
@@ -713,9 +713,9 @@ export function PracticeSetupInterview({
   };
 
   const continuing = draftContinuesInterview(question, messages);
-  const thinkingNow = booting || loading;
+  const thinkingNow = !booting && loading;
   const showInterview =
-    !visibleMap && (thinkingNow || phase === "interview" || redoOpen || continuing);
+    !booting && !visibleMap && (thinkingNow || phase === "interview" || redoOpen || continuing);
   const status = implementationManagerStatus({
     booting: booting && !loading,
     phase,
@@ -837,6 +837,7 @@ export function PracticeSetupInterview({
       className="setup-partner im-flow im-page"
       data-practice-setup-panel=""
       data-practice-setup-phase={booting ? "loading" : phase}
+      aria-busy={booting ? true : undefined}
       data-im-page=""
       aria-label={IMPLEMENTATION_MANAGER_LABEL}
     >
@@ -845,7 +846,7 @@ export function PracticeSetupInterview({
         title="Implementation Manager"
         subtitle="Maps how your practice runs so Milōn can take on the work"
       />
-      <PracticeSetupHero status={status} step={step} working={thinkingNow} />
+      <PracticeSetupHero status={status} step={step} working={thinkingNow} pending={booting} />
 
       {showInterview ? (
         <div className="im-card" data-im-interview="">
@@ -954,6 +955,24 @@ export function PracticeSetupInterview({
                 >
                   {starting ? "Starting…" : integrationStarted ? "Integration started" : "Start integration"}
                 </button>
+                {integrationStarted && resetSetupHold && imResetAllowed(firmId) ? (
+                  <button
+                    type="button"
+                    className="setup-partner__ghost"
+                    data-im-reset=""
+                    onClick={() => {
+                      void resetSetupHold(firmId).then(() => {
+                        setIntegrationStarted(false);
+                        setRunningLines([]);
+                        setFirmRunCount(0);
+                        setOpusRows(null);
+                        setPlanEpoch((epoch) => epoch + 1);
+                      });
+                    }}
+                  >
+                    Reset integration
+                  </button>
+                ) : null}
               </div>
             </div>
           ) : visibleMap && visibleMap.milonCoverage.length > 0 ? (
@@ -1069,24 +1088,6 @@ export function PracticeSetupInterview({
               </li>
             ))}
           </ul>
-          {resetSetupHold && imResetAllowed(firmId) ? (
-            <button
-              type="button"
-              className="setup-partner__ghost"
-              data-im-reset=""
-              onClick={() => {
-                void resetSetupHold(firmId).then(() => {
-                  setIntegrationStarted(false);
-                  setRunningLines([]);
-                  setFirmRunCount(0);
-                  setOpusRows(null);
-                  setPlanEpoch((epoch) => epoch + 1);
-                });
-              }}
-            >
-              Reset integration
-            </button>
-          ) : null}
         </section>
       ) : null}
 
@@ -1126,14 +1127,16 @@ function PracticeSetupHero({
   status,
   step,
   working,
+  pending = false,
 }: {
   status: ImplementationManagerStatus;
   step: ImplementationManagerStep;
   working: boolean;
+  pending?: boolean;
 }) {
   const current = SETUP_STEPS.findIndex((item) => item.id === step);
   return (
-    <article className="im-card im-hero" data-im-card="solo" data-im-hero="" data-im-working={working ? "true" : "false"}>
+    <article className="im-card im-hero" data-im-card="solo" data-im-hero="" data-im-working={working ? "true" : "false"} aria-busy={pending ? true : undefined}>
       <div className="setup-partner__head im-hero__id">
         <img
           className="im-hero-portrait"
@@ -1145,14 +1148,23 @@ function PracticeSetupHero({
         <div className="setup-partner__head-text">
           <div className="im-hero__name">
             <h2 className="setup-partner__title">{IMPLEMENTATION_MANAGER_LABEL}</h2>
-            <span className="im-status" data-im-status="">{status}</span>
+            {pending ? (
+              <span className="im-status" data-im-status="loading" aria-busy="true">
+                <span className="milon-skeleton im-status__skeleton" />
+                <span className="sr-only">Loading saved setup</span>
+              </span>
+            ) : (
+              <span className="im-status" data-im-status="">
+                {status}
+              </span>
+            )}
           </div>
           <p className="im-hero__role">Maps the close, the review, and the sign-off.</p>
         </div>
       </div>
       <ol className="im-stepper" aria-label="Setup progress">
         {SETUP_STEPS.map((item, index) => {
-          const state = index < current ? "done" : index === current ? "current" : "upcoming";
+          const state = pending ? "upcoming" : index < current ? "done" : index === current ? "current" : "upcoming";
           return (
             <li key={item.id} data-step={state} aria-current={state === "current" ? "step" : undefined}>
               <span>{item.label}</span>

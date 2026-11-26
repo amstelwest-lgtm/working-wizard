@@ -368,6 +368,31 @@ export function parsePackContent(raw: unknown): AdvisoryPackContent {
   };
 }
 
+/**
+ * The Management Report card names the page client. A baked pack name from
+ * another business is not shown, and a pack for a different client_id is blank.
+ */
+export function reportCardClientName(input: {
+  pageClientId?: string | null;
+  pageClientName?: string | null;
+  packClientId?: string | null;
+  packClientName?: string | null;
+}): string {
+  const pageId = (input.pageClientId ?? "").trim();
+  const packId = (input.packClientId ?? "").trim();
+  if (packId && pageId && packId !== pageId) return "";
+  const pageName = (input.pageClientName ?? "").trim();
+  const packName = (input.packClientName ?? "").trim();
+  if (
+    pageName &&
+    packName &&
+    pageName.localeCompare(packName, undefined, { sensitivity: "accent" }) !== 0
+  ) {
+    return pageName;
+  }
+  return pageName || packName;
+}
+
 export function parsePackRow(row: Record<string, unknown>): AdvisoryPack {
   const str = (k: string): string | null =>
     typeof row[k] === "string" ? (row[k] as string) : null;

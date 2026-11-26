@@ -14,6 +14,14 @@ function trimmed(value: string | null | undefined): string {
   return (value ?? "").trim();
 }
 
+/** A practice chip must not print the signed-in person, including a first name on its own. */
+function isPersonLabel(candidate: string, person: string): boolean {
+  if (!candidate || !person) return false;
+  if (candidate.localeCompare(person, undefined, { sensitivity: "accent" }) === 0) return true;
+  const first = person.split(/\s+/)[0] ?? "";
+  return Boolean(first) && !candidate.includes(" ") && candidate.localeCompare(first, undefined, { sensitivity: "accent" }) === 0;
+}
+
 /** Skip the demo persona. A real profile name is kept even if it looks similar. */
 function withoutSamplePersona(value: string): string {
   if (!value) return "";
@@ -55,11 +63,10 @@ export function practiceChipName(input: {
   personName?: string | null;
 }): string {
   const firm = trimmed(input.firmName);
-  if (firm) return firm;
-  const profile = trimmed(input.profileFirmName);
   const person = trimmed(input.personName);
-  if (!profile) return "";
-  if (person && profile.localeCompare(person, undefined, { sensitivity: "accent" }) === 0) return "";
+  if (firm) return isPersonLabel(firm, person) ? "" : firm;
+  const profile = trimmed(input.profileFirmName);
+  if (!profile || isPersonLabel(profile, person)) return "";
   return profile;
 }
 
