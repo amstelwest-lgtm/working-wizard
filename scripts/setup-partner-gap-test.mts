@@ -298,8 +298,8 @@ const card = read("src/components/practice-setup-card.tsx");
 assert(card.includes("Set up practice"), "practice home card");
 assert(!card.includes("setup-partner-panel"), "card does not render the panel");
 assert(
-  read("src/components/practice-board.tsx").includes("<PracticeSetupCard"),
-  "card is on practice home",
+  read("src/components/practice-board.tsx").includes("<FirstRunStrip"),
+  "the first-run strip leads to the interview from practice home",
 );
 
 console.log("setup-partner-gap-test: ok");

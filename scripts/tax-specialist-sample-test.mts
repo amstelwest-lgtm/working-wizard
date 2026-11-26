@@ -199,7 +199,8 @@ assert(
 );
 const practice = readFileSync("src/components/practice-board.tsx", "utf8");
 assert(
-  practice.includes("marketCountry={parseMarketSelection(firmMarket)?.country ?? null}"),
+  practice.includes("const firmCountry = parseMarketSelection(firmMarket)?.country ?? null;") &&
+    practice.includes('showTax={firmCountry === "ZA"}'),
   "practice home passes the stored firm country",
 );
 assert(
@@ -265,7 +266,7 @@ assert(
   "a real client file does not force the sample card",
 );
 assert(
-  readFileSync("src/components/practice-board.tsx", "utf8").includes("sampleClient={false}"),
+  !readFileSync("src/components/practice-board.tsx", "utf8").includes("sampleClient={true}"),
   "practice home is not a sample client",
 );
 const slotSrc = readFileSync("src/components/tax-specialist/tax-specialist-slot.tsx", "utf8");

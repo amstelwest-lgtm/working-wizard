@@ -305,8 +305,8 @@ assert(
   "the owner door uses the same card phase",
 );
 assert(
-  readFileSync("src/components/practice-board.tsx", "utf8").includes('cardPhase="ready"'),
-  "practice home uses the same card phase",
+  readFileSync("src/components/practice-board.tsx", "utf8").includes("<PracticeJobsBoard"),
+  "practice home shows the jobs board, not agent cards",
 );
 assert(!page.includes("marketCountry={clientMarket.country}"), "the tax card does not use the ZA date fallback");
 assert(

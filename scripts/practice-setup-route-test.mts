@@ -211,14 +211,16 @@ assert(!panel.includes("Review proposals"), "the review fold is not on this page
 assert(!panel.includes("Locked cap"), "the page does not print the locked cap");
 assert(!panel.includes("setupPartnerMapPromptBlock"), "the client page does not render the map JSON");
 assert(
-  read("src/components/practice-board.tsx").includes("extraCard={<PracticeSetupCard embedded"),
-  "firm home puts the card in the agent grid",
+  read("src/components/practice-board.tsx").includes("<FirstRunStrip"),
+  "firm home leads a new firm with the first-run strip",
 );
 assert(
-  !read("src/components/practice-board.tsx").includes(
-    "{!bookLoading ? <PracticeSetupCard",
-  ),
-  "the card is not a strip above Open queries",
+  !read("src/components/practice-board.tsx").includes("<PracticeSetupCard"),
+  "the Implementation Manager is reached from the strip, not an agent-grid tile",
+);
+assert(
+  read("src/components/first-run-strip.tsx").includes('to="/practice/setup"'),
+  "the interview step opens the Implementation Manager",
 );
 const faceCss = read("src/components/owner-door/owner-door.css");
 assert(

@@ -92,8 +92,9 @@ assert(
 
 const board = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(
-  board.includes("marketCountry={parseMarketSelection(firmMarket)?.country ?? null}"),
-  "the tax card uses the stored firm country",
+  board.includes("const firmCountry = parseMarketSelection(firmMarket)?.country ?? null;") &&
+    board.includes('showTax={firmCountry === "ZA"}'),
+  "the Tax card uses the stored firm country",
 );
 assert(
   !board.includes("marketForFirm({ market: firmMarket }).country"),
