@@ -12,6 +12,7 @@ import { JOB_META, LIVE_JOB_KEYS, type JobKey, type JobsBoardCount } from "@/lib
 import { clientNavSearch } from "@/lib/client-route-search";
 import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
 import "@/components/owner-door/owner-door.css";
+import "@/components/practice-jobs-board.css";
 import { TAX_AGENT, stageAgentShortName, type StageAgentKey } from "@/lib/tax-specialist/agents";
 
 export type JobsBoardAgentRow = {
@@ -52,19 +53,19 @@ function JobCard({
   const hasTarget = live && count.clientId != null;
   return (
     <section
-      className="flex flex-col gap-3 rounded-2xl border border-[var(--milon-border)] bg-[var(--milon-bg)] p-5 shadow-sm"
+      className="job-card flex flex-col gap-3 rounded-2xl border p-5 shadow-sm"
       data-job-card={job}
       aria-labelledby={`job-${job}-title`}
     >
-      <header className="flex items-baseline justify-between gap-3">
+      <header className="job-card-head flex min-w-0 flex-col items-start gap-2">
         <h2
           id={`job-${job}-title`}
-          className="m-0 text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--milon-ink-muted)]"
+          className="m-0 text-[13px] font-semibold uppercase tracking-[0.08em] text-[#3D5270]"
         >
           {meta.label}
         </h2>
-        <span className="flex items-center gap-1.5" data-job-faces={job}>
-          <span className="flex -space-x-2">
+        <span className="job-faces" data-job-faces={job}>
+          <span className="job-face-stack -space-x-2">
             {agents.map((agent) => (
               <OwnerAvatar
                 key={agent}
@@ -76,9 +77,11 @@ function JobCard({
               />
             ))}
           </span>
-          <span className="text-[12px] text-[var(--milon-ink-faint)]">
-            {agents.map(agentName).join(" · ")}
-          </span>
+          {agents.length === 1 ? (
+            <span className="job-face-names text-[12px] text-[#5C7190]" data-job-names="">
+              {agentName(agents[0])}
+            </span>
+          ) : null}
         </span>
       </header>
       <div className="flex items-end gap-3">
@@ -93,30 +96,26 @@ function JobCard({
         </p>
       </div>
       <p className="m-0 text-[13px] leading-snug text-[var(--milon-ink-muted)]">{meta.outcome}</p>
-      <div className="mt-auto flex items-center justify-between gap-3 pt-1">
+      <div className="job-card-footer">
         {hasTarget ? (
           <Link
             to="/clients/$clientId"
             params={{ clientId: count.clientId as string }}
             search={jobSearch(job) as never}
-            className="inline-flex items-center rounded-full bg-[var(--milon-cobalt)] px-4 py-2 text-[13px] font-semibold text-white no-underline hover:opacity-90"
+            className="job-btn job-btn-primary"
             data-job-action={job}
           >
             {meta.action}
           </Link>
         ) : (
-          <span
-            className="inline-flex items-center rounded-full border border-[var(--milon-border)] px-4 py-2 text-[13px] font-semibold text-[var(--milon-ink-faint)]"
-            aria-disabled="true"
-            data-job-action={job}
-          >
+          <span className="job-btn job-btn-idle" aria-disabled="true" data-job-action={job}>
             {meta.action}
           </span>
         )}
         {agents[0] ? (
           <button
             type="button"
-            className="bg-transparent p-0 text-[13px] text-[var(--milon-cobalt)] underline-offset-2 hover:underline"
+            className="job-btn job-btn-secondary"
             onClick={() => onAsk(agents[0])}
             data-job-ask={job}
           >
@@ -147,7 +146,7 @@ export function PracticeJobsBoard({
 }) {
   const jobs = LIVE_JOB_KEYS.filter((job) => showTax || job !== "tax");
   return (
-    <div className="flex flex-col gap-6" data-practice-jobs-board="">
+    <div className="practice-jobs-board flex flex-col gap-6" data-practice-jobs-board="">
       <div className="flex flex-col gap-1">
         <h1 className="m-0 text-[22px] font-bold leading-tight text-[var(--milon-ink)]">
           Three jobs, done for every client
@@ -237,7 +236,7 @@ export function PracticeJobsBoard({
                 ) : null}
                 <button
                   type="button"
-                  className="bg-transparent p-0 text-[13px] text-[var(--milon-cobalt)] underline-offset-2 hover:underline"
+                  className="job-btn job-btn-secondary"
                   onClick={() => onAsk(row.agent)}
                 >
                   Ask
