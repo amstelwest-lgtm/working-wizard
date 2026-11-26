@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ImBankStatementClients } from "@/components/im-bank-statement-clients";
 import { ImPlanLink } from "@/components/im-plan-link";
 import {
   buildImNextSteps,
@@ -49,6 +50,7 @@ export function ImNextStepsList({
   const storageKey = imStepStorageKey(firmId, planKey);
   const [done, setDone] = useState<string[]>(() => readDone(storageKey));
   const nextRef = useRef<HTMLLIElement | null>(null);
+  const [bankOpen, setBankOpen] = useState(false);
 
   useEffect(() => {
     setDone(readDone(storageKey));
@@ -100,6 +102,26 @@ export function ImNextStepsList({
                 >
                   {starting ? "Starting…" : step.button}
                 </button>
+              ) : step.id === "document-collection" && sendAgentAllowed ? (
+                <>
+                  <button
+                    type="button"
+                    className="setup-partner__primary"
+                    data-im-bank-open=""
+                    onClick={() => setBankOpen(true)}
+                  >
+                    {step.button}
+                  </button>
+                  {step.promptHref && step.promptButton ? (
+                    <ImPlanLink
+                      href={step.promptHref}
+                      className="setup-partner__primary"
+                      onClick={() => finish(step.id)}
+                    >
+                      {step.promptButton}
+                    </ImPlanLink>
+                  ) : null}
+                </>
               ) : (
                 <>
                   <ImPlanLink
@@ -124,6 +146,14 @@ export function ImNextStepsList({
           );
         })}
       </ol>
+      {sendAgentAllowed ? (
+        <ImBankStatementClients
+          firmId={firmId}
+          open={bankOpen}
+          onOpenChange={setBankOpen}
+          onSent={() => finish("document-collection")}
+        />
+      ) : null}
     </section>
   );
 }

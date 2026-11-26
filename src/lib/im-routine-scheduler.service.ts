@@ -17,7 +17,11 @@ import {
   type RoutineActionRow,
   type RoutineRunRow,
 } from "@/lib/client-routines";
-import { agentSendFindingRow, planAgentSendRoutine } from "@/lib/agent-send-draft";
+import {
+  agentSendFindingRow,
+  planAgentSendRoutine,
+  type AgentSendDraft,
+} from "@/lib/agent-send-draft";
 import { sendAgentFirmAllowed } from "@/lib/client-agent-send-allowlist";
 import {
   imBudgetVarianceThresholdBreached,
@@ -230,12 +234,33 @@ async function queueAgentSendDraft(input: {
   plan: NonNullable<ReturnType<typeof planAgentSendRoutine>>;
 }): Promise<"created" | "exists"> {
   if (input.plan.invokeRunner || input.plan.sent || input.plan.minted) return "exists";
+  return storeUnsentAgentSendDraft({
+    firmId: input.firmId,
+    clientId: input.clientId,
+    draft: input.plan.draft,
+    inputs: input.plan.idempotencyInputs,
+    summary: "Implementation Manager routine — agent_send_draft, unsent draft.",
+  });
+}
+
+/**
+ * The same unsent agent_send_draft the routine queue writes.
+ * minted and sent stay false. Nothing is emailed and nothing is posted.
+ */
+export async function storeUnsentAgentSendDraft(input: {
+  firmId: string;
+  clientId: string;
+  draft: AgentSendDraft;
+  inputs: string;
+  summary: string;
+}): Promise<"created" | "exists"> {
+  if (input.draft.sent || input.draft.minted) return "exists";
   const db = admin();
   const idempotencyKey = await agentIdempotencyKey({
     agent: "financial_manager",
     clientId: input.clientId,
     trigger: "on_demand",
-    inputs: input.plan.idempotencyInputs,
+    inputs: input.inputs,
   });
   const existing = await db
     .from("agent_runs")
@@ -255,10 +280,10 @@ async function queueAgentSendDraft(input: {
         trigger: "on_demand",
         audience: "accountant",
         idempotency_key: idempotencyKey,
-        input_hash: await agentInputHash(input.plan.idempotencyInputs),
+        input_hash: await agentInputHash(input.inputs),
         status: "skipped",
         stop_reason: "agent_send_draft",
-        summary: "Implementation Manager routine — agent_send_draft, unsent draft.",
+        summary: input.summary,
         finished_at: new Date().toISOString(),
       })
       .select("id")
@@ -280,7 +305,7 @@ async function queueAgentSendDraft(input: {
   if (finding.data?.id) return "exists";
   const stored = await db
     .from("agent_findings")
-    .insert(agentSendFindingRow(input.plan.draft, runId))
+    .insert(agentSendFindingRow(input.draft, runId))
     .select("id")
     .maybeSingle();
   if (stored.error) throw new Error(stored.error.message);

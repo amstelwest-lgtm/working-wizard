@@ -124,7 +124,7 @@ export type PublicMission = {
   intro: string;
   thanks: string;
   messages: Array<{ role: "client" | "agent"; body: string }>;
-  uploads: Array<{ label: string; mime: string }>;
+  uploads: Array<{ id?: string; label: string; mime: string; sizeBytes?: number | null }>;
 };
 
 type ItemRow = {
@@ -423,7 +423,7 @@ async function loadLibraryUploadLabels(
 async function loadMissionUploads(
   sendId: string,
   clientId: string,
-): Promise<Array<{ label: string; mime: string }>> {
+): Promise<Array<{ id?: string; label: string; mime: string; sizeBytes?: number | null }>> {
   const { data, error } = await (
     supabaseAdmin as unknown as {
       from: (name: string) => {
@@ -437,7 +437,7 @@ async function loadMissionUploads(
     }
   )
     .from("client_agent_send_files")
-    .select("upload_label, mime, display_name")
+    .select("id, upload_label, mime, display_name, size_bytes")
     .eq("send_id", sendId);
   const fromSend =
     error || !data
@@ -448,7 +448,16 @@ async function loadMissionUploads(
             (typeof row.display_name === "string" && row.display_name) ||
             "";
           if (!label) return [];
-          return [{ label, mime: typeof row.mime === "string" ? row.mime : "" }];
+          const id = typeof row.id === "string" ? row.id : undefined;
+          const sizeBytes = typeof row.size_bytes === "number" ? row.size_bytes : null;
+          return [
+            {
+              ...(id ? { id } : {}),
+              label,
+              mime: typeof row.mime === "string" ? row.mime : "",
+              sizeBytes,
+            },
+          ];
         });
   const fromLibrary = await loadLibraryUploadLabels(clientId, sendId);
   return [...fromSend, ...fromLibrary];
@@ -1331,11 +1340,78 @@ function sendArchiveSealed(send: { completed_at: string | null }): boolean {
   return Boolean(send.completed_at);
 }
 
+/** Removes one uploaded file. The rest of the request stays. */
+async function removeOneMissionFile(
+  send: { id: string; client_id: string; completed_at: string | null },
+  itemKey: string,
+  fileId: string,
+): Promise<{ ok: true } | ReturnType<typeof closedLink>> {
+  const { data, error } = await (
+    supabaseAdmin as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            eq: (
+              column: string,
+              value: string,
+            ) => {
+              maybeSingle: () => Promise<{
+                data: { id?: string; item_key?: string; storage_path?: string } | null;
+                error: DbError;
+              }>;
+            };
+          };
+        };
+      };
+    }
+  )
+    .from("client_agent_send_files")
+    .select("id, item_key, storage_path")
+    .eq("id", fileId)
+    .eq("send_id", send.id)
+    .maybeSingle();
+  if (error) {
+    if (missingRelation(error, "client_agent_send_files")) return closedLink("unavailable");
+    throw new Error(sendLinkLogLine({ event: "link", reason: "file" }));
+  }
+  const path = typeof data?.storage_path === "string" ? data.storage_path : "";
+  if (!data?.id || data.item_key !== itemKey || !path) return closedLink("unavailable");
+  if (pathBelongsToSend(path, send.id, itemKey)) await objectStorage().remove([path]);
+  await deleteSendFileById(data.id);
+  if (!sendArchiveSealed(send)) {
+    try {
+      await removeSendArchiveCopies({
+        clientId: send.client_id,
+        sendId: send.id,
+        sourcePaths: [path],
+      });
+    } catch {
+      // The file row is already gone.
+    }
+  }
+  const left = await listSendFiles(send.id, itemKey);
+  if (left !== "legacy" && left.length === 0) {
+    await updateItem(send.id, itemKey, {
+      status: "open",
+      quality: null,
+      explanation: null,
+      mime: null,
+      size_bytes: null,
+      storage_path: null,
+    });
+  }
+  return { ok: true };
+}
+
 export const removeClientAgentFile = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     tokenInput
       .extend({
         itemKey: z.string().regex(/^[a-z0-9_]+$/),
+        fileId: z.string().uuid().optional(),
       })
       .parse(input),
   )
@@ -1345,6 +1421,7 @@ export const removeClientAgentFile = createServerFn({ method: "POST" })
     if (!consentReady(resolved.send.consent_at)) return closedLink("consent");
     const items = await loadItems(resolved.send.id);
     if (!items.some((item) => item.itemKey === data.itemKey)) return closedLink("unavailable");
+    if (data.fileId) return removeOneMissionFile(resolved.send, data.itemKey, data.fileId);
     const rows = await listSendFiles(resolved.send.id, data.itemKey);
     const previous = await loadStoredPath(resolved.send.id, data.itemKey);
     await updateItem(resolved.send.id, data.itemKey, {

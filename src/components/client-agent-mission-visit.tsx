@@ -3,9 +3,11 @@
  * The face is the existing silent clip. No lip-sync.
  * Finish shows thank-you for this visit. Reopening the same link shows upload again.
  */
+import { FileText, Loader2, X } from "lucide-react";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { CLIENT_UPLOAD_ACCEPT } from "@/lib/client-agent-link";
 import { sendAgentFace } from "@/lib/client-agent-missions";
+import { formatBytes } from "@/lib/client-documents";
 import { avatarPoster, fmClipSources } from "@/lib/fm-avatar-state";
 import type { PublicMission } from "@/lib/client-agent-link.functions";
 
@@ -77,7 +79,9 @@ export function ClientAgentMissionVisit({
   onAsk,
   onUploadLabel,
   onUpload,
+  onRemoveUpload,
   onDone,
+  uploading = false,
   returnVisit = false,
   passwordPrompt = false,
   password = "",
@@ -99,7 +103,10 @@ export function ClientAgentMissionVisit({
   onAsk: () => void;
   onUploadLabel: (value: string) => void;
   onUpload: (files: File[]) => void;
+  onRemoveUpload?: (file: { id?: string; label: string }) => void;
   onDone: () => void;
+  /** True only while a file is being saved. */
+  uploading?: boolean;
   /** The link was already finished. The client can still send more files. */
   returnVisit?: boolean;
   passwordPrompt?: boolean;
@@ -124,7 +131,7 @@ export function ClientAgentMissionVisit({
         {practiceName}
       </p>
       <h1 className="text-2xl font-semibold">{mission.agentShortName}</h1>
-      {noticeText ? (
+      {noticeText && (!consented || showThanks) ? (
         <p
           role="alert"
           data-upload-notice=""
@@ -174,10 +181,22 @@ export function ClientAgentMissionVisit({
               type="button"
               className={PRIMARY}
               data-upload-documents=""
-              disabled={busy}
+              aria-busy={uploading}
+              disabled={busy || uploading}
               onClick={() => document.getElementById("mission-file")?.click()}
             >
-              Upload documents
+              {uploading ? (
+                <>
+                  <Loader2
+                    className="mr-2 h-4 w-4 animate-spin"
+                    aria-hidden
+                    data-upload-spinner=""
+                  />
+                  Uploading…
+                </>
+              ) : (
+                "Upload documents"
+              )}
             </button>
             <label className="text-sm text-[#3D5270]" htmlFor="mission-upload-label">
               What is this?
@@ -193,6 +212,16 @@ export function ClientAgentMissionVisit({
             <p className="text-sm leading-6 text-[#3D5270]">
               A name is optional. The file name is used if you leave this blank.
             </p>
+            {noticeText ? (
+              <p
+                role="alert"
+                data-upload-notice=""
+                data-upload-error=""
+                className="rounded-xl border border-[#DBEAFE] bg-[#F4F8FF] px-3 py-2 text-sm text-[#102A43]"
+              >
+                {noticeText}
+              </p>
+            ) : null}
             <input
               id="mission-file"
               className="sr-only"
@@ -233,12 +262,42 @@ export function ClientAgentMissionVisit({
             ) : null}
           </div>
           {mission.uploads.length > 0 ? (
-            <ul className="flex flex-col gap-2">
-              {mission.uploads.map((file) => (
-                <li key={`${file.label}-${file.mime}`} className="text-sm text-[#3D5270]">
-                  {file.label}
-                </li>
-              ))}
+            <ul className="flex flex-col gap-2" data-upload-chips="">
+              {mission.uploads.map((file, index) => {
+                const size = formatBytes(file.sizeBytes ?? undefined);
+                return (
+                  <li
+                    key={file.id ?? `${file.label}-${index}`}
+                    className="flex items-center gap-3 rounded-2xl border border-[#DBEAFE] bg-[#F4F8FF] px-3 py-2"
+                    data-upload-chip=""
+                  >
+                    <FileText className="h-5 w-5 shrink-0 text-[#0B5FFF]" aria-hidden />
+                    <span className="min-w-0 flex-1">
+                      <span
+                        className="block truncate text-sm font-semibold"
+                        data-upload-chip-name=""
+                      >
+                        {file.label}
+                      </span>
+                      {size ? (
+                        <span className="block text-sm text-[#3D5270]" data-upload-chip-size="">
+                          {size}
+                        </span>
+                      ) : null}
+                    </span>
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#3D5270] hover:bg-white disabled:opacity-60"
+                      aria-label={`Remove ${file.label}`}
+                      data-upload-chip-remove=""
+                      disabled={busy || uploading}
+                      onClick={() => onRemoveUpload?.(file)}
+                    >
+                      <X className="h-4 w-4" aria-hidden />
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           ) : null}
           <div
