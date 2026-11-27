@@ -3,7 +3,7 @@
  * accountant approval, then a PDF and CSV capture sheet.
  * The owner cannot approve. Nothing is emailed and nothing is filed.
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   TAX_FORM_DRAFT_STATUS_LABEL,
   currentApprover,
@@ -38,6 +38,13 @@ import {
   type Itr12Sheet,
   type Itr12SheetLine,
 } from "@/lib/tax-specialist/forms/itr12";
+import {
+  type Itr12BusinessDeduction,
+  type Itr12BusinessInput,
+  type Itr12HomeOffice,
+  type Itr12RentalProperty,
+  type Itr12WearDraft,
+} from "@/lib/tax-specialist/forms/itr12-schedules";
 import { saveCatalogDraft } from "@/lib/tax-specialist/forms/pipeline";
 import "./za-irp6-sheet.css";
 
@@ -47,46 +54,663 @@ function scheduleCents(cents: number | null): string {
   return cents == null ? "Blank" : formatSampleCents(cents);
 }
 
-function ScheduleBlocks({ sheet }: { sheet: Itr12Sheet }) {
-  const business = sheet.business;
+const BLANK_SCHEDULE = "A blank schedule is not zero";
+
+function rowId(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function emptyBusiness(): Itr12BusinessInput {
+  return {
+    grossIncomeCents: null,
+    deductions: [],
+    homeOffice: null,
+    assets: [],
+    wearAndTearCents: null,
+    ringFenceS20A: null,
+  };
+}
+
+function emptyProperty(id: string): Itr12RentalProperty {
+  return {
+    id,
+    description: "",
+    rentReceivedCents: null,
+    ratesCents: null,
+    interestCents: null,
+    insuranceCents: null,
+    repairsCents: null,
+    leviesCents: null,
+    agentFeesCents: null,
+    wearAndTearCents: null,
+    assets: [],
+    privateUsePercent: null,
+  };
+}
+
+function emptyAsset(id: string): Itr12WearDraft {
+  return {
+    id,
+    description: "",
+    costCents: null,
+    broughtIntoUse: "",
+    category: "",
+    section: "s11e",
+    privateUsePercent: null,
+    newAndUnused: false,
+    additionCents: null,
+    additionDate: null,
+    disposalDate: null,
+    proceedsCents: null,
+    bookDepreciationCents: null,
+  };
+}
+
+/** Local text until blur, so a parent render cannot append the same digits twice. */
+function BlurAmount({
+  id,
+  value,
+  label,
+  disabled,
+  entry,
+  onCommit,
+}: {
+  id: string;
+  value: number | null;
+  label: string;
+  disabled: boolean;
+  entry: string;
+  onCommit: (cents: number | null) => void;
+}) {
+  const [text, setText] = useState(centsText(value));
+  const [bad, setBad] = useState(false);
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focused.current) setText(centsText(value));
+  }, [value]);
+  return (
+    <span className="irp6-amount">
+      <span aria-hidden="true">R</span>
+      <input
+        id={id}
+        className="irp6-input irp6-input--num"
+        inputMode="decimal"
+        aria-label={label}
+        aria-invalid={bad || undefined}
+        disabled={disabled}
+        value={text}
+        placeholder="Blank"
+        data-itr12-entry={entry}
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onChange={(event) => {
+          setText(event.target.value);
+          setBad(false);
+        }}
+        onBlur={() => {
+          focused.current = false;
+          if (!text.trim()) {
+            setBad(false);
+            setText("");
+            if (value != null) onCommit(null);
+            return;
+          }
+          const cents = parseRandsToCents(text);
+          if (cents == null || cents < 0) {
+            setBad(true);
+            return;
+          }
+          setBad(false);
+          setText(centsText(cents));
+          if (cents !== value) onCommit(cents);
+        }}
+      />
+    </span>
+  );
+}
+
+function BlurText({
+  id,
+  value,
+  label,
+  disabled,
+  entry,
+  onCommit,
+}: {
+  id: string;
+  value: string;
+  label: string;
+  disabled: boolean;
+  entry: string;
+  onCommit: (value: string) => void;
+}) {
+  const [text, setText] = useState(value);
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focused.current) setText(value);
+  }, [value]);
+  return (
+    <input
+      id={id}
+      className="irp6-input"
+      aria-label={label}
+      disabled={disabled}
+      value={text}
+      placeholder="Blank"
+      data-itr12-entry={entry}
+      onFocus={() => {
+        focused.current = true;
+      }}
+      onChange={(event) => setText(event.target.value)}
+      onBlur={() => {
+        focused.current = false;
+        const next = text.trim();
+        setText(next);
+        if (next !== value.trim()) onCommit(next);
+      }}
+    />
+  );
+}
+
+function MarkSelect({
+  id,
+  value,
+  label,
+  disabled,
+  entry,
+  onCommit,
+}: {
+  id: string;
+  value: boolean | null;
+  label: string;
+  disabled: boolean;
+  entry: string;
+  onCommit: (value: boolean | null) => void;
+}) {
+  return (
+    <select
+      id={id}
+      className="irp6-input"
+      aria-label={label}
+      disabled={disabled}
+      value={value == null ? "" : value ? "yes" : "no"}
+      data-itr12-entry={entry}
+      onChange={(event) => {
+        const next = event.target.value;
+        onCommit(next === "yes" ? true : next === "no" ? false : null);
+      }}
+    >
+      <option value="">Blank</option>
+      <option value="yes">Yes</option>
+      <option value="no">No</option>
+    </select>
+  );
+}
+
+function LocalSchedules({
+  inputs,
+  sheet,
+  locked,
+  onChange,
+}: {
+  inputs: Itr12Inputs;
+  sheet: Itr12Sheet;
+  locked: boolean;
+  onChange: (next: Itr12Inputs) => void;
+}) {
+  const business = inputs.business ?? null;
+  const properties = inputs.rentals ?? [];
+  const worked = sheet.business;
   const rentals = sheet.rentals;
+
+  const saveBusiness = (next: Itr12BusinessInput) => {
+    const started =
+      next.grossIncomeCents != null ||
+      next.deductions.length > 0 ||
+      next.assets.length > 0 ||
+      next.wearAndTearCents != null ||
+      next.ringFenceS20A != null ||
+      next.homeOffice != null;
+    onChange({ ...inputs, business: started ? next : null });
+  };
+  const patchBusiness = (patch: (current: Itr12BusinessInput) => Itr12BusinessInput) => {
+    saveBusiness(patch(business ?? emptyBusiness()));
+  };
+  const patchHome = (patch: (current: Itr12HomeOffice) => Itr12HomeOffice) => {
+    patchBusiness((current) => {
+      const home = patch(
+        current.homeOffice ?? {
+          amountCents: null,
+          specificallyEquipped: null,
+          regularlyAndExclusivelyUsed: null,
+        },
+      );
+      const started =
+        home.amountCents != null ||
+        home.specificallyEquipped != null ||
+        home.regularlyAndExclusivelyUsed != null;
+      return { ...current, homeOffice: started ? home : null };
+    });
+  };
+
+  const saveRentals = (next: readonly Itr12RentalProperty[]) => {
+    onChange({ ...inputs, rentals: next.length > 0 ? next : [] });
+  };
+  const patchProperty = (
+    id: string,
+    patch: (property: Itr12RentalProperty) => Itr12RentalProperty,
+  ) => {
+    saveRentals(properties.map((property) => (property.id === id ? patch(property) : property)));
+  };
+
+  const businessLines = [
+    ["Gross income", worked?.grossIncomeCents ?? null],
+    ["Wear-and-tear", worked?.wearAndTearCents ?? null],
+    ["Net profit or loss", worked?.netProfitCents ?? null],
+  ] as const;
+
   return (
     <>
-      <div data-itr12-business={business ? "filled" : "blank"}>
-        <h4 className="irp6-label">Local business, trade, or profession</h4>
-        {business ? (
+      <section className="irp6-section" data-itr12-business={worked ? "filled" : "blank"}>
+        <h3 className="irp6-section-title">Local business, trade, or profession</h3>
+        {worked ? null : <p className="irp6-note">{BLANK_SCHEDULE}</p>}
+        {businessLines.map(([label, cents]) => (
+          <p key={label} className="irp6-note" data-itr12-blank-line={label}>
+            {label}: {scheduleCents(cents)}
+          </p>
+        ))}
+        <BlurAmount
+          id="itr12-business-gross"
+          entry="business-gross"
+          label="Gross income"
+          disabled={locked}
+          value={business?.grossIncomeCents ?? null}
+          onCommit={(cents) =>
+            patchBusiness((current) => ({ ...current, grossIncomeCents: cents }))
+          }
+        />
+        {business?.deductions.map((row) => (
+          <div key={row.id} data-itr12-deduction={row.id}>
+            <BlurText
+              id={`itr12-deduction-label-${row.id}`}
+              entry="deduction-label"
+              label="Deduction description"
+              disabled={locked}
+              value={row.label}
+              onCommit={(label) =>
+                patchBusiness((current) => ({
+                  ...current,
+                  deductions: current.deductions.map((item) =>
+                    item.id === row.id ? { ...item, label } : item,
+                  ),
+                }))
+              }
+            />
+            <BlurAmount
+              id={`itr12-deduction-amount-${row.id}`}
+              entry="deduction-amount"
+              label="Deduction amount"
+              disabled={locked}
+              value={row.amountCents}
+              onCommit={(cents) =>
+                patchBusiness((current) => ({
+                  ...current,
+                  deductions: current.deductions.map((item) =>
+                    item.id === row.id ? { ...item, amountCents: cents } : item,
+                  ),
+                }))
+              }
+            />
+            {locked ? null : (
+              <button
+                type="button"
+                className="irp6-back"
+                onClick={() =>
+                  patchBusiness((current) => ({
+                    ...current,
+                    deductions: current.deductions.filter((item) => item.id !== row.id),
+                  }))
+                }
+              >
+                Remove deduction
+              </button>
+            )}
+          </div>
+        ))}
+        {business?.deductions.length ? null : (
+          <p className="irp6-note" data-itr12-blank-line="Deductions">
+            Deductions: Blank
+          </p>
+        )}
+        {locked ? null : (
+          <button
+            type="button"
+            className="irp6-back"
+            data-itr12-deduction-add="true"
+            onClick={() =>
+              patchBusiness((current) => ({
+                ...current,
+                deductions: [
+                  ...current.deductions,
+                  {
+                    id: rowId("deduction"),
+                    label: "",
+                    amountCents: null,
+                  } satisfies Itr12BusinessDeduction,
+                ],
+              }))
+            }
+          >
+            Add a deduction
+          </button>
+        )}
+        <p className="irp6-note">
+          Home office. Both s23(b) marks must be yes before the amount is deducted.
+        </p>
+        <BlurAmount
+          id="itr12-home-amount"
+          entry="home-amount"
+          label="Home office amount"
+          disabled={locked}
+          value={business?.homeOffice?.amountCents ?? null}
+          onCommit={(cents) => patchHome((home) => ({ ...home, amountCents: cents }))}
+        />
+        <MarkSelect
+          id="itr12-home-equipped"
+          entry="home-equipped"
+          label="Specifically equipped for the trade"
+          disabled={locked}
+          value={business?.homeOffice?.specificallyEquipped ?? null}
+          onCommit={(specificallyEquipped) =>
+            patchHome((home) => ({ ...home, specificallyEquipped }))
+          }
+        />
+        <MarkSelect
+          id="itr12-home-exclusive"
+          entry="home-exclusive"
+          label="Regularly and exclusively used for the trade"
+          disabled={locked}
+          value={business?.homeOffice?.regularlyAndExclusivelyUsed ?? null}
+          onCommit={(regularlyAndExclusivelyUsed) =>
+            patchHome((home) => ({ ...home, regularlyAndExclusivelyUsed }))
+          }
+        />
+        <MarkSelect
+          id="itr12-s20a"
+          entry="s20a"
+          label="s20A ring-fence"
+          disabled={locked}
+          value={business?.ringFenceS20A ?? null}
+          onCommit={(ringFenceS20A) => patchBusiness((current) => ({ ...current, ringFenceS20A }))}
+        />
+        <p className="irp6-note">s20A is an indicator only. Not signed off as a calculation.</p>
+        {business?.assets.length ? null : (
+          <p className="irp6-note" data-itr12-blank-line="Wear-and-tear assets">
+            Wear-and-tear assets: Blank
+          </p>
+        )}
+        {business?.assets.map((asset) => (
+          <div key={asset.id} data-itr12-asset={asset.id}>
+            <BlurText
+              id={`itr12-asset-description-${asset.id}`}
+              entry="asset-description"
+              label="Asset description"
+              disabled={locked}
+              value={asset.description}
+              onCommit={(description) =>
+                patchBusiness((current) => ({
+                  ...current,
+                  assets: current.assets.map((item) =>
+                    item.id === asset.id ? { ...item, description } : item,
+                  ),
+                }))
+              }
+            />
+            <BlurAmount
+              id={`itr12-asset-cost-${asset.id}`}
+              entry="asset-cost"
+              label="Asset cost"
+              disabled={locked}
+              value={asset.costCents}
+              onCommit={(costCents) =>
+                patchBusiness((current) => ({
+                  ...current,
+                  assets: current.assets.map((item) =>
+                    item.id === asset.id ? { ...item, costCents } : item,
+                  ),
+                }))
+              }
+            />
+            <input
+              id={`itr12-asset-date-${asset.id}`}
+              className="irp6-input"
+              type="date"
+              aria-label="Date brought into use"
+              disabled={locked}
+              value={asset.broughtIntoUse}
+              data-itr12-entry="asset-date"
+              onChange={(event) =>
+                patchBusiness((current) => ({
+                  ...current,
+                  assets: current.assets.map((item) =>
+                    item.id === asset.id ? { ...item, broughtIntoUse: event.target.value } : item,
+                  ),
+                }))
+              }
+            />
+            <BlurText
+              id={`itr12-asset-category-${asset.id}`}
+              entry="asset-category"
+              label="Asset category"
+              disabled={locked}
+              value={asset.category}
+              onCommit={(category) =>
+                patchBusiness((current) => ({
+                  ...current,
+                  assets: current.assets.map((item) =>
+                    item.id === asset.id ? { ...item, category } : item,
+                  ),
+                }))
+              }
+            />
+            <select
+              id={`itr12-asset-section-${asset.id}`}
+              className="irp6-input"
+              aria-label="Wear-and-tear section"
+              disabled={locked}
+              value={asset.section}
+              data-itr12-entry="asset-section"
+              onChange={(event) =>
+                patchBusiness((current) => ({
+                  ...current,
+                  assets: current.assets.map((item) =>
+                    item.id === asset.id
+                      ? { ...item, section: event.target.value === "s12c" ? "s12c" : "s11e" }
+                      : item,
+                  ),
+                }))
+              }
+            >
+              <option value="s11e">s11(e)</option>
+              <option value="s12c">s12C</option>
+            </select>
+            <BlurText
+              id={`itr12-asset-private-${asset.id}`}
+              entry="asset-private-use"
+              label="Asset private use percent"
+              disabled={locked}
+              value={asset.privateUsePercent == null ? "" : String(asset.privateUsePercent)}
+              onCommit={(text) => {
+                const percent = text === "" ? null : /^\d{1,3}$/.test(text) ? Number(text) : null;
+                if (text !== "" && (percent == null || percent > 100)) return;
+                patchBusiness((current) => ({
+                  ...current,
+                  assets: current.assets.map((item) =>
+                    item.id === asset.id ? { ...item, privateUsePercent: percent } : item,
+                  ),
+                }));
+              }}
+            />
+            {locked ? null : (
+              <button
+                type="button"
+                className="irp6-back"
+                onClick={() =>
+                  patchBusiness((current) => ({
+                    ...current,
+                    assets: current.assets.filter((item) => item.id !== asset.id),
+                  }))
+                }
+              >
+                Remove asset
+              </button>
+            )}
+          </div>
+        ))}
+        {locked ? null : (
+          <button
+            type="button"
+            className="irp6-back"
+            data-itr12-asset-add="true"
+            onClick={() =>
+              patchBusiness((current) => ({
+                ...current,
+                assets: [...current.assets, emptyAsset(rowId("asset"))],
+              }))
+            }
+          >
+            Add a wear-and-tear asset
+          </button>
+        )}
+        {worked?.notes.map((note) => (
+          <p key={note} className="irp6-note">
+            {note}
+          </p>
+        ))}
+      </section>
+      <section className="irp6-section" data-itr12-rental={rentals ? "filled" : "blank"}>
+        <h3 className="irp6-section-title">Local rental income</h3>
+        {rentals ? null : <p className="irp6-note">{BLANK_SCHEDULE}</p>}
+        {properties.length === 0 ? (
           <>
-            <p className="irp6-note">
-              Gross {scheduleCents(business.grossIncomeCents)}. Wear-and-tear{" "}
-              {scheduleCents(business.wearAndTearCents)}. Net{" "}
-              {scheduleCents(business.netProfitCents)}. s20A{" "}
-              {business.ringFenceS20A == null ? "Blank" : business.ringFenceS20A ? "Yes" : "No"}.
-            </p>
-            {business.notes.map((note) => (
-              <p key={note} className="irp6-note">
-                {note}
+            {(
+              [
+                "Rent received",
+                "Rates",
+                "Interest",
+                "Insurance",
+                "Repairs",
+                "Levies",
+                "Agent fees",
+                "Wear-and-tear",
+                "Private use",
+                "Net rental",
+              ] as const
+            ).map((label) => (
+              <p key={label} className="irp6-note" data-itr12-blank-line={label}>
+                {label}: Blank
               </p>
             ))}
           </>
-        ) : (
-          <p className="irp6-note">Blank. A blank schedule is not zero.</p>
-        )}
-      </div>
-      <div data-itr12-rental={rentals ? "filled" : "blank"}>
-        <h4 className="irp6-label">Local rental income</h4>
-        {rentals ? (
-          <>
-            {rentals.properties.map((property) => (
-              <p key={property.id} className="irp6-note" data-itr12-property={property.id}>
-                {property.description}: net {scheduleCents(property.netCents)}. {property.note}
+        ) : null}
+        {properties.map((property) => {
+          const workedProperty = rentals?.properties.find((row) => row.id === property.id);
+          const fields = [
+            ["rentReceivedCents", "Rent received", "rent"],
+            ["ratesCents", "Rates", "rates"],
+            ["interestCents", "Interest", "interest"],
+            ["insuranceCents", "Insurance", "insurance"],
+            ["repairsCents", "Repairs", "repairs"],
+            ["leviesCents", "Levies", "levies"],
+            ["agentFeesCents", "Agent fees", "agent-fees"],
+            ["wearAndTearCents", "Wear-and-tear", "rental-wear"],
+          ] as const;
+          return (
+            <div key={property.id} data-itr12-property={property.id}>
+              <BlurText
+                id={`itr12-property-name-${property.id}`}
+                entry="property-name"
+                label="Property description"
+                disabled={locked}
+                value={property.description}
+                onCommit={(description) =>
+                  patchProperty(property.id, (current) => ({ ...current, description }))
+                }
+              />
+              {fields.map(([key, label, entry]) => (
+                <span key={key}>
+                  <span className="irp6-note">
+                    {label}: {scheduleCents(property[key])}
+                  </span>
+                  <BlurAmount
+                    id={`itr12-${entry}-${property.id}`}
+                    entry={entry}
+                    label={label}
+                    disabled={locked}
+                    value={property[key]}
+                    onCommit={(cents) =>
+                      patchProperty(property.id, (current) => ({ ...current, [key]: cents }))
+                    }
+                  />
+                </span>
+              ))}
+              <span className="irp6-note">
+                Private use:{" "}
+                {property.privateUsePercent == null ? "Blank" : `${property.privateUsePercent}%`}
+              </span>
+              <BlurText
+                id={`itr12-private-use-${property.id}`}
+                entry="private-use"
+                label="Private use percent"
+                disabled={locked}
+                value={property.privateUsePercent == null ? "" : String(property.privateUsePercent)}
+                onCommit={(text) => {
+                  if (!text) {
+                    patchProperty(property.id, (current) => ({
+                      ...current,
+                      privateUsePercent: null,
+                    }));
+                    return;
+                  }
+                  if (!/^\d{1,3}$/.test(text)) return;
+                  const percent = Number(text);
+                  if (percent > 100) return;
+                  patchProperty(property.id, (current) => ({
+                    ...current,
+                    privateUsePercent: percent,
+                  }));
+                }}
+              />
+              <p className="irp6-note">
+                Net rental: {scheduleCents(workedProperty?.netCents ?? null)}
               </p>
-            ))}
-            <p className="irp6-note">Total net rental {scheduleCents(rentals.totalNetCents)}.</p>
-          </>
-        ) : (
-          <p className="irp6-note">Blank. A blank schedule is not zero.</p>
+              {locked ? null : (
+                <button
+                  type="button"
+                  className="irp6-back"
+                  onClick={() => saveRentals(properties.filter((item) => item.id !== property.id))}
+                >
+                  Remove property
+                </button>
+              )}
+            </div>
+          );
+        })}
+        <p className="irp6-note">
+          Total net rental: {scheduleCents(rentals?.totalNetCents ?? null)}
+        </p>
+        {locked ? null : (
+          <button
+            type="button"
+            className="irp6-back"
+            data-itr12-rental-add="true"
+            onClick={() => saveRentals([...properties, emptyProperty(rowId("property"))])}
+          >
+            Add a property
+          </button>
         )}
-      </div>
+      </section>
     </>
   );
 }
@@ -668,6 +1292,13 @@ export function ZaItr12Sheet({
         )}
       </section>
 
+      <LocalSchedules
+        inputs={inputs}
+        sheet={sheet}
+        locked={locked}
+        onChange={(next) => edit(["result"], next)}
+      />
+
       <section className="irp6-section" data-itr12-section="result">
         <header className="irp6-section-head">
           <div>
@@ -688,7 +1319,6 @@ export function ZaItr12Sheet({
               .map((line) => fieldRow(line))}
           </tbody>
         </table>
-        <ScheduleBlocks sheet={sheet} />
       </section>
 
       <p className="irp6-purpose">{ITR12_FOOTER}</p>

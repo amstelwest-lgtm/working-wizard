@@ -31,11 +31,28 @@ export type Itr12HomeOffice = {
   regularlyAndExclusivelyUsed: boolean | null;
 };
 
+/** A register row the accountant is still typing. Blank cost is not zero. */
+export type Itr12WearDraft = {
+  id: string;
+  description: string;
+  costCents: number | null;
+  broughtIntoUse: string;
+  category: string;
+  section: WearAsset["section"];
+  privateUsePercent: number | null;
+  newAndUnused: boolean;
+  additionCents: number | null;
+  additionDate: string | null;
+  disposalDate: string | null;
+  proceedsCents: number | null;
+  bookDepreciationCents: number | null;
+};
+
 export type Itr12BusinessInput = {
   grossIncomeCents: number | null;
   deductions: readonly Itr12BusinessDeduction[];
   homeOffice: Itr12HomeOffice | null;
-  assets: readonly WearAsset[];
+  assets: readonly Itr12WearDraft[];
   /** Used only when the asset register is empty. Null is blank, not zero. */
   wearAndTearCents: number | null;
   /** Typist mark only. Null means not marked. It does not change the net. */
@@ -203,14 +220,49 @@ type WearEffect = {
   open: boolean;
 };
 
+function readyAssets(assets: readonly Itr12WearDraft[]): WearAsset[] | "pending" {
+  if (assets.length === 0) return [];
+  const ready: WearAsset[] = [];
+  for (const asset of assets) {
+    if (
+      !asset.description.trim() ||
+      !nonNegative(asset.costCents) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(asset.broughtIntoUse) ||
+      asset.privateUsePercent == null
+    ) {
+      return "pending";
+    }
+    ready.push({
+      id: asset.id,
+      description: asset.description.trim(),
+      costCents: asset.costCents,
+      broughtIntoUse: asset.broughtIntoUse,
+      category: asset.category,
+      section: asset.section,
+      privateUsePercent: asset.privateUsePercent,
+      newAndUnused: asset.newAndUnused,
+      additionCents: asset.additionCents,
+      additionDate: asset.additionDate,
+      disposalDate: asset.disposalDate,
+      proceedsCents: asset.proceedsCents,
+      bookDepreciationCents: asset.bookDepreciationCents,
+    });
+  }
+  return ready;
+}
+
 function wearEffect(
-  assets: readonly WearAsset[],
+  assets: readonly Itr12WearDraft[],
   typedCents: number | null,
   yearStart: string,
   yearEnd: string,
 ): WearEffect {
-  if (assets.length > 0) {
-    const wear = wearSchedule(assets, yearStart, yearEnd);
+  const ready = readyAssets(assets);
+  if (ready === "pending") {
+    return { wear: null, cents: null, recoupmentCents: null, open: true };
+  }
+  if (ready.length > 0) {
+    const wear = wearSchedule(ready, yearStart, yearEnd);
     if (wear?.wearAndTearCents == null) {
       return { wear, cents: null, recoupmentCents: null, open: true };
     }
@@ -459,11 +511,45 @@ export function businessInputFrom(value: unknown): Itr12BusinessInput | null {
     grossIncomeCents: centsField(record.grossIncomeCents),
     deductions: deductionsFrom(record.deductions),
     homeOffice: homeFrom(record.homeOffice),
-    assets: wearAssetsFrom(record.assets),
+    assets: wearDraftsFrom(record.assets),
     wearAndTearCents: centsField(record.wearAndTearCents),
     ringFenceS20A: markField(record.ringFenceS20A),
   };
   return businessStarted(input) ? input : null;
+}
+
+function wearDraftsFrom(value: unknown): Itr12WearDraft[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item, index) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as Record<string, unknown>;
+    const section = row.section === "s12c" ? "s12c" : row.section === "s11e" ? "s11e" : null;
+    const description = textField(row.description);
+    const costCents = centsField(row.costCents);
+    const broughtIntoUse = textField(row.broughtIntoUse);
+    if (!description && costCents == null && !broughtIntoUse && !section) return [];
+    const percent = row.privateUsePercent;
+    return [
+      {
+        id: textField(row.id) || `asset-${index + 1}`,
+        description,
+        costCents,
+        broughtIntoUse,
+        category: textField(row.category),
+        section: section ?? "s11e",
+        privateUsePercent:
+          typeof percent === "number" && Number.isInteger(percent) && percent >= 0 && percent <= 100
+            ? percent
+            : null,
+        newAndUnused: row.newAndUnused === true,
+        additionCents: centsField(row.additionCents),
+        additionDate: textField(row.additionDate) || null,
+        disposalDate: textField(row.disposalDate) || null,
+        proceedsCents: centsField(row.proceedsCents),
+        bookDepreciationCents: centsField(row.bookDepreciationCents),
+      },
+    ];
+  });
 }
 
 function propertyFrom(value: unknown, index: number): Itr12RentalProperty | null {

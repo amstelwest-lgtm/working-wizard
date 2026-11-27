@@ -256,6 +256,19 @@ assert(view.includes("not sent to the client"), "the sheet says it is not sent t
 assert(view.includes('data-itr12-open-queries='), "open queries are counted");
 assert(view.includes("disabled"), "Approve is blocked while queries are open");
 assert(!view.includes("mailto:"), "the sheet has no email link");
+assert(view.includes("A blank schedule is not zero"), "a blank schedule says it is not zero");
+assert(view.includes('data-itr12-entry="business-gross"'), "business gross is on the sheet");
+assert(view.includes("data-itr12-deduction-add"), "a deduction line can be added");
+assert(view.includes('data-itr12-entry="home-equipped"'), "the s23(b) equipped mark is on the sheet");
+assert(view.includes('data-itr12-entry="s20a"'), "the s20A mark is on the sheet");
+assert(view.includes("data-itr12-rental-add"), "a rental property can be added");
+assert(view.includes('data-itr12-entry="private-use"') || view.includes("Private use: Blank"), "private use is on the blank rental schedule");
+const blankBusiness = view.split('data-itr12-business="blank"')[1]?.split("data-itr12-rental=")[0] ?? "";
+assert(blankBusiness.includes("A blank schedule is not zero"), "the blank business section says it is not zero");
+assert(!blankBusiness.includes("0.00"), "a blank business schedule does not show 0.00");
+const blankRental = view.split('data-itr12-rental="blank"')[1]?.split('data-itr12-section="result"')[0] ?? "";
+assert(blankRental.includes("A blank schedule is not zero"), "the blank rental section says it is not zero");
+assert(!blankRental.includes("0.00"), "a blank rental schedule does not show 0.00");
 
 const owner = renderToStaticMarkup(
   createElement(ZaItr12Sheet, {
@@ -272,6 +285,10 @@ const owner = renderToStaticMarkup(
 assert(owner.includes('data-itr12-role="owner"'), "the owner view is marked");
 assert(owner.includes("The owner cannot approve a section."), "the owner is told they cannot approve");
 assert(!owner.includes('data-itr12-add='), "the owner cannot type a figure");
+assert(!owner.includes("data-itr12-deduction-add"), "the owner cannot add a deduction");
+assert(!owner.includes("data-itr12-asset-add"), "the owner cannot add a wear-and-tear asset");
+assert(!owner.includes("data-itr12-rental-add"), "the owner cannot add a property");
+assert(owner.includes("A blank schedule is not zero"), "the owner still sees a blank schedule");
 
 const sheetSrc = readFileSync("src/components/tax-specialist/za-itr12-sheet.tsx", "utf8");
 const pdfSrc = readFileSync("src/components/tax-specialist/za-itr12-pdf.tsx", "utf8");
@@ -284,6 +301,17 @@ for (const src of [
 ]) {
   assert(!/mailto:|sendEmail|resend|eFiling login|sars\.gov/i.test(src), "no send and no SARS login");
 }
+assert(sheetSrc.includes("A blank schedule is not zero"), "the sheet source names a blank schedule");
+assert(sheetSrc.includes('entry="business-gross"'), "the sheet source has a gross income control");
+assert(sheetSrc.includes("data-itr12-deduction-add"), "the sheet source can add a deduction");
+assert(sheetSrc.includes('entry="home-equipped"'), "the sheet source has the equipped s23(b) mark");
+assert(sheetSrc.includes('entry="home-exclusive"'), "the sheet source has the exclusive s23(b) mark");
+assert(sheetSrc.includes('entry="s20a"'), "the sheet source has the s20A mark");
+assert(sheetSrc.includes('entry="asset-description"'), "the sheet source has a wear-and-tear asset control");
+assert(sheetSrc.includes("data-itr12-asset-add"), "the sheet source can add an asset");
+assert(sheetSrc.includes("data-itr12-rental-add"), "the sheet source can add a property");
+assert(sheetSrc.includes('entry="private-use"'), "the sheet source has private use");
+assert(sheetSrc.includes("onBlur"), "schedule amounts commit on blur");
 assert(pdfSrc.includes("Not a SARS return"), "the PDF is labelled not a SARS return");
 assert(ITR12_FOOTER.includes("Not a SARS return"), "the footer is the capture-sheet label");
 
