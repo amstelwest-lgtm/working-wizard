@@ -12,9 +12,15 @@ import { ZaItr12Sheet } from "../src/components/tax-specialist/za-itr12-sheet";
 import { ZaItr14Sheet } from "../src/components/tax-specialist/za-itr14-sheet";
 import {
   capitalGainsSchedule,
+  cgtCsvRows,
   cgtYear,
   type CgtDisposal,
 } from "../src/lib/tax-specialist/forms/cgt";
+import {
+  NIL_CONFIRMED_NOTE,
+  markCapitalLossNil,
+  undoCapitalLossNil,
+} from "../src/lib/tax-specialist/forms/nil-confirm";
 import type { TaxFormDraft } from "../src/lib/tax-specialist/forms/drafts";
 import {
   computeItr12,
@@ -510,6 +516,82 @@ for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
   const content = await page.getTextContent();
   pdfText += content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
 }
+const typedLoss = markCapitalLossNil(4_000_000, false);
+eq(typedLoss.cents, 4_000_000, "a typed brought-forward loss stays");
+eq(typedLoss.confirmed, false, "a typed brought-forward loss is not confirmed nil");
+const blankLoss = markCapitalLossNil(null, false);
+eq(blankLoss.cents, 0, "a blank brought-forward loss becomes nil");
+eq(blankLoss.confirmed, true, "a blank brought-forward loss is confirmed nil");
+const restoredLoss = undoCapitalLossNil(blankLoss.cents, blankLoss.confirmed);
+eq(restoredLoss.cents, null, "undo restores the blank brought-forward loss");
+eq(restoredLoss.confirmed, false, "undo clears the capital-loss confirmation");
+const nilCapital = capitalGainsSchedule({
+  person: "individual",
+  yearOfAssessment: 2026,
+  disposals: [shares],
+  assessedCapitalLossBroughtForwardCents: blankLoss.cents,
+  broughtForwardNilConfirmed: true,
+});
+assert(nilCapital?.notes.includes(NIL_CONFIRMED_NOTE), "the capital gains schedule carries the nil note");
+eq(nilCapital?.rows[0]?.proceedsCents, 40_000_000, "the disposal proceeds stay");
+assert(
+  cgtCsvRows(nilCapital).some((row) => row.includes(NIL_CONFIRMED_NOTE)),
+  "the capital gains CSV carries the nil confirmation",
+);
+const nilCgtView = renderToStaticMarkup(
+  createElement(ZaItr12Sheet, {
+    client: { id: "c1", name: "Nicola Physio" },
+    today: "2026-11-03",
+    drafts: [],
+    initialYear: 2026,
+    seed: {
+      taxReference: "",
+      lines: [],
+      queries: [],
+      disposals: [shares],
+      assessedCapitalLossBroughtForwardCents: 0,
+      capitalLossNilConfirmed: true,
+    },
+    onSaved: () => undefined,
+    onBack: () => undefined,
+  }),
+);
+assert(nilCgtView.includes('data-nil-mark="cgt"'), "the capital loss has the nil button");
+assert(nilCgtView.includes('data-nil-undo="cgt"'), "the capital loss confirmation can be undone");
+assert(nilCgtView.includes('data-nil-note="cgt"'), "the capital gains sheet shows the nil note");
+assert(nilCgtView.includes(NIL_CONFIRMED_NOTE), "the capital gains sheet shows the confirmation sentence");
+const nilCgtSheet = computeItr12({
+  clientName: "Nicola Physio",
+  yearOfAssessment: 2026,
+  inputs: {
+    taxReference: "",
+    lines: [],
+    queries: [],
+    disposals: [shares],
+    assessedCapitalLossBroughtForwardCents: 0,
+    capitalLossNilConfirmed: true,
+  },
+});
+assert(itr12Csv(nilCgtSheet).includes(NIL_CONFIRMED_NOTE), "the ITR12 CSV carries the capital-loss confirmation");
+const { renderToBuffer: renderNilCgt } = await import("@react-pdf/renderer");
+const { Itr12PDF: NilCgtPDF } = await import("../src/components/tax-specialist/za-itr12-pdf");
+const nilCgtPdf = await renderNilCgt(
+  createElement(NilCgtPDF, {
+    clientName: "Nicola Physio",
+    sheet: nilCgtSheet,
+    approvedByName: null,
+    approvedAt: null,
+    preparedOn: "2026-11-03",
+  }) as Parameters<typeof renderNilCgt>[0],
+);
+const nilCgtDoc = await getDocumentProxy(new Uint8Array(nilCgtPdf));
+let nilCgtText = "";
+for (let pageNumber = 1; pageNumber <= nilCgtDoc.numPages; pageNumber += 1) {
+  const page = await nilCgtDoc.getPage(pageNumber);
+  const content = await page.getTextContent();
+  nilCgtText += content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+}
+assert(nilCgtText.includes(NIL_CONFIRMED_NOTE), "the capital gains PDF carries the nil confirmation");
 assert(pdfText.includes("Not a SARS return"), "the PDF pages say it is not a SARS return");
 assert(pdfText.includes("Capital gains"), "the PDF has the capital gains section");
 assert(pdfText.includes("Primary residence"), "the PDF names the primary residence");

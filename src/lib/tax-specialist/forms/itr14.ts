@@ -37,6 +37,7 @@ import {
   type CgtSchedule,
 } from "./cgt.ts";
 import type { TaxFormDraft, TaxFormDraftField } from "./drafts.ts";
+import { NIL_CONFIRMED_NOTE } from "./nil-confirm.ts";
 import {
   irp6Supported,
   irp6YearEnd,
@@ -558,6 +559,10 @@ export type Itr14Inputs = {
   disposals: CgtDisposal[];
   /** Blank is not zero. Separate from the income-tax assessed loss. */
   assessedCapitalLossBroughtForwardCents: number | null;
+  /** The brought-forward capital loss was blank and the accountant confirmed nil. */
+  capitalLossNilConfirmed?: boolean;
+  /** Adjustment amounts the accountant confirmed as nil. */
+  nilConfirmed?: readonly string[];
 };
 
 export function emptyItr14Inputs(): Itr14Inputs {
@@ -591,6 +596,8 @@ export function emptyItr14Inputs(): Itr14Inputs {
     assets: [],
     disposals: [],
     assessedCapitalLossBroughtForwardCents: null,
+    capitalLossNilConfirmed: false,
+    nilConfirmed: [],
   };
 }
 
@@ -636,6 +643,10 @@ export type Itr14Sheet = {
   assessedLoss: AssessedLossWorking | null;
   /** Null when the disposal register is blank. A blank register is not zero. */
   capital: CgtSchedule | null;
+  /** The brought-forward capital loss was confirmed nil. */
+  capitalLossNilConfirmed: boolean;
+  /** An adjustment amount was confirmed nil. */
+  adjustmentNilConfirmed: boolean;
 };
 
 export type Itr14Client = Irp6Client;
@@ -926,6 +937,7 @@ export function computeItr14(input: {
     yearOfAssessment,
     disposals: inputs.disposals,
     assessedCapitalLossBroughtForwardCents: inputs.assessedCapitalLossBroughtForwardCents,
+    broughtForwardNilConfirmed: inputs.capitalLossNilConfirmed === true,
   });
   const capitalIncluded =
     capital?.includedInTaxableIncome === true && capital.taxableCapitalGainCents != null;
@@ -1563,6 +1575,8 @@ export function computeItr14(input: {
     wear,
     assessedLoss,
     capital,
+    capitalLossNilConfirmed: inputs.capitalLossNilConfirmed === true,
+    adjustmentNilConfirmed: (inputs.nilConfirmed?.length ?? 0) > 0,
   };
 }
 
@@ -1723,6 +1737,10 @@ export function itr14InputsFromDraft(draft: TaxFormDraft | null | undefined): It
     assets: wearAssetsFrom(stored.assets),
     disposals: cgtDisposalsFrom(stored.disposals),
     assessedCapitalLossBroughtForwardCents: centsOf(stored.assessedCapitalLossBroughtForwardCents),
+    capitalLossNilConfirmed: stored.capitalLossNilConfirmed === true,
+    nilConfirmed: Array.isArray(stored.nilConfirmed)
+      ? stored.nilConfirmed.filter((item): item is string => typeof item === "string")
+      : [],
   };
 }
 
@@ -1799,6 +1817,12 @@ export function itr14Csv(sheet: Itr14Sheet): string {
     rows.push(["Wear-and-tear schedule", "", "No asset register", "A blank register is not zero"]);
   }
   rows.push(...cgtCsvRows(sheet.capital));
+  if (sheet.capitalLossNilConfirmed && !sheet.capital?.notes.includes(NIL_CONFIRMED_NOTE)) {
+    rows.push(["Assessed capital loss brought forward", "", "Accountant", NIL_CONFIRMED_NOTE]);
+  }
+  if (sheet.adjustmentNilConfirmed) {
+    rows.push(["Tax adjustments", "", "Accountant", NIL_CONFIRMED_NOTE]);
+  }
   if (sheet.assessedLoss) {
     rows.push([
       "Assessed loss set-off",

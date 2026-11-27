@@ -22,12 +22,15 @@ export function AssetDateInput({
   label,
   value,
   disabled,
+  showLabel = true,
   onCommit,
 }: {
   id: string;
   label: string;
   value: string;
   disabled?: boolean;
+  /** The table heading is the visible label. The input keeps its accessible name. */
+  showLabel?: boolean;
   onCommit: (iso: string) => void;
 }) {
   const [text, setText] = useState(value);
@@ -53,9 +56,7 @@ export function AssetDateInput({
     setText(next);
     if (next !== value) onCommit(next);
   };
-  return (
-    <label>
-      {label}
+  const field = (
       <input
         id={id}
         className="irp6-input"
@@ -87,6 +88,12 @@ export function AssetDateInput({
           commit(text);
         }}
       />
+  );
+  if (!showLabel) return field;
+  return (
+    <label>
+      {label}
+      {field}
     </label>
   );
 }

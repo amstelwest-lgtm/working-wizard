@@ -11,6 +11,7 @@
  * credit, and the retirement deduction limit are not signed off.
  */
 import type { CgtSchedule } from "./cgt.ts";
+import { NIL_CONFIRMED_NOTE, nilKeysFrom } from "./nil-confirm.ts";
 import {
   wearAssetsFrom,
   wearSchedule,
@@ -58,6 +59,8 @@ export type Itr12BusinessInput = {
   wearAndTearCents: number | null;
   /** Typist mark only. Null means not marked. It does not change the net. */
   ringFenceS20A: boolean | null;
+  /** Amounts the accountant confirmed as nil. Empty means none. */
+  nilConfirmed?: readonly string[];
 };
 
 export type Itr12HomeOfficeResult = {
@@ -97,6 +100,8 @@ export type Itr12RentalProperty = {
   assets: readonly WearAsset[];
   /** Whole percent, 0 to 100. Null stays blank and blocks the net. */
   privateUsePercent: number | null;
+  /** Amounts the accountant confirmed as nil. Empty means none. */
+  nilConfirmed?: readonly string[];
 };
 
 export type Itr12RentalPropertyResult = {
@@ -118,6 +123,8 @@ export type Itr12RentalPropertyResult = {
   note: string;
   /** Named blanks. A blank field is not treated as zero. */
   gaps: readonly { field: string; prompt: string }[];
+  /** Set when this property's blanks were confirmed as nil. */
+  nilNote: string | null;
 };
 
 export type Itr12RentalSchedule = {
@@ -340,6 +347,7 @@ export function businessSchedule(
   const homeOpen = home?.deductedCents == null && home != null;
   const open = grossOpen || "open" in deductions || wear.open || homeOpen;
   const notes = [HOME_OFFICE_NOTE, RING_FENCE_NOTE, SCRAPPING_NOTE];
+  if (input.nilConfirmed?.length) notes.push(NIL_CONFIRMED_NOTE);
   if (wear.open) {
     notes.push("Wear-and-tear is blank. A blank register is not zero, so the net stays blank.");
   } else if (wear.recoupmentCents == null) {
@@ -445,6 +453,7 @@ function propertyResult(
     netCents,
     note,
     gaps,
+    nilNote: property.nilConfirmed?.length ? NIL_CONFIRMED_NOTE : null,
   };
 }
 
@@ -459,6 +468,7 @@ export function rentalSchedule(
   const complete = rows.every((row) => row.netCents != null);
   const notes = [RENTAL_NOTE];
   if (!complete) notes.push("A property is missing a figure, so the total stays blank.");
+  if (rows.some((row) => row.nilNote)) notes.push(NIL_CONFIRMED_NOTE);
   return {
     draft: true,
     properties: rows,
@@ -609,6 +619,7 @@ export function businessInputFrom(value: unknown): Itr12BusinessInput | null {
     assets: wearDraftsFrom(record.assets),
     wearAndTearCents: centsField(record.wearAndTearCents),
     ringFenceS20A: markField(record.ringFenceS20A),
+    nilConfirmed: nilKeysFrom(record.nilConfirmed),
   };
   return businessStarted(input) ? input : null;
 }
@@ -667,6 +678,7 @@ function propertyFrom(value: unknown, index: number): Itr12RentalProperty | null
       typeof percent === "number" && Number.isInteger(percent) && percent >= 0 && percent <= 100
         ? percent
         : null,
+    nilConfirmed: nilKeysFrom(row.nilConfirmed),
   };
 }
 

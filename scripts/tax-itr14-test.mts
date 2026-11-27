@@ -36,6 +36,11 @@ import {
   type Itr14SectionId,
 } from "../src/lib/tax-specialist/forms/itr14";
 import { taxFormSchema } from "../src/lib/tax-specialist/forms/pipeline";
+import {
+  NIL_CONFIRMED_NOTE,
+  markItr14AdjustmentsNil,
+  undoItr14AdjustmentsNil,
+} from "../src/lib/tax-specialist/forms/nil-confirm";
 import { SAMPLE_COMPANY, sampleCompanyTax } from "../src/lib/tax-specialist/sample-compute";
 
 function assert(cond: unknown, msg: string): asserts cond {
@@ -350,6 +355,7 @@ assert(view.includes("Not a SARS return"), "the sheet says it is not a SARS retu
 assert(view.includes("not sent to the client"), "the sheet says it is not sent to the client");
 assert(view.includes('data-itr14-year-final="blocked"'), "Approve waits for a final year");
 assert(view.includes("Not computed"), "tax is not invented on an empty sheet");
+assert(view.includes('data-nil-mark="adjustments"'), "the adjustments section can mark blanks as nil");
 assert(!view.includes("mailto:"), "the sheet has no email link");
 assert(!view.includes("28%"), "the empty sheet does not mention 28%");
 
@@ -370,6 +376,7 @@ assert(
   "the owner is told they cannot approve",
 );
 assert(!owner.includes("data-itr14-add-adjustment="), "the owner cannot add an adjustment");
+assert(!owner.includes("data-nil-mark="), "the owner cannot mark blanks as nil");
 
 const sheetSrc = readFileSync("src/components/tax-specialist/za-itr14-sheet.tsx", "utf8");
 const pdfSrc = readFileSync("src/components/tax-specialist/za-itr14-pdf.tsx", "utf8");
@@ -1037,6 +1044,50 @@ const keptBlankCost = importWearAssets([
 eq(keptBlankCost.length, 1, "a blank cost stays on the imported row");
 eq(keptBlankCost[0]?.costCents, null, "an imported blank cost is not zero");
 eq(importWearAssets([{}]).length, 0, "a row with no asset fields is dropped");
+const nilAdjustments = markItr14AdjustmentsNil(
+  {
+    ...emptyItr14Inputs(),
+    finesAddBackCents: null,
+    donationCents: 50_000,
+    wearAndTearCents: null,
+    adjustments: [
+      { id: "typed", description: "Legal fees", amountCents: 20_000, direction: "deduct" },
+      { id: "open", description: "Sundry", amountCents: null, direction: "add" },
+    ],
+  },
+  { wear: true },
+);
+eq(nilAdjustments.donationCents, 50_000, "a typed adjustment amount stays");
+eq(nilAdjustments.adjustments[0]?.amountCents, 20_000, "a typed other adjustment stays");
+eq(nilAdjustments.finesAddBackCents, 0, "a blank fine becomes nil");
+eq(nilAdjustments.adjustments[1]?.amountCents, 0, "a blank other adjustment becomes nil");
+eq(nilAdjustments.wearAndTearCents, null, "wear supplied by the register is not overwritten");
+assert(!nilAdjustments.nilConfirmed?.includes("donationCents"), "a typed donation is not confirmed nil");
+assert(nilAdjustments.nilConfirmed?.includes("finesAddBackCents"), "the blank fine is confirmed nil");
+assert(nilAdjustments.nilConfirmed?.includes("adjustment:open"), "the blank other adjustment is confirmed");
+const adjustmentsUndone = undoItr14AdjustmentsNil(nilAdjustments);
+eq(adjustmentsUndone.finesAddBackCents, null, "undo restores the blank fine");
+eq(adjustmentsUndone.donationCents, 50_000, "undo leaves the typed donation");
+eq(adjustmentsUndone.adjustments[0]?.amountCents, 20_000, "undo leaves the typed other adjustment");
+eq(adjustmentsUndone.adjustments[1]?.amountCents, null, "undo restores the blank other adjustment");
+eq(adjustmentsUndone.nilConfirmed?.length, 0, "undo clears the adjustment confirmation");
+const nilItr14 = computeItr14({
+  client,
+  yearOfAssessment: 2026,
+  inputs: {
+    ...base,
+    finesAddBackCents: nilAdjustments.finesAddBackCents,
+    donationCents: nilAdjustments.donationCents ?? base.donationCents,
+    adjustments: nilAdjustments.adjustments,
+    nilConfirmed: nilAdjustments.nilConfirmed,
+  },
+});
+assert(nilItr14.adjustmentNilConfirmed, "the sheet records the adjustment confirmation");
+assert(itr14Csv(nilItr14).includes(NIL_CONFIRMED_NOTE), "the ITR14 CSV carries the nil confirmation");
+const nilItr14View = renderSheet(nilAdjustments, "nil-adjustments");
+assert(nilItr14View.includes('data-nil-note="adjustments"'), "the adjustments sheet shows the nil note");
+assert(nilItr14View.includes('data-nil-undo="adjustments"'), "the adjustment confirmation can be undone");
+assert(nilItr14View.includes(NIL_CONFIRMED_NOTE), "the adjustments sheet shows the confirmation sentence");
 assert(mixedView.includes("<legend>Asset 1</legend>"), "the first asset legend is static");
 assert(mixedView.includes("<legend>Asset 2</legend>"), "the second asset legend is static");
 const itr14SheetSrc = readFileSync("src/components/tax-specialist/za-itr14-sheet.tsx", "utf8");

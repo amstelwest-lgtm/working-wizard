@@ -10,6 +10,11 @@ import {
   type CgtPerson,
   type CgtSchedule,
 } from "@/lib/tax-specialist/forms/cgt";
+import {
+  NIL_CONFIRMED_NOTE,
+  markCapitalLossNil,
+  undoCapitalLossNil,
+} from "@/lib/tax-specialist/forms/nil-confirm";
 import { parseRandsToCents } from "@/lib/tax-specialist/forms/irp6";
 import { formatSampleCents } from "@/lib/tax-specialist/sample-compute";
 
@@ -166,6 +171,7 @@ export function CgtSection({
   person,
   disposals,
   assessedCapitalLossBroughtForwardCents,
+  capitalLossNilConfirmed = false,
   schedule,
   locked,
   onChange,
@@ -174,16 +180,29 @@ export function CgtSection({
   person: CgtPerson;
   disposals: readonly CgtDisposal[];
   assessedCapitalLossBroughtForwardCents: number | null;
+  capitalLossNilConfirmed?: boolean;
   schedule: CgtSchedule | null;
   locked: boolean;
   onChange: (next: {
     disposals: CgtDisposal[];
     assessedCapitalLossBroughtForwardCents: number | null;
+    capitalLossNilConfirmed: boolean;
   }) => void;
 }) {
   const blank = schedule == null;
-  const update = (id: string, patch: Partial<CgtDisposal>) => {
+  const publish = (next: {
+    disposals: CgtDisposal[];
+    assessedCapitalLossBroughtForwardCents: number | null;
+    capitalLossNilConfirmed?: boolean;
+  }) => {
     onChange({
+      disposals: next.disposals,
+      assessedCapitalLossBroughtForwardCents: next.assessedCapitalLossBroughtForwardCents,
+      capitalLossNilConfirmed: next.capitalLossNilConfirmed ?? capitalLossNilConfirmed,
+    });
+  };
+  const update = (id: string, patch: Partial<CgtDisposal>) => {
+    publish({
       disposals: disposals.map((row) => (row.id === id ? { ...row, ...patch } : row)),
       assessedCapitalLossBroughtForwardCents,
     });
@@ -344,7 +363,7 @@ export function CgtSection({
               className="irp6-back"
               data-cgt-remove={row.id}
               onClick={() =>
-                onChange({
+                publish({
                   disposals: disposals.filter((item) => item.id !== row.id),
                   assessedCapitalLossBroughtForwardCents,
                 })
@@ -361,7 +380,7 @@ export function CgtSection({
           className="irp6-back"
           data-cgt-add="true"
           onClick={() =>
-            onChange({
+            publish({
               disposals: [...disposals, emptyDisposal()],
               assessedCapitalLossBroughtForwardCents,
             })
@@ -378,12 +397,59 @@ export function CgtSection({
         disabled={locked}
         value={assessedCapitalLossBroughtForwardCents}
         onCommit={(assessedCapitalLossBroughtForwardCentsNext) =>
-          onChange({
+          publish({
             disposals: [...disposals],
             assessedCapitalLossBroughtForwardCents: assessedCapitalLossBroughtForwardCentsNext,
+            capitalLossNilConfirmed:
+              assessedCapitalLossBroughtForwardCentsNext == null ? false : capitalLossNilConfirmed,
           })
         }
       />
+      {capitalLossNilConfirmed ? (
+        <p className="irp6-note" data-nil-note="cgt">
+          {NIL_CONFIRMED_NOTE}
+        </p>
+      ) : null}
+      {locked ? null : (
+        <button
+          type="button"
+          className="irp6-back"
+          data-nil-mark="cgt"
+          onClick={() => {
+            const marked = markCapitalLossNil(
+              assessedCapitalLossBroughtForwardCents,
+              capitalLossNilConfirmed,
+            );
+            publish({
+              disposals: [...disposals],
+              assessedCapitalLossBroughtForwardCents: marked.cents,
+              capitalLossNilConfirmed: marked.confirmed,
+            });
+          }}
+        >
+          Mark remaining blanks as nil
+        </button>
+      )}
+      {locked || !capitalLossNilConfirmed ? null : (
+        <button
+          type="button"
+          className="irp6-back"
+          data-nil-undo="cgt"
+          onClick={() => {
+            const undone = undoCapitalLossNil(
+              assessedCapitalLossBroughtForwardCents,
+              capitalLossNilConfirmed,
+            );
+            publish({
+              disposals: [...disposals],
+              assessedCapitalLossBroughtForwardCents: undone.cents,
+              capitalLossNilConfirmed: undone.confirmed,
+            });
+          }}
+        >
+          Undo
+        </button>
+      )}
       {blank ? null : (
         <table className="irp6-table">
           <tbody>

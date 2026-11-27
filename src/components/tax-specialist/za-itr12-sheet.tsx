@@ -46,6 +46,13 @@ import {
   type Itr12WearDraft,
 } from "@/lib/tax-specialist/forms/itr12-schedules";
 import { wearIssueField } from "@/lib/tax-specialist/forms/itr14-allowances";
+import {
+  NIL_CONFIRMED_NOTE,
+  markBusinessNil,
+  markRentalNil,
+  undoBusinessNil,
+  undoRentalNil,
+} from "@/lib/tax-specialist/forms/nil-confirm";
 import { saveCatalogDraft } from "@/lib/tax-specialist/forms/pipeline";
 import { AssetDateInput } from "./asset-date-input";
 import { CgtSection } from "./za-cgt-section";
@@ -634,8 +641,32 @@ function LocalSchedules({
             Add a wear-and-tear asset
           </button>
         )}
+        {locked || !business ? null : (
+          <button
+            type="button"
+            className="irp6-back"
+            data-nil-mark="business"
+            onClick={() => saveBusiness(markBusinessNil(business))}
+          >
+            Mark remaining blanks as nil
+          </button>
+        )}
+        {locked || !business?.nilConfirmed?.length ? null : (
+          <button
+            type="button"
+            className="irp6-back"
+            data-nil-undo="business"
+            onClick={() => saveBusiness(undoBusinessNil(business))}
+          >
+            Undo
+          </button>
+        )}
         {worked?.notes.map((note) => (
-          <p key={note} className="irp6-note">
+          <p
+            key={note}
+            className="irp6-note"
+            data-nil-note={note === NIL_CONFIRMED_NOTE ? "business" : undefined}
+          >
             {note}
           </p>
         ))}
@@ -750,6 +781,33 @@ function LocalSchedules({
               <p className="irp6-note">
                 Net rental: {scheduleCents(workedProperty?.netCents ?? null)}
               </p>
+              {property.nilConfirmed?.length ? (
+                <p className="irp6-note" data-nil-note="rental">
+                  {NIL_CONFIRMED_NOTE}
+                </p>
+              ) : null}
+              {locked ? null : (
+                <button
+                  type="button"
+                  className="irp6-back"
+                  data-nil-mark="rental"
+                  data-nil-target={property.id}
+                  onClick={() => patchProperty(property.id, (current) => markRentalNil(current))}
+                >
+                  Mark remaining blanks as nil
+                </button>
+              )}
+              {locked || !property.nilConfirmed?.length ? null : (
+                <button
+                  type="button"
+                  className="irp6-back"
+                  data-nil-undo="rental"
+                  data-nil-target={property.id}
+                  onClick={() => patchProperty(property.id, (current) => undoRentalNil(current))}
+                >
+                  Undo
+                </button>
+              )}
               {locked ? null : (
                 <button
                   type="button"
@@ -1395,6 +1453,7 @@ export function ZaItr12Sheet({
         person="individual"
         disposals={inputs.disposals ?? []}
         assessedCapitalLossBroughtForwardCents={inputs.assessedCapitalLossBroughtForwardCents ?? null}
+        capitalLossNilConfirmed={inputs.capitalLossNilConfirmed === true}
         schedule={sheet.capital}
         locked={locked}
         onChange={(next) => edit(["result"], { ...inputs, ...next })}

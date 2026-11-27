@@ -10,6 +10,7 @@
  * A finished net capital loss is carried forward and is not included in
  * taxable income. The death-year exclusion is not applied.
  */
+import { NIL_CONFIRMED_NOTE } from "./nil-confirm.ts";
 
 export const CGT_BLANK_SCHEDULE = "A blank schedule is not zero";
 
@@ -193,6 +194,8 @@ export function capitalGainsSchedule(input: {
   yearOfAssessment: number;
   disposals: readonly CgtDisposal[];
   assessedCapitalLossBroughtForwardCents: number | null;
+  /** The brought-forward loss was blank and the accountant confirmed nil. */
+  broughtForwardNilConfirmed?: boolean;
 }): CgtSchedule | null {
   const started = input.disposals.filter(rowStarted);
   if (started.length === 0) return null;
@@ -220,8 +223,9 @@ export function capitalGainsSchedule(input: {
     ratesNote: null,
     notes: [],
   };
+  const nilNote = input.broughtForwardNilConfirmed ? [NIL_CONFIRMED_NOTE] : [];
   if (rows.some((row) => rowIncomplete(row, person)) || (brought != null && brought < 0)) {
-    return { ...base, incomplete: true, notes: [CGT_INCOMPLETE_NOTE] };
+    return { ...base, incomplete: true, notes: [CGT_INCOMPLETE_NOTE, ...nilNote] };
   }
 
   const aggregate = rows.reduce((sum, row) => sum + (row.gainCents ?? 0), 0);
@@ -297,7 +301,7 @@ export function capitalGainsSchedule(input: {
     includedInTaxableIncome,
     incomplete: false,
     ratesNote: cgtRatesNote(input.yearOfAssessment),
-    notes,
+    notes: [...notes, ...nilNote],
   };
 }
 
@@ -362,6 +366,14 @@ export function cgtCsvRows(schedule: CgtSchedule | null): string[][] {
       plain(schedule.carriedForwardCents),
       "Carried forward",
       CGT_LOSS_NOTE,
+    ]);
+  }
+  if (schedule.notes.includes(NIL_CONFIRMED_NOTE)) {
+    rows.push([
+      "Assessed capital loss brought forward",
+      plain(schedule.assessedCapitalLossBroughtForwardCents),
+      "Accountant",
+      NIL_CONFIRMED_NOTE,
     ]);
   }
   return rows;

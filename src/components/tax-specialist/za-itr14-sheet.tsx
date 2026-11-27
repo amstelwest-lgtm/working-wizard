@@ -21,6 +21,7 @@ import {
   type WearAsset,
   type WearSection,
 } from "@/lib/tax-specialist/forms/itr14-allowances";
+import { NIL_CONFIRMED_NOTE, markItr14AdjustmentsNil, undoItr14AdjustmentsNil } from "@/lib/tax-specialist/forms/nil-confirm";
 import { AssetDateInput } from "./asset-date-input";
 import {
   ITR14_FOOTER,
@@ -1031,6 +1032,7 @@ export function ZaItr14Sheet({
           person="company"
           disposals={inputs.disposals}
           assessedCapitalLossBroughtForwardCents={inputs.assessedCapitalLossBroughtForwardCents}
+          capitalLossNilConfirmed={inputs.capitalLossNilConfirmed === true}
           schedule={sheet.capital}
           locked={locked}
           onChange={(next) => patch(["adjustments"], next)}
@@ -1174,6 +1176,43 @@ export function ZaItr14Sheet({
             </tbody>
           </table>
         </div>
+        {inputs.nilConfirmed?.length ? (
+          <p className="irp6-note" data-nil-note="adjustments">
+            {NIL_CONFIRMED_NOTE}
+          </p>
+        ) : null}
+        {locked ? null : (
+          <button
+            type="button"
+            className="irp6-back"
+            data-nil-mark="adjustments"
+            onClick={() =>
+              patch(
+                ["adjustments"],
+                markItr14AdjustmentsNil(inputs, {
+                  depreciation:
+                    lineOf("depreciationAddBack")?.source === "books" ||
+                    lineOf("depreciationAddBack")?.source === "worked",
+                  wear:
+                    lineOf("wearAndTear")?.source === "books" ||
+                    lineOf("wearAndTear")?.source === "worked",
+                }),
+              )
+            }
+          >
+            Mark remaining blanks as nil
+          </button>
+        )}
+        {locked || !inputs.nilConfirmed?.length ? null : (
+          <button
+            type="button"
+            className="irp6-back"
+            data-nil-undo="adjustments"
+            onClick={() => patch(["adjustments"], undoItr14AdjustmentsNil(inputs))}
+          >
+            Undo
+          </button>
+        )}
       </section>
 
       <section className="irp6-section" data-itr14-section="it14sd">

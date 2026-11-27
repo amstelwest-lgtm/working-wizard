@@ -39,6 +39,13 @@ import {
 } from "../src/lib/tax-specialist/forms/itr12-schedules";
 import { wearSchedule, type WearAsset } from "../src/lib/tax-specialist/forms/itr14-allowances";
 import { taxFormSchema } from "../src/lib/tax-specialist/forms/pipeline";
+import {
+  NIL_CONFIRMED_NOTE,
+  markBusinessNil,
+  markRentalNil,
+  undoBusinessNil,
+  undoRentalNil,
+} from "../src/lib/tax-specialist/forms/nil-confirm";
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg);
@@ -289,6 +296,7 @@ assert(!owner.includes('data-itr12-add='), "the owner cannot type a figure");
 assert(!owner.includes("data-itr12-deduction-add"), "the owner cannot add a deduction");
 assert(!owner.includes("data-itr12-asset-add"), "the owner cannot add a wear-and-tear asset");
 assert(!owner.includes("data-itr12-rental-add"), "the owner cannot add a property");
+assert(!owner.includes("data-nil-mark="), "the owner cannot mark blanks as nil");
 assert(owner.includes("A blank schedule is not zero"), "the owner still sees a blank schedule");
 
 const sheetSrc = readFileSync("src/components/tax-specialist/za-itr12-sheet.tsx", "utf8");
@@ -517,6 +525,122 @@ assert(
   mixedAssetView.includes('data-itr12-wear-allowance="pc">R 12 000.00'),
   "the complete row still shows its allowance",
 );
+const nilBusiness = markBusinessNil({
+  ...businessInput,
+  grossIncomeCents: null,
+  deductions: [
+    { id: "kept", label: "Accounting fees", amountCents: 1_000_000 },
+    { id: "open", label: "Telephone", amountCents: null },
+  ],
+  homeOffice: {
+    amountCents: null,
+    specificallyEquipped: true,
+    regularlyAndExclusivelyUsed: true,
+  },
+  assets: [],
+  wearAndTearCents: null,
+});
+eq(nilBusiness.grossIncomeCents, 0, "a blank gross income becomes nil");
+eq(nilBusiness.deductions[0]?.amountCents, 1_000_000, "a typed deduction stays");
+eq(nilBusiness.deductions[1]?.amountCents, 0, "a blank deduction becomes nil");
+eq(nilBusiness.homeOffice?.amountCents, 0, "a blank home office amount becomes nil");
+eq(nilBusiness.wearAndTearCents, 0, "a blank wear-and-tear amount becomes nil");
+assert(nilBusiness.nilConfirmed?.includes("grossIncomeCents"), "the gross income blank is recorded");
+assert(!nilBusiness.nilConfirmed?.includes("deduction:kept"), "a typed deduction is not recorded as confirmed");
+const nilAgain = markBusinessNil(nilBusiness);
+eq(nilAgain.deductions[0]?.amountCents, 1_000_000, "marking again does not rewrite a typed figure");
+const nilUndone = undoBusinessNil(nilBusiness);
+eq(nilUndone.grossIncomeCents, null, "undo restores the blank gross income");
+eq(nilUndone.deductions[0]?.amountCents, 1_000_000, "undo leaves the typed deduction");
+eq(nilUndone.deductions[1]?.amountCents, null, "undo restores the blank deduction");
+eq(nilUndone.homeOffice?.amountCents, null, "undo restores the blank home office amount");
+eq(nilUndone.wearAndTearCents, null, "undo restores the blank wear-and-tear amount");
+eq(nilUndone.nilConfirmed?.length, 0, "undo clears the confirmation");
+const nilSchedule = businessSchedule(nilBusiness, yearStart, yearEnd);
+assert(nilSchedule?.notes.includes(NIL_CONFIRMED_NOTE), "the business schedule carries the nil note");
+const nilRental = markRentalNil({
+  id: "flat",
+  description: "Flat",
+  rentReceivedCents: 10_000_000,
+  ratesCents: null,
+  interestCents: 0,
+  insuranceCents: null,
+  repairsCents: null,
+  leviesCents: null,
+  agentFeesCents: null,
+  wearAndTearCents: null,
+  assets: [],
+  privateUsePercent: null,
+});
+eq(nilRental.rentReceivedCents, 10_000_000, "typed rent stays");
+eq(nilRental.interestCents, 0, "a typed zero stays a typed zero");
+eq(nilRental.ratesCents, 0, "a blank rate becomes nil");
+eq(nilRental.privateUsePercent, null, "private use stays blank");
+assert(!nilRental.nilConfirmed?.includes("rentReceivedCents"), "typed rent is not confirmed nil");
+assert(!nilRental.nilConfirmed?.includes("interestCents"), "a typed zero is not confirmed nil");
+assert(nilRental.nilConfirmed?.includes("ratesCents"), "the blank rate is confirmed nil");
+const rentalUndone = undoRentalNil(nilRental);
+eq(rentalUndone.ratesCents, null, "undo restores the blank rate");
+eq(rentalUndone.rentReceivedCents, 10_000_000, "undo leaves the typed rent");
+eq(rentalUndone.interestCents, 0, "undo leaves the typed zero");
+const nilSheet = computeItr12({
+  clientName: "Nicola Physio",
+  yearOfAssessment: 2026,
+  inputs: {
+    ...emptyItr12Inputs(),
+    business: nilBusiness,
+    rentals: [nilRental],
+    capitalLossNilConfirmed: true,
+    assessedCapitalLossBroughtForwardCents: 0,
+  },
+});
+assert(nilSheet.business?.notes.includes(NIL_CONFIRMED_NOTE), "the sheet business note is the confirmation");
+assert(nilSheet.rentals?.notes.includes(NIL_CONFIRMED_NOTE), "the sheet rental note is the confirmation");
+eq(nilSheet.rentals?.properties[0]?.nilNote, NIL_CONFIRMED_NOTE, "the rental row carries the note");
+const nilCsv = itr12Csv(nilSheet);
+assert(nilCsv.includes(NIL_CONFIRMED_NOTE), "the CSV carries the nil confirmation");
+assert(nilCsv.includes("Local business"), "the CSV names the business schedule");
+const nilView = renderToStaticMarkup(
+  createElement(ZaItr12Sheet, {
+    client: { id: "c1", name: "Nicola Physio" },
+    today: "2026-11-03",
+    drafts: [],
+    initialYear: 2026,
+    seed: {
+      ...emptyItr12Inputs(),
+      business: nilBusiness,
+      rentals: [nilRental],
+    },
+    onSaved: () => undefined,
+    onBack: () => undefined,
+  }),
+);
+assert(nilView.includes('data-nil-mark="business"'), "the business schedule has the nil button");
+assert(nilView.includes('data-nil-undo="business"'), "the business confirmation can be undone");
+assert(nilView.includes('data-nil-note="business"'), "the business sheet shows the nil note");
+assert(nilView.includes('data-nil-mark="rental"'), "each rental has the nil button");
+assert(nilView.includes('data-nil-note="rental"'), "the rental sheet shows the nil note");
+assert(nilView.includes(NIL_CONFIRMED_NOTE), "the sheet shows the confirmation sentence");
+const { renderToBuffer: renderNilPdf } = await import("@react-pdf/renderer");
+const { Itr12PDF: NilItr12PDF } = await import("../src/components/tax-specialist/za-itr12-pdf");
+const nilPdfBuf = await renderNilPdf(
+  createElement(NilItr12PDF, {
+    clientName: "Nicola Physio",
+    sheet: nilSheet,
+    approvedByName: null,
+    approvedAt: null,
+    preparedOn: "2026-11-03",
+  }) as Parameters<typeof renderNilPdf>[0],
+);
+const { getDocumentProxy: nilPdfProxy } = await import("unpdf");
+const nilPdfDoc = await nilPdfProxy(new Uint8Array(nilPdfBuf));
+let nilPdfText = "";
+for (let pageNumber = 1; pageNumber <= nilPdfDoc.numPages; pageNumber += 1) {
+  const page = await nilPdfDoc.getPage(pageNumber);
+  const content = await page.getTextContent();
+  nilPdfText += content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+}
+assert(nilPdfText.includes(NIL_CONFIRMED_NOTE), "the PDF carries the nil confirmation");
 
 function rental(id: string, description: string, privateUsePercent: number, amounts: number[]): Itr12RentalProperty {
   const [rent, rates, interest, insurance, repairs, levies, agent, wear] = amounts;

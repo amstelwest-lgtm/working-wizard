@@ -8,6 +8,7 @@ import { MilonMark } from "@/components/pdf/glyphs";
 import { C } from "@/components/pdf/theme";
 import { zaToday } from "@/lib/tax-specialist/forms/irp6";
 import { CGT_BLANK_SCHEDULE } from "@/lib/tax-specialist/forms/cgt";
+import { NIL_CONFIRMED_NOTE } from "@/lib/tax-specialist/forms/nil-confirm";
 import {
   ITR12_FOOTER,
   ITR12_SECTIONS,
@@ -301,6 +302,9 @@ function CapitalSection({ sheet }: { sheet: Itr12Sheet }) {
       ) : (
         <Text style={S.note}>{CGT_BLANK_SCHEDULE}</Text>
       )}
+      {sheet.capitalLossNilConfirmed && !capital?.notes.includes(NIL_CONFIRMED_NOTE) ? (
+        <Text style={S.note}>{NIL_CONFIRMED_NOTE}</Text>
+      ) : null}
     </View>
   );
 }
