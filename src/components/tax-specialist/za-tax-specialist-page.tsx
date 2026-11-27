@@ -45,6 +45,7 @@ import { loadItr12Open } from "@/lib/tax-specialist/forms/itr12-load";
 import type { Itr12Inputs } from "@/lib/tax-specialist/forms/itr12";
 import { loadIrp6IndividualOpen } from "@/lib/tax-specialist/forms/irp6-individual-load";
 import type { Irp6IndividualInputs } from "@/lib/tax-specialist/forms/irp6-individual";
+import { ZaDtrSheet } from "./za-dtr-sheet";
 import { ZaIrp6IndividualSheet } from "./za-irp6-individual-sheet";
 import { ZaIrp6Sheet, type Irp6SheetClient } from "./za-irp6-sheet";
 import { ZaItr12Sheet } from "./za-itr12-sheet";
@@ -129,7 +130,21 @@ function Workings() {
   );
 }
 
-function FormGallery({ onOpen }: { onOpen?: (form: TaxFormEntry) => void }) {
+function FormGallery({
+  onOpen,
+  onOpenDtr,
+}: {
+  onOpen?: (form: TaxFormEntry) => void;
+  onOpenDtr?: () => void;
+}) {
+  const dtr = (
+    <>
+      <span className="tax-page-form-code">DTR01 / DTR02</span>
+      <span className="tax-page-form-name">Dividends tax draft</span>
+      <span className="tax-page-form-when">Each dividend paid</span>
+      <span className="tax-page-form-status is-ready">Ready to prepare</span>
+    </>
+  );
   return (
     <ul className="tax-page-forms">
       {TAX_FORM_GALLERY.map((form) => {
@@ -167,6 +182,15 @@ function FormGallery({ onOpen }: { onOpen?: (form: TaxFormEntry) => void }) {
           </li>
         );
       })}
+      <li data-tax-form="DTR" data-tax-form-code="DTR" data-tax-form-status="ready">
+        {onOpenDtr ? (
+          <button type="button" className="tax-page-form is-open" onClick={onOpenDtr}>
+            {dtr}
+          </button>
+        ) : (
+          <div className="tax-page-form">{dtr}</div>
+        )}
+      </li>
     </ul>
   );
 }
@@ -191,6 +215,7 @@ export function ZaTaxSpecialistPage({
   const clientId = client?.id ?? null;
   const [drafts, setDrafts] = useState<TaxFormDraft[] | null>(clientId ? null : []);
   const [open, setOpen] = useState<TaxFormCode | null>(null);
+  const [dtrOpen, setDtrOpen] = useState(false);
   const [itr12, setItr12] = useState<{ year: number; seed: Itr12Inputs | null } | null>(null);
   const [individual, setIndividual] = useState<{
     year: number;
@@ -213,7 +238,17 @@ export function ZaTaxSpecialistPage({
     setDrafts((prev) => applySavedDraft(prev ?? [], row));
   }, []);
 
+  const openDtr = () => {
+    if (!client) return;
+    setIndividual(null);
+    setItr12(null);
+    setOpen(null);
+    setDtrOpen(true);
+    document.querySelector("[data-tax-page]")?.scrollIntoView({ block: "start" });
+  };
+
   const openForm = (form: TaxFormEntry) => {
+    setDtrOpen(false);
     if (form.galleryId === "IRP6-individual" && client && drafts) {
       void loadIrp6IndividualOpen(client.id, drafts, day).then((next) => {
         setIndividual(next);
@@ -250,6 +285,19 @@ export function ZaTaxSpecialistPage({
         .slice(0, ACTIVITY_CAP),
     [activity, drafts],
   );
+
+  if (dtrOpen && client) {
+    return (
+      <div className="tax-page" data-tax-page="true" data-tax-open-form="DTR">
+        <ZaDtrSheet
+          key={client.id}
+          client={{ id: client.id, name: client.name }}
+          backLabel="All SARS forms"
+          onBack={() => setDtrOpen(false)}
+        />
+      </div>
+    );
+  }
 
   if (individual && client && drafts) {
     return (
@@ -335,7 +383,10 @@ export function ZaTaxSpecialistPage({
   return (
     <div className="tax-page" data-tax-page="true">
       <AgentSection section="forms" data-tax-section="forms">
-        <FormGallery onOpen={client || onOpenForm ? openForm : undefined} />
+        <FormGallery
+          onOpen={client || onOpenForm ? openForm : undefined}
+          onOpenDtr={client ? openDtr : undefined}
+        />
       </AgentSection>
       {client ? null : <Workings />}
       <AgentSection section="deadlines" data-tax-section="deadlines">

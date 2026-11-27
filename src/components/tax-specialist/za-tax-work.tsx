@@ -27,6 +27,7 @@ import {
 } from "@/lib/tax-specialist/forms/irp6-individual";
 import { itr14DefaultYear } from "@/lib/tax-specialist/forms/itr14";
 import { irp6DefaultPick, zaToday, type Irp6Period } from "@/lib/tax-specialist/forms/irp6";
+import { ZaDtrSheet } from "./za-dtr-sheet";
 import { ZaIrp6Sheet } from "./za-irp6-sheet";
 import { ZaIrp6IndividualSheet } from "./za-irp6-individual-sheet";
 import { ZaItr12Sheet } from "./za-itr12-sheet";
@@ -86,6 +87,7 @@ export function TaxWorkBoard({
   onOpenItr12,
   onPrepareItr14,
   onOpenItr14,
+  onPrepareDtr = () => undefined,
   preparingItr12 = false,
   preparingIrp6Individual = false,
 }: {
@@ -99,6 +101,7 @@ export function TaxWorkBoard({
   onOpenItr12: (draft: TaxFormDraft) => void;
   onPrepareItr14: () => void;
   onOpenItr14: (draft: TaxFormDraft) => void;
+  onPrepareDtr?: () => void;
   preparingItr12?: boolean;
   preparingIrp6Individual?: boolean;
 }) {
@@ -143,6 +146,14 @@ export function TaxWorkBoard({
             >
               {preparingItr12 ? "Preparing ITR12…" : "Prepare ITR12"}
             </button>
+            <button
+              type="button"
+              className="tax-work-prepare"
+              data-tax-work-prepare="DTR"
+              onClick={onPrepareDtr}
+            >
+              Prepare dividends tax
+            </button>
           </div>
         </div>
         {current.length === 0 ? (
@@ -150,7 +161,7 @@ export function TaxWorkBoard({
             id="tax-drafts-empty"
             dashed
             title="No tax form drafts yet"
-            description="Prepare a company IRP6, an ITR14, an individual IRP6, or an ITR12 when you are ready. A new save keeps the earlier version."
+            description="Prepare a company IRP6, an ITR14, an individual IRP6, an ITR12, or a dividends tax draft when you are ready. A new save keeps the earlier version."
           />
         ) : (
           <table className="tax-work-table">
@@ -264,6 +275,7 @@ export function ZaTaxWork({ client }: { client: TaxWorkClient }) {
     seed: Irp6IndividualInputs | null;
   } | null>(null);
   const [itr14Year, setItr14Year] = useState<number | null>(null);
+  const [dtrOpen, setDtrOpen] = useState(false);
   const [preparingItr12, setPreparingItr12] = useState(false);
   const [preparingIndividual, setPreparingIndividual] = useState(false);
 
@@ -300,6 +312,17 @@ export function ZaTaxWork({ client }: { client: TaxWorkClient }) {
       .then((next) => setIndividual(next))
       .finally(() => setPreparingIndividual(false));
   };
+
+  if (dtrOpen) {
+    return (
+      <ZaDtrSheet
+        key={client.id}
+        client={{ id: client.id, name: client.name }}
+        backLabel="Tax drafts"
+        onBack={() => setDtrOpen(false)}
+      />
+    );
+  }
 
   if (individual && drafts) {
     return (
@@ -395,6 +418,7 @@ export function ZaTaxWork({ client }: { client: TaxWorkClient }) {
           onOpenItr12={(row) => setItr12({ year: row.tax_year, seed: null })}
           onPrepareItr14={() => setItr14Year(itr14DefaultYear(zaToday(), client.fyStartMonth))}
           onOpenItr14={(row) => setItr14Year(row.tax_year)}
+          onPrepareDtr={() => setDtrOpen(true)}
           packs={<TaxPackPanel clientId={client.id} sendId={sendId} showWhenEmpty />}
         />
       )}
