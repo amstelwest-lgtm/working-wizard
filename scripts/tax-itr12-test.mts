@@ -41,7 +41,7 @@ import {
   type Itr12BusinessInput,
   type Itr12RentalProperty,
 } from "../src/lib/tax-specialist/forms/itr12-schedules";
-import { assetFieldIssue, wearSchedule, type WearAsset } from "../src/lib/tax-specialist/forms/itr14-allowances";
+import { ASSET_NEEDS_COST, assetFieldIssue, wearSchedule, type WearAsset } from "../src/lib/tax-specialist/forms/itr14-allowances";
 import { NIL_CONFIRMED_NOTE } from "../src/lib/tax-specialist/forms/nil-mark";
 import { taxFormSchema } from "../src/lib/tax-specialist/forms/pipeline";
 
@@ -811,7 +811,12 @@ const badDateAsset = {
   costCents: 10_000,
   broughtIntoUse: "2025-02-31",
 };
-eq(assetFieldIssue(clearedAsset)?.field, "cost", "a cleared cost belongs beside cost");
+eq(assetFieldIssue(clearedAsset)?.message, ASSET_NEEDS_COST, "a cleared cost on a started row names the cost");
+eq(
+  assetFieldIssue({ ...clearedAsset, description: "", broughtIntoUse: "", category: "" }),
+  null,
+  "an untouched asset stays silent",
+);
 eq(
   assetFieldIssue(badDateAsset)?.message,
   "Date brought into use must be a real date.",
@@ -842,13 +847,79 @@ assert(assetView.includes('data-asset-row="cleared"'), "a cleared-cost asset row
 assert(assetView.includes('data-asset-row="baddate"'), "a bad-date asset row stays");
 assert(
   assetView.includes('data-asset-field-issue="cost"') &&
-    assetView.includes("Cost must be a nil or positive amount."),
+    assetView.includes(ASSET_NEEDS_COST),
   "the cleared cost message sits beside the cost field",
 );
+assert(
+  assetView.includes('data-itr12-blank-line="Wear-and-tear"') &&
+    assetView.includes("Wear-and-tear: Blank"),
+  "a cleared cost leaves the wear total blank",
+);
+assert(!readFileSync("src/components/tax-specialist/za-itr12-sheet.tsx", "utf8").includes("s12C "), "the s12C option has no trailing space");
 assert(
   assetView.includes('data-asset-field-issue="date"') &&
     assetView.includes("Date brought into use must be a real date."),
   "the bad date message sits beside the date field",
+);
+
+const { Window } = await import("happy-dom");
+const costDom = new Window({
+  url: "http://127.0.0.1:5000/clients/qa",
+  settings: { disableCSSFileLoading: true },
+});
+for (const key of ["window", "document", "navigator", "HTMLElement", "HTMLInputElement", "Node", "Element", "Document", "Event"] as const) {
+  Object.defineProperty(globalThis, key, { configurable: true, writable: true, value: costDom[key as keyof typeof costDom] });
+}
+Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", { configurable: true, writable: true, value: true });
+const { act } = await import("react");
+const { createRoot } = await import("react-dom/client");
+const costHost = document.createElement("div");
+document.body.appendChild(costHost);
+const costRoot = createRoot(costHost);
+await act(async () => {
+  costRoot.render(
+    createElement(ZaItr12Sheet, {
+      client: { id: "c1", name: "Nicola Physio" },
+      today: "2026-11-03",
+      drafts: [],
+      initialYear: 2026,
+      onSaved: () => undefined,
+      onBack: () => undefined,
+    }),
+  );
+});
+await act(async () => {
+  document.querySelector<HTMLButtonElement>("[data-itr12-asset-add]")?.click();
+});
+const freshCost = document.querySelector<HTMLInputElement>('[data-itr12-entry="asset-cost"]');
+assert(freshCost, "a new asset has a cost field");
+assert(
+  !freshCost.closest("fieldset")?.textContent?.includes(ASSET_NEEDS_COST),
+  "an untouched cost field stays silent",
+);
+const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+assert(setValue, "the cost input value can be set");
+const typeCost = async (input: HTMLInputElement, next: string) => {
+  await act(async () => {
+    input.focus();
+    setValue.call(input, next);
+    const tracked = input as HTMLInputElement & { _valueTracker?: { setValue: (value: string) => void } };
+    tracked._valueTracker?.setValue(next === "" ? "x" : "");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    input.blur();
+  });
+};
+await typeCost(freshCost, "1000");
+const afterType = document.querySelector<HTMLInputElement>('[data-itr12-entry="asset-cost"]');
+await typeCost(afterType!, "");
+const clearedRow = document.querySelector("[data-asset-row]");
+assert(clearedRow, "clearing the cost keeps the asset row");
+assert(clearedRow.textContent?.includes(ASSET_NEEDS_COST), "clearing a typed cost shows the cost message");
+assert(
+  document.body.textContent?.includes("Wear-and-tear: Blank"),
+  "clearing a typed cost does not turn wear into zero",
 );
 
 console.log("tax-itr12 ok");

@@ -49,7 +49,7 @@ import {
   undoItr12BusinessNil,
   undoItr12RentalNil,
 } from "@/lib/tax-specialist/forms/itr12-schedules";
-import { assetFieldIssue } from "@/lib/tax-specialist/forms/itr14-allowances";
+import { ASSET_NEEDS_COST, assetFieldIssue } from "@/lib/tax-specialist/forms/itr14-allowances";
 import { NIL_CONFIRMED_NOTE } from "@/lib/tax-specialist/forms/nil-mark";
 import { saveCatalogDraft } from "@/lib/tax-specialist/forms/pipeline";
 import { AssetDateInput } from "./asset-date-input";
@@ -122,6 +122,8 @@ function BlurAmount({
   label,
   disabled,
   entry,
+  issue,
+  emptyMessage,
   onCommit,
 }: {
   id: string;
@@ -129,15 +131,22 @@ function BlurAmount({
   label: string;
   disabled: boolean;
   entry: string;
+  /** Stored-field message. Clearing a typed amount uses emptyMessage. */
+  issue?: string;
+  emptyMessage?: string;
   onCommit: (cents: number | null) => void;
 }) {
   const [text, setText] = useState(centsText(value));
   const [bad, setBad] = useState(false);
+  const [cleared, setCleared] = useState(false);
   const focused = useRef(false);
+  const sawText = useRef(false);
   useEffect(() => {
     if (!focused.current) setText(centsText(value));
   }, [value]);
+  const message = issue || (cleared && emptyMessage ? emptyMessage : "");
   return (
+    <>
     <span className="irp6-amount">
       <span aria-hidden="true">R</span>
       <input
@@ -156,12 +165,19 @@ function BlurAmount({
         onChange={(event) => {
           setText(event.target.value);
           setBad(false);
+          if (event.target.value.trim()) {
+            sawText.current = true;
+            setCleared(false);
+          } else if (sawText.current) {
+            setCleared(true);
+          }
         }}
         onBlur={() => {
           focused.current = false;
           if (!text.trim()) {
             setBad(false);
             setText("");
+            setCleared(sawText.current);
             if (value != null) onCommit(null);
             return;
           }
@@ -176,6 +192,12 @@ function BlurAmount({
         }}
       />
     </span>
+    {message ? (
+      <span className="irp6-field-error" data-asset-field-issue="cost">
+        {message}
+      </span>
+    ) : null}
+    </>
   );
 }
 
@@ -496,6 +518,8 @@ function LocalSchedules({
                   label="Cost"
                   disabled={locked}
                   value={asset.costCents}
+                  issue={issueOn("cost")}
+                  emptyMessage={ASSET_NEEDS_COST}
                   onCommit={(costCents) =>
                     patchBusiness((current) => ({
                       ...current,
@@ -505,11 +529,6 @@ function LocalSchedules({
                     }))
                   }
                 />
-                {issueOn("cost") ? (
-                  <span className="irp6-field-error" data-asset-field-issue="cost">
-                    {issueOn("cost")}
-                  </span>
-                ) : null}
               </label>
               <AssetDateInput
                 id={`itr12-asset-date-${asset.id}`}
@@ -570,7 +589,7 @@ function LocalSchedules({
                   }
                 >
                   <option value="s11e">s11(e)</option>
-                  <option value="s12c">s12C </option>
+                  <option value="s12c">s12C</option>
                 </select>
                 {issueOn("section") ? (
                   <span className="irp6-field-error" data-asset-field-issue="section">
