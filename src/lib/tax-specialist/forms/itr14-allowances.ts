@@ -631,9 +631,34 @@ export function wearSchedule(
   };
 }
 
+export const ASSET_NEEDS_COST = "An asset needs a cost.";
+
+function assetRowStarted(asset: {
+  description: string;
+  broughtIntoUse: string;
+  category: string;
+  additionCents?: number | null;
+  additionDate?: string | null;
+  disposalDate?: string | null;
+  proceedsCents?: number | null;
+  bookDepreciationCents?: number | null;
+}): boolean {
+  return Boolean(
+    asset.description.trim() ||
+      asset.broughtIntoUse.trim() ||
+      asset.category.trim() ||
+      asset.additionCents != null ||
+      asset.additionDate ||
+      asset.disposalDate ||
+      asset.proceedsCents != null ||
+      asset.bookDepreciationCents != null,
+  );
+}
+
 /**
  * The first check a register row fails, and the field it belongs beside.
- * A cleared cost and a bad date fail here. The row itself is not removed.
+ * A row that has never been typed stays silent. A started row with a blank
+ * cost names that field. The row itself is not removed.
  */
 export function assetFieldIssue(asset: {
   description: string;
@@ -648,6 +673,8 @@ export function assetFieldIssue(asset: {
   proceedsCents?: number | null;
   bookDepreciationCents?: number | null;
 }): { field: string; message: string } | null {
+  if (!assetRowStarted(asset)) return null;
+  if (asset.costCents == null) return { field: "cost", message: ASSET_NEEDS_COST };
   const message = assetProblem({
     id: "draft",
     description: asset.description,

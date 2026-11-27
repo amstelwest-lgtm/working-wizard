@@ -13,6 +13,7 @@ import {
   ASSESSED_LOSS_FLOOR_CENTS,
   assessedLossWorking,
   importWearAssets,
+  ASSET_NEEDS_COST,
   wearIssueField,
   wearSchedule,
   type WearAsset,
@@ -1239,13 +1240,55 @@ assert(assetIssues.includes('data-itr14-wear-row="cleared"'), "a cleared-cost as
 assert(assetIssues.includes('data-itr14-wear-row="baddate"'), "a bad-date asset row stays");
 assert(
   assetIssues.includes('data-asset-field-issue="cost"') &&
-    assetIssues.includes("Cost must be a nil or positive amount."),
+    assetIssues.includes(ASSET_NEEDS_COST),
   "the cleared cost message sits beside the cost field",
+);
+assert(
+  assetIssues.includes('data-itr14-wear-allowance=""'),
+  "a cleared cost leaves that asset's allowance blank",
 );
 assert(
   assetIssues.includes('data-asset-field-issue="date"') &&
     assetIssues.includes("Date brought into use must be a real date."),
   "the bad date message sits beside the date field",
+);
+
+await act(async () => {
+  document.querySelector<HTMLButtonElement>('[data-itr14-add-asset="true"]')?.click();
+});
+const freshItr14Cost = document.querySelector<HTMLInputElement>('input[id^="itr14-asset-"][id$="-cost"]');
+assert(freshItr14Cost, "a new ITR14 asset has a cost field");
+assert(
+  !freshItr14Cost.closest("fieldset")?.textContent?.includes(ASSET_NEEDS_COST),
+  "an untouched ITR14 cost field stays silent",
+);
+const setItr14Value = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+assert(setItr14Value, "the ITR14 cost input value can be set");
+const typeItr14Cost = async (input: HTMLInputElement, next: string) => {
+  await act(async () => {
+    input.focus();
+    setItr14Value.call(input, next);
+    const tracked = input as HTMLInputElement & { _valueTracker?: { setValue: (value: string) => void } };
+    tracked._valueTracker?.setValue(next === "" ? "x" : "");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    input.blur();
+  });
+};
+await typeItr14Cost(freshItr14Cost, "1000");
+const typedItr14Cost = document.querySelector<HTMLInputElement>('input[id^="itr14-asset-"][id$="-cost"]');
+assert(typedItr14Cost, "the cost field stays after typing");
+await typeItr14Cost(typedItr14Cost, "");
+const clearedItr14 = document.querySelector("[data-itr14-asset]");
+assert(clearedItr14, "clearing the cost keeps the ITR14 asset row");
+assert(
+  clearedItr14.textContent?.includes(ASSET_NEEDS_COST),
+  "clearing a typed ITR14 cost shows the cost message",
+);
+assert(
+  !document.querySelector("[data-itr14-wear-allowance]")?.textContent?.includes("0.00"),
+  "clearing a typed cost does not turn the allowance into zero",
 );
 
 console.log("acceptance wear-and-tear cents", schedule?.wearAndTearCents);

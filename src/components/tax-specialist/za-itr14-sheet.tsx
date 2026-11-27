@@ -3,7 +3,7 @@
  * sections, sources, accountant approval, then a PDF and CSV capture sheet.
  * The owner cannot approve. Nothing is emailed and nothing is filed.
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   TAX_FORM_DRAFT_STATUS_LABEL,
   currentApprover,
@@ -17,6 +17,7 @@ import {
   type Irp6Client,
 } from "@/lib/tax-specialist/forms/irp6";
 import {
+  ASSET_NEEDS_COST,
   assetFieldIssue,
   type WearAsset,
   type WearSection,
@@ -73,22 +74,30 @@ function AmountInput({
   onChange,
   label,
   disabled,
+  issue,
+  emptyMessage,
 }: {
   id: string;
   value: number | null;
   onChange: (cents: number | null) => void;
   label: string;
   disabled?: boolean;
+  issue?: string;
+  emptyMessage?: string;
 }) {
   const [text, setText] = useState(centsText(value));
   const [bad, setBad] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [cleared, setCleared] = useState(false);
+  const sawText = useRef(false);
   useEffect(() => {
     if (focused) return;
     const next = centsText(value);
     setText((current) => (parseRandsToCents(current) === value ? current : next));
   }, [value, focused]);
+  const message = issue || (cleared && emptyMessage ? emptyMessage : "");
   return (
+    <>
     <span className="irp6-amount">
       <span aria-hidden="true">R</span>
       <input
@@ -110,10 +119,22 @@ function AmountInput({
           setText(next);
           const cents = parseRandsToCents(next);
           setBad(next.trim() !== "" && cents == null);
+          if (next.trim()) {
+            sawText.current = true;
+            setCleared(false);
+          } else if (sawText.current) {
+            setCleared(true);
+          }
           onChange(next.trim() === "" ? null : cents);
         }}
       />
     </span>
+    {message ? (
+      <span className="irp6-field-error" data-asset-field-issue="cost">
+        {message}
+      </span>
+    ) : null}
+    </>
   );
 }
 
@@ -889,13 +910,10 @@ export function ZaItr14Sheet({
                         id={`itr14-asset-${asset.id}-cost`}
                         label="Cost"
                         value={asset.costCents}
+                        issue={issueOn("cost")}
+                        emptyMessage={ASSET_NEEDS_COST}
                         onChange={(cents) => updateAsset(asset.id, { costCents: cents })}
                       />
-                      {issueOn("cost") ? (
-                        <span className="irp6-field-error" data-asset-field-issue="cost">
-                          {issueOn("cost")}
-                        </span>
-                      ) : null}
                     </label>
                     <AssetDateInput
                       id={`itr14-asset-${asset.id}-date`}

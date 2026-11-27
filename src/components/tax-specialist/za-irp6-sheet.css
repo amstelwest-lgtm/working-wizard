@@ -364,6 +364,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  margin-inline-start: 0.4em;
   width: 100%;
   max-width: 200px;
   color: #486581;
