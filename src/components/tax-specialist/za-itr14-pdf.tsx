@@ -8,6 +8,7 @@ import { MilonMark } from "@/components/pdf/glyphs";
 import { C } from "@/components/pdf/theme";
 import { zaToday } from "@/lib/tax-specialist/forms/irp6";
 import { CGT_BLANK_SCHEDULE } from "@/lib/tax-specialist/forms/cgt";
+import { NIL_CONFIRMED_NOTE } from "@/lib/tax-specialist/forms/nil-mark";
 import { ITR14_FOOTER, ITR14_SECTIONS, type Itr14Sheet } from "@/lib/tax-specialist/forms/itr14";
 import { formatSampleCents, formatSampleDate } from "@/lib/tax-specialist/sample-compute";
 
@@ -221,6 +222,9 @@ function CapitalSection({ sheet }: { sheet: Itr14Sheet }) {
       ) : (
         <Text style={S.note}>{CGT_BLANK_SCHEDULE}</Text>
       )}
+      {sheet.assessedCapitalLossNilNote ? (
+        <Text style={S.note}>{pdfText(sheet.assessedCapitalLossNilNote)}</Text>
+      ) : null}
     </View>
   );
 }
@@ -269,6 +273,9 @@ export function Itr14PDF({
         {ITR14_SECTIONS.map((section) => (
           <View key={section.id} style={S.section}>
             <Text style={S.sectionTitle}>{section.title}</Text>
+            {section.id === "adjustments" && sheet.adjustmentNilNote ? (
+              <Text style={S.note}>{pdfText(NIL_CONFIRMED_NOTE)}</Text>
+            ) : null}
             {section.id === "queries" ? (
               sheet.queries.length ? (
                 sheet.queries.map((query) => (

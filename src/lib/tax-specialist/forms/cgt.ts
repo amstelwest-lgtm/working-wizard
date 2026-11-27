@@ -10,6 +10,7 @@
  * A finished net capital loss is carried forward and is not included in
  * taxable income. The death-year exclusion is not applied.
  */
+import { rememberNilKey, type NilMark } from "./nil-mark.ts";
 
 export const CGT_BLANK_SCHEDULE = "A blank schedule is not zero";
 
@@ -18,6 +19,31 @@ export const CGT_UNSIGNED_NOTE =
 
 export const CGT_LOSS_NOTE =
   "A net capital loss is carried forward and is not included in taxable income.";
+
+const ASSESSED_LOSS_NIL_KEY = "assessedCapitalLossBroughtForwardCents";
+
+/** Sets the brought-forward loss to 0 only when it is still blank. */
+export function markAssessedCapitalLossNil(
+  cents: number | null,
+  mark: NilMark | null | undefined,
+): { cents: number | null; mark: NilMark } {
+  let keys = [...(mark?.keys ?? [])];
+  let next = cents;
+  if (next == null) {
+    next = 0;
+    keys = rememberNilKey({ keys }, ASSESSED_LOSS_NIL_KEY);
+  }
+  return { cents: next, mark: { keys } };
+}
+
+/** Puts the brought-forward loss back to blank when this button set it. */
+export function undoAssessedCapitalLossNil(
+  cents: number | null,
+  mark: NilMark | null | undefined,
+): { cents: number | null; mark: null } {
+  const restore = (mark?.keys ?? []).includes(ASSESSED_LOSS_NIL_KEY);
+  return { cents: restore ? null : cents, mark: null };
+}
 
 export const CGT_INCOMPLETE_NOTE =
   "A disposal is missing a figure, so the totals stay blank. A blank is not zero.";

@@ -33,11 +33,16 @@ import {
 import {
   RENTAL_GAP_PROMPTS,
   businessSchedule,
+  markItr12BusinessNil,
+  markItr12RentalNil,
   rentalSchedule,
+  undoItr12BusinessNil,
+  undoItr12RentalNil,
   type Itr12BusinessInput,
   type Itr12RentalProperty,
 } from "../src/lib/tax-specialist/forms/itr12-schedules";
-import { wearSchedule, type WearAsset } from "../src/lib/tax-specialist/forms/itr14-allowances";
+import { assetFieldIssue, wearSchedule, type WearAsset } from "../src/lib/tax-specialist/forms/itr14-allowances";
+import { NIL_CONFIRMED_NOTE } from "../src/lib/tax-specialist/forms/nil-mark";
 import { taxFormSchema } from "../src/lib/tax-specialist/forms/pipeline";
 
 function assert(cond: unknown, msg: string): asserts cond {
@@ -683,5 +688,167 @@ assert(scheduledView.includes('data-itr12-business="filled"'), "the sheet shows 
 assert(scheduledView.includes('data-itr12-rental="filled"'), "the sheet shows the rental schedule");
 assert(scheduledView.includes("R 171 000.00"), "the sheet shows the business net");
 assert(scheduledView.includes("not signed off"), "the sheet says what is not signed off");
+
+const nilBusiness: Itr12BusinessInput = {
+  grossIncomeCents: 25_000,
+  deductions: [{ id: "phone", label: "Phone", amountCents: 5_000 }],
+  homeOffice: null,
+  assets: [],
+  wearAndTearCents: null,
+  ringFenceS20A: null,
+};
+const markedBusiness = markItr12BusinessNil(nilBusiness);
+eq(markedBusiness.grossIncomeCents, 25_000, "a typed business gross stays");
+eq(markedBusiness.deductions[0]?.amountCents, 5_000, "a typed deduction stays");
+eq(markedBusiness.wearAndTearCents, 0, "a blank wear line becomes 0");
+assert(
+  businessSchedule(markedBusiness, yearStart, yearEnd)?.notes.includes(NIL_CONFIRMED_NOTE),
+  "the business schedule carries the nil note",
+);
+const undoneBusiness = undoItr12BusinessNil(markedBusiness);
+eq(undoneBusiness.wearAndTearCents, null, "undo puts the wear line back to blank");
+eq(undoneBusiness.grossIncomeCents, 25_000, "undo leaves the typed gross");
+eq(undoneBusiness.deductions[0]?.amountCents, 5_000, "undo leaves the typed deduction");
+eq(undoneBusiness.nilMark, null, "undo clears the business nil mark");
+assert(
+  !businessSchedule(undoneBusiness, yearStart, yearEnd)?.notes.includes(NIL_CONFIRMED_NOTE),
+  "undo removes the business nil note",
+);
+const blankMarked = markItr12BusinessNil({
+  grossIncomeCents: null,
+  deductions: [],
+  homeOffice: null,
+  assets: [],
+  wearAndTearCents: null,
+  ringFenceS20A: null,
+});
+eq(blankMarked.grossIncomeCents, 0, "a blank gross becomes 0");
+eq(blankMarked.wearAndTearCents, 0, "a blank wear line becomes 0");
+
+const markedRental = markItr12RentalNil(qaProperty);
+eq(markedRental.rentReceivedCents, qaProperty.rentReceivedCents, "typed rent stays");
+eq(markedRental.repairsCents, qaProperty.repairsCents, "typed repairs stay");
+eq(markedRental.ratesCents, 0, "blank rates become 0");
+eq(markedRental.privateUsePercent, 0, "blank private use becomes 0");
+assert(
+  rentalSchedule([markedRental], yearStart, yearEnd)?.properties[0]?.nilConfirmed === true,
+  "the rental schedule carries the nil note",
+);
+const undoneRental = undoItr12RentalNil(markedRental);
+eq(undoneRental.ratesCents, null, "undo puts rates back to blank");
+eq(undoneRental.privateUsePercent, null, "undo puts private use back to blank");
+eq(undoneRental.rentReceivedCents, qaProperty.rentReceivedCents, "undo leaves typed rent");
+eq(undoneRental.repairsCents, qaProperty.repairsCents, "undo leaves typed repairs");
+assert(
+  rentalSchedule([undoneRental], yearStart, yearEnd)?.properties[0]?.nilConfirmed === false,
+  "undo removes the rental nil note",
+);
+
+const nilInputs: Itr12Inputs = {
+  ...emptyItr12Inputs(),
+  business: markedBusiness,
+  rentals: [markedRental],
+};
+const nilSheet = computeItr12({
+  clientName: "Nicola Physio",
+  yearOfAssessment: 2026,
+  inputs: nilInputs,
+});
+const nilCsv = itr12Csv(nilSheet);
+assert(nilCsv.includes(NIL_CONFIRMED_NOTE), "the CSV carries the nil note");
+assert(nilCsv.split(NIL_CONFIRMED_NOTE).length >= 3, "business and rental each carry the nil note");
+const nilPdf = await renderToBuffer(
+  createElement(Itr12PDF, {
+    clientName: "Nicola Physio",
+    sheet: nilSheet,
+    approvedByName: null,
+    approvedAt: null,
+    preparedOn: "2026-11-03",
+  }) as Parameters<typeof renderToBuffer>[0],
+);
+const nilDoc = await getDocumentProxy(new Uint8Array(nilPdf));
+let nilPdfText = "";
+for (let pageNumber = 1; pageNumber <= nilDoc.numPages; pageNumber += 1) {
+  const page = await nilDoc.getPage(pageNumber);
+  const content = await page.getTextContent();
+  nilPdfText += content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+}
+assert(nilPdfText.includes(NIL_CONFIRMED_NOTE), "the PDF carries the nil note");
+const nilView = renderToStaticMarkup(
+  createElement(ZaItr12Sheet, {
+    client: { id: "c1", name: "Nicola Physio" },
+    today: "2026-11-03",
+    drafts: [],
+    initialYear: 2026,
+    seed: nilInputs,
+    onSaved: () => undefined,
+    onBack: () => undefined,
+  }),
+);
+assert(nilView.includes('data-nil-note="itr12-business"'), "the business sheet shows the nil note");
+assert(nilView.includes('data-nil-blanks="itr12-business"'), "the business sheet has the nil button");
+assert(nilView.includes('data-nil-undo="itr12-business"'), "the business nil mark can be undone");
+
+const clearedAsset = {
+  id: "cleared",
+  description: "Chair",
+  costCents: null,
+  broughtIntoUse: "2025-03-01",
+  category: "Office equipment",
+  section: "s11e" as const,
+  privateUsePercent: 0,
+  newAndUnused: false,
+  additionCents: null,
+  additionDate: null,
+  disposalDate: null,
+  proceedsCents: null,
+  bookDepreciationCents: null,
+};
+const badDateAsset = {
+  ...clearedAsset,
+  id: "baddate",
+  description: "Lamp",
+  costCents: 10_000,
+  broughtIntoUse: "2025-02-31",
+};
+eq(assetFieldIssue(clearedAsset)?.field, "cost", "a cleared cost belongs beside cost");
+eq(
+  assetFieldIssue(badDateAsset)?.message,
+  "Date brought into use must be a real date.",
+  "a bad date names the date",
+);
+const assetView = renderToStaticMarkup(
+  createElement(ZaItr12Sheet, {
+    client: { id: "c1", name: "Nicola Physio" },
+    today: "2026-11-03",
+    drafts: [],
+    initialYear: 2026,
+    seed: {
+      ...emptyItr12Inputs(),
+      business: {
+        grossIncomeCents: null,
+        deductions: [],
+        homeOffice: null,
+        assets: [clearedAsset, badDateAsset],
+        wearAndTearCents: null,
+        ringFenceS20A: null,
+      },
+    },
+    onSaved: () => undefined,
+    onBack: () => undefined,
+  }),
+);
+assert(assetView.includes('data-asset-row="cleared"'), "a cleared-cost asset row stays");
+assert(assetView.includes('data-asset-row="baddate"'), "a bad-date asset row stays");
+assert(
+  assetView.includes('data-asset-field-issue="cost"') &&
+    assetView.includes("Cost must be a nil or positive amount."),
+  "the cleared cost message sits beside the cost field",
+);
+assert(
+  assetView.includes('data-asset-field-issue="date"') &&
+    assetView.includes("Date brought into use must be a real date."),
+  "the bad date message sits beside the date field",
+);
 
 console.log("tax-itr12 ok");

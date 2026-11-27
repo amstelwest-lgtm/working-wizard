@@ -25,7 +25,8 @@ export type WearSection = "s11e" | "s12c";
 export type WearAsset = {
   id: string;
   description: string;
-  costCents: number;
+  /** Null is a cleared cost. It is not nil, and the row stays on the schedule. */
+  costCents: number | null;
   broughtIntoUse: string;
   category: string;
   section: WearSection;
@@ -456,13 +457,15 @@ function disposalInYear(asset: WearAsset, yearStart: string, yearEnd: string): s
 function rowFor(asset: WearAsset, yearStart: string, yearEnd: string): WearRow | { error: string } {
   const problem = assetProblem(asset);
   if (problem) return { error: problem };
+  if (asset.costCents == null) return { error: "Cost must be a nil or positive amount." };
+  const costCents = asset.costCents;
   if (asset.disposalDate && asset.disposalDate < yearStart) {
     return {
       id: asset.id,
       description: asset.description,
       sectionLabel: asset.section === "s12c" ? "s12C" : "s11(e)",
       category: asset.category,
-      costCents: asset.costCents + (asset.additionCents ?? 0),
+      costCents: costCents + (asset.additionCents ?? 0),
       allowanceCents: 0,
       recoupmentCents: 0,
       taxValueCents: 0,
@@ -471,7 +474,7 @@ function rowFor(asset: WearAsset, yearStart: string, yearEnd: string): WearRow |
   }
   const disposal = disposalInYear(asset, yearStart, yearEnd);
   const components: Component[] = [
-    { costCents: asset.costCents, broughtIntoUse: asset.broughtIntoUse, label: asset.description },
+    { costCents, broughtIntoUse: asset.broughtIntoUse, label: asset.description },
   ];
   if (asset.additionCents != null && asset.additionCents > 0 && asset.additionDate) {
     const addBy = disposal ?? yearEnd;
@@ -521,7 +524,7 @@ function rowFor(asset: WearAsset, yearStart: string, yearEnd: string): WearRow |
 
 function assetProblem(asset: WearAsset): string | null {
   if (!asset.description.trim()) return "An asset needs a description.";
-  if (!Number.isSafeInteger(asset.costCents) || asset.costCents < 0)
+  if (asset.costCents == null || !Number.isSafeInteger(asset.costCents) || asset.costCents < 0)
     return "Cost must be a nil or positive amount.";
   if (!parseIso(asset.broughtIntoUse)) return "Date brought into use must be a real date.";
   if (asset.section !== "s11e" && asset.section !== "s12c")
@@ -628,6 +631,42 @@ export function wearSchedule(
   };
 }
 
+/**
+ * The first check a register row fails, and the field it belongs beside.
+ * A cleared cost and a bad date fail here. The row itself is not removed.
+ */
+export function assetFieldIssue(asset: {
+  description: string;
+  costCents: number | null;
+  broughtIntoUse: string;
+  category: string;
+  section: string;
+  privateUsePercent: number | null;
+  additionCents?: number | null;
+  additionDate?: string | null;
+  disposalDate?: string | null;
+  proceedsCents?: number | null;
+  bookDepreciationCents?: number | null;
+}): { field: string; message: string } | null {
+  const message = assetProblem({
+    id: "draft",
+    description: asset.description,
+    costCents: asset.costCents,
+    broughtIntoUse: asset.broughtIntoUse,
+    category: asset.category,
+    section: asset.section === "s12c" ? "s12c" : "s11e",
+    privateUsePercent: asset.privateUsePercent ?? Number.NaN,
+    newAndUnused: false,
+    additionCents: asset.additionCents ?? null,
+    additionDate: asset.additionDate ?? null,
+    disposalDate: asset.disposalDate ?? null,
+    proceedsCents: asset.proceedsCents ?? null,
+    bookDepreciationCents: asset.bookDepreciationCents ?? null,
+  });
+  if (!message) return null;
+  return { field: wearIssueField(message), message };
+}
+
 /** Which register field a validation sentence belongs beside. */
 export function wearIssueField(message: string): string {
   const text = message.toLowerCase();
@@ -704,20 +743,22 @@ function coerceAsset(value: unknown, index: number): WearAsset | null {
   const row = value as Record<string, unknown>;
   const description = text(row.description) || text(row.name);
   const costCents = money(row, "costCents", "cost");
-  const broughtIntoUse = parseDate(row.broughtIntoUse) || parseDate(row.dateBroughtIntoUse);
+  const broughtRaw = text(row.broughtIntoUse) || text(row.dateBroughtIntoUse);
+  const broughtIntoUse = parseDate(broughtRaw) ?? broughtRaw;
   const section = parseSection(row.section);
-  if (!description || costCents == null || !broughtIntoUse || !section) return null;
+  const id = text(row.id);
+  if (!description && costCents == null && !broughtIntoUse && !id && !section) return null;
   const privateUse = parsePercent(row.privateUsePercent ?? row.privateUse);
   const additionCents = money(row, "additionCents", "addition");
   const proceedsCents = money(row, "proceedsCents", "proceeds");
   const book = money(row, "bookDepreciationCents", "bookDepreciation");
   return {
-    id: text(row.id) || `asset-${index + 1}`,
+    id: id || `asset-${index + 1}`,
     description,
     costCents,
     broughtIntoUse,
     category: text(row.category),
-    section,
+    section: section ?? "s11e",
     privateUsePercent: privateUse ?? -1,
     newAndUnused: parseFlag(row.newAndUnused ?? row.newAndUnusedAsset),
     smallItem: row.smallItem === true || row.section === "small",

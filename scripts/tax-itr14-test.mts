@@ -24,6 +24,7 @@ import {
   ITR14_SECTIONS,
   computeItr14,
   emptyItr14Inputs,
+  itr14AdjustmentBlankKeys,
   itr14ApproveBlock,
   itr14Books,
   itr14CanDownload,
@@ -32,9 +33,12 @@ import {
   itr14DraftFields,
   itr14Due,
   itr14InputsFromDraft,
+  markItr14AdjustmentsNil,
+  undoItr14AdjustmentsNil,
   type Itr14Inputs,
   type Itr14SectionId,
 } from "../src/lib/tax-specialist/forms/itr14";
+import { NIL_CONFIRMED_NOTE } from "../src/lib/tax-specialist/forms/nil-mark";
 import { taxFormSchema } from "../src/lib/tax-specialist/forms/pipeline";
 import { SAMPLE_COMPANY, sampleCompanyTax } from "../src/lib/tax-specialist/sample-compute";
 
@@ -1105,6 +1109,143 @@ eq(document.activeElement, lossInput, "the loss field keeps focus while it is ty
 assert(
   document.body.innerHTML.includes('data-itr14-assessed-loss="true"'),
   "the working appears once the balance is typed",
+);
+
+const typedDonation: Itr14Inputs = {
+  ...emptyItr14Inputs(),
+  donationCents: 50_000,
+  adjustments: [
+    { id: "typed", description: "Legal", amountCents: 100, direction: "add" },
+    { id: "blank", description: "Sundry", amountCents: null, direction: "deduct" },
+  ],
+};
+const adjustmentKeys = itr14AdjustmentBlankKeys(typedDonation, {
+  depreciation: false,
+  wear: false,
+});
+assert(!adjustmentKeys.includes("donationCents"), "a typed donation is not a remaining blank");
+assert(adjustmentKeys.includes("finesAddBackCents"), "a blank fine is a remaining blank");
+assert(
+  adjustmentKeys.includes("adjustment:blank"),
+  "a blank other adjustment is a remaining blank",
+);
+assert(
+  !adjustmentKeys.includes("adjustment:typed"),
+  "a typed other adjustment stays out of the blanks",
+);
+const booksKeys = itr14AdjustmentBlankKeys(emptyItr14Inputs(), { depreciation: true, wear: true });
+assert(
+  !booksKeys.includes("depreciationAddBackCents"),
+  "a books depreciation figure is not marked nil",
+);
+assert(!booksKeys.includes("wearAndTearCents"), "a register wear figure is not marked nil");
+const markedAdjustments = markItr14AdjustmentsNil(typedDonation, adjustmentKeys);
+eq(markedAdjustments.donationCents, 50_000, "a typed donation stays");
+eq(
+  markedAdjustments.adjustments.find((row) => row.id === "typed")?.amountCents,
+  100,
+  "a typed adjustment stays",
+);
+eq(markedAdjustments.finesAddBackCents, 0, "a blank fine becomes 0");
+eq(
+  markedAdjustments.adjustments.find((row) => row.id === "blank")?.amountCents,
+  0,
+  "a blank adjustment becomes 0",
+);
+const markedAdjustmentSheet = computeItr14({
+  client,
+  yearOfAssessment: 2026,
+  inputs: markedAdjustments,
+});
+eq(
+  markedAdjustmentSheet.adjustmentNilNote,
+  NIL_CONFIRMED_NOTE,
+  "the adjustments schedule carries the nil note",
+);
+assert(
+  itr14Csv(markedAdjustmentSheet).includes(NIL_CONFIRMED_NOTE),
+  "the adjustments CSV carries the nil note",
+);
+const undoneAdjustments = undoItr14AdjustmentsNil(markedAdjustments);
+eq(undoneAdjustments.finesAddBackCents, null, "undo puts the fine back to blank");
+eq(
+  undoneAdjustments.adjustments.find((row) => row.id === "blank")?.amountCents,
+  null,
+  "undo puts the blank adjustment back to blank",
+);
+eq(undoneAdjustments.donationCents, 50_000, "undo leaves the typed donation");
+eq(
+  undoneAdjustments.adjustments.find((row) => row.id === "typed")?.amountCents,
+  100,
+  "undo leaves the typed adjustment",
+);
+eq(undoneAdjustments.adjustmentNilMark, null, "undo clears the adjustments nil mark");
+eq(
+  computeItr14({ client, yearOfAssessment: 2026, inputs: undoneAdjustments }).adjustmentNilNote,
+  null,
+  "undo removes the adjustments nil note",
+);
+const adjustmentPdf = await renderToBuffer(
+  createElement(Itr14PDF, {
+    clientName: client.name,
+    sheet: markedAdjustmentSheet,
+    approvedByName: null,
+    approvedAt: null,
+    preparedOn: "2026-11-03",
+  }) as Parameters<typeof renderToBuffer>[0],
+);
+const adjustmentDoc = await getDocumentProxy(new Uint8Array(adjustmentPdf));
+let adjustmentPdfText = "";
+for (let pageNumber = 1; pageNumber <= adjustmentDoc.numPages; pageNumber += 1) {
+  const page = await adjustmentDoc.getPage(pageNumber);
+  const content = await page.getTextContent();
+  adjustmentPdfText += content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+}
+assert(adjustmentPdfText.includes(NIL_CONFIRMED_NOTE), "the adjustments PDF carries the nil note");
+const adjustmentView = renderSheet(markedAdjustments, "nil-adjustments");
+assert(
+  adjustmentView.includes('data-nil-note="itr14-adjustments"'),
+  "the adjustments sheet shows the nil note",
+);
+assert(
+  adjustmentView.includes('data-nil-blanks="itr14-adjustments"'),
+  "the adjustments sheet has the nil button",
+);
+
+const clearedCostAsset = {
+  ...fixture[0]!,
+  id: "cleared",
+  description: "Chair",
+  costCents: null,
+  broughtIntoUse: "2025-03-01",
+};
+const badDateAsset = {
+  ...fixture[0]!,
+  id: "baddate",
+  description: "Lamp",
+  costCents: 10_000,
+  broughtIntoUse: "2025-02-31",
+};
+const assetIssues = renderSheet(
+  {
+    ...base,
+    assets: [clearedCostAsset, badDateAsset],
+    wearAndTearCents: null,
+    depreciationAddBackCents: null,
+  },
+  "asset-issues",
+);
+assert(assetIssues.includes('data-itr14-wear-row="cleared"'), "a cleared-cost asset row stays");
+assert(assetIssues.includes('data-itr14-wear-row="baddate"'), "a bad-date asset row stays");
+assert(
+  assetIssues.includes('data-asset-field-issue="cost"') &&
+    assetIssues.includes("Cost must be a nil or positive amount."),
+  "the cleared cost message sits beside the cost field",
+);
+assert(
+  assetIssues.includes('data-asset-field-issue="date"') &&
+    assetIssues.includes("Date brought into use must be a real date."),
+  "the bad date message sits beside the date field",
 );
 
 console.log("acceptance wear-and-tear cents", schedule?.wearAndTearCents);
