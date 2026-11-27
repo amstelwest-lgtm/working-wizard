@@ -31,6 +31,7 @@ import {
   type Itr12SectionId,
 } from "../src/lib/tax-specialist/forms/itr12";
 import {
+  RENTAL_GAP_PROMPTS,
   businessSchedule,
   rentalSchedule,
   type Itr12BusinessInput,
@@ -312,6 +313,14 @@ assert(sheetSrc.includes("data-itr12-asset-add"), "the sheet source can add an a
 assert(sheetSrc.includes("data-itr12-rental-add"), "the sheet source can add a property");
 assert(sheetSrc.includes('entry="private-use"'), "the sheet source has private use");
 assert(sheetSrc.includes("onBlur"), "schedule amounts commit on blur");
+assert(sheetSrc.includes("AssetDateInput"), "the asset date uses the shared input");
+assert(!sheetSrc.includes('type="date"'), "the asset date is not the browser date control");
+assert(sheetSrc.includes("Asset {index + 1}"), "an asset legend does not echo the description");
+assert(sheetSrc.includes("data-itr12-gap"), "a missing rental field is named beside the input");
+const dateSrc = readFileSync("src/components/tax-specialist/asset-date-input.tsx", "utf8");
+assert(dateSrc.includes("onBlur"), "the date commits on blur");
+assert(dateSrc.includes('type="text"'), "the date is a plain text input");
+assert(!dateSrc.includes('type="date"'), "the date input is not type=date");
 assert(pdfSrc.includes("Not a SARS return"), "the PDF is labelled not a SARS return");
 assert(ITR12_FOOTER.includes("Not a SARS return"), "the footer is the capture-sheet label");
 
@@ -462,6 +471,76 @@ const rentalGap = rentalSchedule(
 );
 eq(rentalGap?.properties[1]?.netCents, null, "a missing private-use percent stays blank");
 eq(rentalGap?.totalNetCents, null, "one blank property does not become zero in the total");
+eq(
+  rentalGap?.properties[1]?.gaps.map((gap) => gap.prompt).join(" "),
+  RENTAL_GAP_PROMPTS.privateUsePercent,
+  "only the missing private-use field is named",
+);
+const qaProperty: Itr12RentalProperty = {
+  id: "qa",
+  description: "QA flat",
+  rentReceivedCents: 12_000_000,
+  ratesCents: null,
+  interestCents: null,
+  insuranceCents: null,
+  repairsCents: 2_000_000,
+  leviesCents: null,
+  agentFeesCents: null,
+  wearAndTearCents: null,
+  assets: [],
+  privateUsePercent: null,
+};
+const qaRental = rentalSchedule([qaProperty], yearStart, yearEnd);
+eq(qaRental?.properties[0]?.netCents, null, "rent and repairs alone do not invent a net");
+eq(qaRental?.totalNetCents, null, "an incomplete rental total stays blank");
+const qaPrompts = qaRental?.properties[0]?.gaps.map((gap) => gap.prompt) ?? [];
+for (const field of [
+  "ratesCents",
+  "interestCents",
+  "insuranceCents",
+  "leviesCents",
+  "agentFeesCents",
+  "wearAndTearCents",
+  "privateUsePercent",
+] as const) {
+  assert(qaPrompts.includes(RENTAL_GAP_PROMPTS[field]), `${field} is named`);
+}
+assert(!qaPrompts.includes(RENTAL_GAP_PROMPTS.rentReceivedCents), "typed rent is not listed as missing");
+assert(!qaPrompts.includes(RENTAL_GAP_PROMPTS.repairsCents), "typed repairs are not listed as missing");
+const qaSheet = computeItr12({
+  clientName: "Ben",
+  yearOfAssessment: 2026,
+  inputs: { ...emptyItr12Inputs(), rentals: [qaProperty] },
+});
+eq(qaSheet.taxableIncomeCents, null, "incomplete rental does not become taxable income");
+const qaTaxable = qaSheet.lines.find((line) => line.id === "taxableIncome");
+eq(qaTaxable?.plain, "", "taxable income stays blank");
+assert(
+  qaTaxable?.note?.includes("The local rental schedule is incomplete"),
+  "the incomplete message stays",
+);
+assert(
+  qaTaxable?.note?.includes(RENTAL_GAP_PROMPTS.privateUsePercent),
+  "the incomplete message names private use",
+);
+for (const prompt of qaPrompts) {
+  assert(qaTaxable?.note?.includes(prompt), "the incomplete message lists every missing field");
+}
+const qaView = renderToStaticMarkup(
+  createElement(ZaItr12Sheet, {
+    client: { id: "c1", name: "Ben" },
+    today: "2026-11-03",
+    drafts: [],
+    initialYear: 2026,
+    seed: { ...emptyItr12Inputs(), rentals: [qaProperty] },
+    onSaved: () => undefined,
+    onBack: () => undefined,
+  }),
+);
+assert(qaView.includes('data-itr12-gap="privateUsePercent"'), "private use is named on the property");
+assert(qaView.includes("Net rental: Blank"), "the property net stays Blank");
+assert(qaView.includes(">—<") || qaView.includes("—"), "taxable income renders as a dash");
+assert(!qaView.includes("Net rental: R 0.00"), "the blank net is not zero");
 
 const combinedInputs: Itr12Inputs = {
   taxReference: "1234567890",
