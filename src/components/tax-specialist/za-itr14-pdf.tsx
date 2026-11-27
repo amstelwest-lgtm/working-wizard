@@ -7,6 +7,7 @@ import { Document, Font, Page, StyleSheet, Text, View } from "@react-pdf/rendere
 import { MilonMark } from "@/components/pdf/glyphs";
 import { C } from "@/components/pdf/theme";
 import { zaToday } from "@/lib/tax-specialist/forms/irp6";
+import { CGT_BLANK_SCHEDULE } from "@/lib/tax-specialist/forms/cgt";
 import { ITR14_FOOTER, ITR14_SECTIONS, type Itr14Sheet } from "@/lib/tax-specialist/forms/itr14";
 import { formatSampleCents, formatSampleDate } from "@/lib/tax-specialist/sample-compute";
 
@@ -163,6 +164,64 @@ function LossSection({ sheet }: { sheet: Itr14Sheet }) {
   );
 }
 
+function CapitalSection({ sheet }: { sheet: Itr14Sheet }) {
+  const capital = sheet.capital;
+  return (
+    <View style={S.section}>
+      <Text style={S.sectionTitle}>Capital gains</Text>
+      {capital ? (
+        <>
+          {capital.rows.map((row) => (
+            <View key={row.id} style={S.row} wrap={false}>
+              <View style={S.label}>
+                <Text>{pdfText(row.description || "Disposal")}</Text>
+                <Text style={S.note}>
+                  {row.dateAcquired || "Blank"} to {row.dateDisposed || "Blank"}
+                </Text>
+              </View>
+              <Text style={S.value}>{money(row.gainCents)}</Text>
+              <Text style={S.source}>Base cost {money(row.baseCostCents)}</Text>
+            </View>
+          ))}
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Aggregate gain or loss</Text>
+            <Text style={S.value}>{money(capital.aggregateCents)}</Text>
+            <Text style={S.source}>No annual exclusion</Text>
+          </View>
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Inclusion</Text>
+            <Text style={S.value}>
+              {capital.inclusionPercent == null ? "Blank" : `${capital.inclusionPercent}%`}
+            </Text>
+            <Text style={S.source}>Company</Text>
+          </View>
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Taxable capital gain</Text>
+            <Text style={S.value}>{money(capital.taxableCapitalGainCents)}</Text>
+            <Text style={S.source}>
+              {capital.includedInTaxableIncome ? "Included in taxable income" : "Not included"}
+            </Text>
+          </View>
+          {capital.lossCarriedForward ? (
+            <View style={S.row} wrap={false}>
+              <Text style={S.label}>Capital loss carried forward</Text>
+              <Text style={S.value}>{money(capital.carriedForwardCents)}</Text>
+              <Text style={S.source}>Not included</Text>
+            </View>
+          ) : null}
+          {capital.notes.map((note) => (
+            <Text key={note} style={S.note}>
+              {pdfText(note)}
+            </Text>
+          ))}
+        </>
+      ) : (
+        <Text style={S.note}>{CGT_BLANK_SCHEDULE}</Text>
+      )}
+    </View>
+  );
+}
+
 export function Itr14PDF({
   clientName,
   sheet,
@@ -236,6 +295,7 @@ export function Itr14PDF({
         ))}
         <WearSection sheet={sheet} />
         <LossSection sheet={sheet} />
+        <CapitalSection sheet={sheet} />
         <View style={S.footer} fixed>
           <Text>{pdfText(ITR14_FOOTER)}</Text>
         </View>

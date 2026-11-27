@@ -32,6 +32,11 @@ What the sheet takes from them:
 - Paragraph 20 underestimation penalty is calculated for the second period.
   It is not signed off here for any year of assessment, so the sheet, the
   PDF, and the CSV do not show a rand penalty.
+- Eighth Schedule capital gains. These guides do not state an inclusion
+  rate, an annual exclusion, or a primary residence exclusion for any year
+  of assessment. Those figures are not signed off. The disposal register
+  still records each gain or loss. The taxable capital gain stays blank on
+  the sheet, the PDF, and the CSV until a year is signed off here.
 - A due date on a weekend or public holiday moves to the last business day
   before it (G01, "last working day prior to the public holiday or weekend"). `docs/tax-specialist-plan.md` says the next business day;
   the sheet follows SARS.
