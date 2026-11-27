@@ -908,6 +908,9 @@ export function computeItr14(input: {
         assessedLossCarriedCents: assessedLoss?.carriedCents ?? computed.assessedLossCarriedCents,
       }
     : null;
+  /** Unused assessed loss is carried forward. It is not shown as negative taxable income. */
+  const taxableBeforeDonationShown =
+    company == null ? null : Math.max(0, company.taxableBeforeDonationCents);
 
   const creditsReady =
     nonNegative(inputs.provisionalPeriod1Cents) &&
@@ -1185,9 +1188,12 @@ export function computeItr14(input: {
     "taxableBeforeDonation",
     "adjustments",
     "Taxable income before the donation limit",
-    company?.taxableBeforeDonationCents ?? null,
+    taxableBeforeDonationShown,
     company ? "worked" : "missing",
     true,
+    taxableBeforeDonationShown === 0 && company != null && company.taxableBeforeDonationCents < 0
+      ? "Set-off is limited to income. The unused balance is on the assessed-loss carried-forward line."
+      : undefined,
   );
   amount(
     "donation",
@@ -1512,10 +1518,11 @@ export function computeItr14(input: {
       wearCents! -
       inputs.exemptDividendsCents! -
       lossSubtracted;
+    const beforeShown = Math.max(0, before);
     checks.push({
       id: "adds-up",
       level: before === company.taxableBeforeDonationCents ? "ok" : "error",
-      text: `${formatSampleCents(accountingProfitCents)} profit, adjustments applied, is ${formatSampleCents(company.taxableBeforeDonationCents)} before the donation limit.`,
+      text: `${formatSampleCents(accountingProfitCents)} profit, adjustments applied, is ${formatSampleCents(beforeShown)} before the donation limit.`,
     });
     if (
       shownTax != null &&

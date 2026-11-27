@@ -753,6 +753,80 @@ const underCap = lossSheet(200_000_000, 50_000_000);
 eq(underCap.assessedLoss?.setOffCents, 50_000_000, "a loss inside the cap is set off in full");
 eq(underCap.taxableIncomeCents, 150_000_000, "the uncapped set-off still ties");
 eq(underCap.assessedLoss?.carriedCents, 0, "nothing is carried when the loss is used");
+const absorbedInputs: Itr14Inputs = {
+  ...emptyItr14Inputs(),
+  taxReference: "0123456789",
+  registrationNumber: "2020/123456/07",
+  companyClass: "standard",
+  yearFinal: true,
+  accountingProfitCents: 10_000_000,
+  depreciationAddBackCents: 0,
+  finesAddBackCents: 0,
+  wearAndTearCents: 55_556,
+  exemptDividendsCents: 0,
+  assessedLossBroughtForwardCents: 50_000_000,
+  donationCents: 0,
+  priorAssessmentCents: 0,
+  provisionalPeriod1Cents: 0,
+  provisionalPeriod2Cents: 0,
+  provisionalTopUpCents: 0,
+  turnoverCents: 1,
+  accountTbAcknowledged: true,
+  fixedAssetRegisterAcknowledged: true,
+  balanceSheetAcknowledged: true,
+};
+const absorbedSheet = computeItr14({
+  client,
+  yearOfAssessment: 2026,
+  inputs: absorbedInputs,
+});
+eq(
+  absorbedSheet.lines.find((line) => line.id === "taxableBeforeDonation")?.plain,
+  "0.00",
+  "acceptance: taxable income before the donation limit is 0.00 after the set-off",
+);
+eq(
+  absorbedSheet.lines.find((line) => line.id === "taxableIncome")?.plain,
+  "0.00",
+  "taxable income is 0.00 when the set-off uses the whole profit",
+);
+eq(
+  absorbedSheet.lines.find((line) => line.id === "assessedLossCarried")?.plain,
+  "400555.56",
+  "acceptance: the unused R400 555.56 is only the carried-forward loss",
+);
+eq(absorbedSheet.assessedLoss?.carriedCents, 40_055_556, "carried forward is R400 555.56");
+assert(
+  absorbedSheet.lines.every((line) => !line.plain.startsWith("-") && !line.display.includes("−")),
+  "no taxable-income line is negative",
+);
+const absorbedCsv = itr14Csv(absorbedSheet);
+assert(absorbedCsv.includes("Taxable income before the donation limit,0.00"), "the CSV line is 0.00");
+assert(absorbedCsv.includes("Assessed loss carried forward,400555.56"), "the CSV carried-forward line is 400555.56");
+assert(!absorbedCsv.includes("-400555.56"), "the CSV does not show the carried-forward loss as negative income");
+assert(!/,-[0-9]/.test(absorbedCsv), "the CSV has no negative amount");
+const { renderToBuffer: renderAbsorbedPdf } = await import("@react-pdf/renderer");
+const { Itr14PDF: AbsorbedPdf } = await import("../src/components/tax-specialist/za-itr14-pdf");
+const absorbedPdf = await renderAbsorbedPdf(
+  createElement(AbsorbedPdf, {
+    clientName: client.name,
+    sheet: absorbedSheet,
+    approvedByName: null,
+    approvedAt: null,
+    preparedOn: "2026-11-03",
+  }) as Parameters<typeof renderAbsorbedPdf>[0],
+);
+const { getDocumentProxy: absorbedProxy } = await import("unpdf");
+const absorbedDoc = await absorbedProxy(new Uint8Array(absorbedPdf));
+let absorbedPdfText = "";
+for (let pageNumber = 1; pageNumber <= absorbedDoc.numPages; pageNumber += 1) {
+  const page = await absorbedDoc.getPage(pageNumber);
+  const content = await page.getTextContent();
+  absorbedPdfText += content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+}
+assert(absorbedPdfText.includes("0.00"), "the PDF shows 0.00");
+assert(absorbedPdfText.includes("400 555.56"), "the PDF shows the carried-forward loss");
+assert(!absorbedPdfText.includes("-R") && !absorbedPdfText.includes("−R"), "the PDF has no negative taxable income");
 const beforeRingFence = assessedLossWorking({
   taxableBeforeLossCents: 500_000_000,
   broughtForwardCents: 500_000_000,
