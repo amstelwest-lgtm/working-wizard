@@ -21,6 +21,14 @@ import {
   yearOfAssessmentStart,
   type CompanyTaxResult,
 } from "../sample-compute.ts";
+import {
+  assessedLossWorking,
+  wearAssetsFrom,
+  wearSchedule,
+  type AssessedLossWorking,
+  type WearAsset,
+  type WearSchedule,
+} from "./itr14-allowances.ts";
 import type { TaxFormDraft, TaxFormDraftField } from "./drafts.ts";
 import {
   irp6Supported,
@@ -537,6 +545,8 @@ export type Itr14Inputs = {
   fixedAssetRegisterAcknowledged: boolean;
   balanceSheetAcknowledged: boolean;
   queries: Itr14Query[];
+  /** Empty means no register. Wear-and-tear and depreciation stay as typed, including blank. */
+  assets: WearAsset[];
 };
 
 export function emptyItr14Inputs(): Itr14Inputs {
@@ -567,6 +577,7 @@ export function emptyItr14Inputs(): Itr14Inputs {
     fixedAssetRegisterAcknowledged: false,
     balanceSheetAcknowledged: false,
     queries: [],
+    assets: [],
   };
 }
 
@@ -606,6 +617,10 @@ export type Itr14Sheet = {
   taxCents: number | null;
   balanceCents: number | null;
   company: CompanyTaxResult | null;
+  /** Null when the register is blank. A blank register is not a zero allowance. */
+  wear: WearSchedule | null;
+  /** Null when the brought-forward balance has not been typed. */
+  assessedLoss: AssessedLossWorking | null;
 };
 
 export type Itr14Client = Irp6Client;
@@ -772,10 +787,15 @@ export function computeItr14(input: {
   const standard = inputs.companyClass === "standard";
 
   const accountingProfitCents = books.profitCents ?? inputs.accountingProfitCents;
-  const depreciationCents =
-    inputs.depreciationAddBackCents != null
+  const wear = wearSchedule(inputs.assets, yearStart, yearEnd);
+  const registerWear = wear?.wearAndTearCents != null;
+  const registerDepreciation = wear?.depreciationAddBackCents != null;
+  const depreciationCents = registerDepreciation
+    ? wear!.depreciationAddBackCents
+    : inputs.depreciationAddBackCents != null
       ? inputs.depreciationAddBackCents
       : books.depreciationCents;
+  const wearCents = registerWear ? wear!.wearAndTearCents : inputs.wearAndTearCents;
   const turnoverCents = inputs.turnoverCents != null ? inputs.turnoverCents : books.revenueCents;
   const costOfSalesCents =
     inputs.costOfSalesCents != null ? inputs.costOfSalesCents : books.cogsCents;
@@ -823,25 +843,55 @@ export function computeItr14(input: {
   const named = [
     depreciationCents,
     inputs.finesAddBackCents,
-    inputs.wearAndTearCents,
+    wearCents,
     inputs.exemptDividendsCents,
     inputs.assessedLossBroughtForwardCents,
     inputs.donationCents,
   ];
   const namedReady = named.every(nonNegative);
+  const bridgeReady =
+    accountingProfitCents != null &&
+    depreciationCents != null &&
+    inputs.finesAddBackCents != null &&
+    wearCents != null &&
+    inputs.exemptDividendsCents != null &&
+    otherComplete;
+  const taxableBeforeLossCents = bridgeReady
+    ? accountingProfitCents +
+      depreciationCents +
+      inputs.finesAddBackCents +
+      otherNet -
+      wearCents -
+      inputs.exemptDividendsCents
+    : null;
+  const assessedLoss =
+    supported && taxableBeforeLossCents != null && inputs.assessedLossBroughtForwardCents != null
+      ? assessedLossWorking({
+          taxableBeforeLossCents,
+          broughtForwardCents: inputs.assessedLossBroughtForwardCents,
+          yearEnd,
+        })
+      : null;
+  const lossSubtracted = assessedLoss?.subtractedCents ?? inputs.assessedLossBroughtForwardCents;
   const canCompute =
     standard && supported && accountingProfitCents != null && namedReady && otherComplete;
-  const company = canCompute
+  const computed = canCompute
     ? computeCompanyTax({
         accountingProfitCents: accountingProfitCents! + otherNet,
         depreciationAddBackCents: depreciationCents!,
         finesAddBackCents: inputs.finesAddBackCents!,
-        wearAndTearCents: inputs.wearAndTearCents!,
+        wearAndTearCents: wearCents!,
         exemptDividendsCents: inputs.exemptDividendsCents!,
-        assessedLossBroughtForwardCents: inputs.assessedLossBroughtForwardCents!,
+        assessedLossBroughtForwardCents: lossSubtracted!,
         donationCents: inputs.donationCents!,
         provisionalEstimateCents: 0,
       })
+    : null;
+  const company = computed
+    ? {
+        ...computed,
+        assessedLossCarriedCents: assessedLoss?.carriedCents ?? computed.assessedLossCarriedCents,
+      }
     : null;
 
   const creditsReady =
@@ -1034,17 +1084,21 @@ export function computeItr14(input: {
     "adjustments",
     "Depreciation add-back",
     depreciationCents,
-    inputs.depreciationAddBackCents != null
-      ? "input"
-      : books.depreciationCents != null
-        ? "books"
-        : "missing",
-    true,
-    books.depreciationCents == null
-      ? "Depreciation is not stored on the books sync. Type the add-back, or nil."
+    registerDepreciation
+      ? "worked"
       : inputs.depreciationAddBackCents != null
-        ? "Typed over the books figure."
-        : "From the books. Type a different figure if the tax add-back differs.",
+        ? "input"
+        : books.depreciationCents != null
+          ? "books"
+          : "missing",
+    true,
+    registerDepreciation
+      ? "From the asset register: book depreciation plus recoupment. Draft for review."
+      : books.depreciationCents == null
+        ? "Depreciation is not stored on the books sync. Type the add-back, or nil."
+        : inputs.depreciationAddBackCents != null
+          ? "Typed over the books figure."
+          : "From the books. Type a different figure if the tax add-back differs.",
   );
   amount(
     "finesAddBack",
@@ -1058,10 +1112,12 @@ export function computeItr14(input: {
     "wearAndTear",
     "adjustments",
     "Wear-and-tear allowance",
-    inputs.wearAndTearCents,
-    inputs.wearAndTearCents != null ? "input" : "missing",
+    wearCents,
+    registerWear ? "worked" : wearCents != null ? "input" : "missing",
     true,
-    "Not read from a fixed asset register.",
+    registerWear
+      ? "From the asset register. Draft for review."
+      : "Not read from a fixed asset register.",
   );
   amount(
     "exemptDividends",
@@ -1078,7 +1134,9 @@ export function computeItr14(input: {
     inputs.assessedLossBroughtForwardCents,
     inputs.assessedLossBroughtForwardCents != null ? "input" : "missing",
     true,
-    "The loss SARS has agreed. Not taken from the books.",
+    assessedLoss
+      ? assessedLoss.note
+      : "The loss SARS has agreed. Not taken from the books. A blank is not zero.",
   );
   amount(
     "otherAdjustmentsNet",
@@ -1381,7 +1439,7 @@ export function computeItr14(input: {
   for (const [id, cents] of [
     ["depreciation", depreciationCents],
     ["fines", inputs.finesAddBackCents],
-    ["wear", inputs.wearAndTearCents],
+    ["wear", wearCents],
     ["dividends", inputs.exemptDividendsCents],
     ["loss", inputs.assessedLossBroughtForwardCents],
     ["donation", inputs.donationCents],
@@ -1394,15 +1452,20 @@ export function computeItr14(input: {
       });
     }
   }
-  if (company && accountingProfitCents != null && depreciationCents != null) {
+  if (
+    company &&
+    accountingProfitCents != null &&
+    depreciationCents != null &&
+    lossSubtracted != null
+  ) {
     const before =
       accountingProfitCents +
       depreciationCents +
       inputs.finesAddBackCents! +
       otherNet -
-      inputs.wearAndTearCents! -
+      wearCents! -
       inputs.exemptDividendsCents! -
-      inputs.assessedLossBroughtForwardCents!;
+      lossSubtracted;
     checks.push({
       id: "adds-up",
       level: before === company.taxableBeforeDonationCents ? "ok" : "error",
@@ -1440,6 +1503,8 @@ export function computeItr14(input: {
     taxCents,
     balanceCents,
     company,
+    wear,
+    assessedLoss,
   };
 }
 
@@ -1597,6 +1662,7 @@ export function itr14InputsFromDraft(draft: TaxFormDraft | null | undefined): It
     fixedAssetRegisterAcknowledged: stored.fixedAssetRegisterAcknowledged === true,
     balanceSheetAcknowledged: stored.balanceSheetAcknowledged === true,
     queries: stored.queries.filter(isQuery),
+    assets: wearAssetsFrom(stored.assets),
   };
 }
 
@@ -1649,6 +1715,40 @@ export function itr14Csv(sheet: Itr14Sheet): string {
       query.resolved ? "Query, resolved" : "Query, open",
       query.text,
       query.resolved ? "Resolved by the accountant" : "Open",
+      "",
+    ]);
+  }
+  if (sheet.wear) {
+    for (const asset of sheet.wear.rows) {
+      rows.push([
+        `Wear-and-tear, ${asset.description}`,
+        plainRands(asset.allowanceCents),
+        asset.sectionLabel,
+        asset.detail,
+      ]);
+    }
+    if (sheet.wear.wearAndTearCents != null) {
+      rows.push([
+        "Wear-and-tear total",
+        plainRands(sheet.wear.wearAndTearCents),
+        "Asset register",
+        "Draft for review",
+      ]);
+    }
+  } else {
+    rows.push(["Wear-and-tear schedule", "", "No asset register", "A blank register is not zero"]);
+  }
+  if (sheet.assessedLoss) {
+    rows.push([
+      "Assessed loss set-off",
+      plainRands(sheet.assessedLoss.setOffCents),
+      "Draft for review",
+      sheet.assessedLoss.note,
+    ]);
+    rows.push([
+      "Assessed loss carried forward, working",
+      plainRands(sheet.assessedLoss.carriedCents),
+      "Draft for review",
       "",
     ]);
   }

@@ -9,6 +9,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ZaItr14Sheet } from "../src/components/tax-specialist/za-itr14-sheet";
 import type { TaxFormDraft } from "../src/lib/tax-specialist/forms/drafts";
 import {
+  ASSESSED_LOSS_FLOOR_CENTS,
+  assessedLossWorking,
+  importWearAssets,
+  wearSchedule,
+  type WearAsset,
+} from "../src/lib/tax-specialist/forms/itr14-allowances";
+import {
   ITR14_FIELDS,
   ITR14_FOOTER,
   ITR14_RULES_YEAR,
@@ -402,5 +409,411 @@ for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
 assert(pdfText.includes("Not a SARS return"), "the PDF pages say it is not a SARS return");
 assert(pdfText.includes("493"), "the PDF shows the tax");
 assert(!/mailto:/i.test(pdfText), "the PDF is not an email");
+assert(pdfText.includes("Wear-and-tear schedule"), "the PDF has a wear-and-tear section");
+assert(pdfText.includes("Assessed loss"), "the PDF has an assessed-loss section");
+assert(pdfText.includes("Draft for review"), "the workings are marked draft");
+assert(/blank register is not zero/i.test(pdfText), "a blank register is labelled on the PDF");
 
+/**
+ * Hand-computed register for 1 Mar 2025 – 28 Feb 2026.
+ * Laptop R36 000, personal computers, 3 years, full year: R12 000.
+ * Desk R18 000, furniture, 6 years, Sep–Feb (6 months): R1 500.
+ * Desk addition R12 000 from 1 Dec (3 months): R500.
+ * Van R120 000, delivery vehicles, 4 years, year 3, 20% private: R24 000.
+ * Tool R7 000, s11(e) small item, full write-off: R7 000.
+ * New press R100 000, s12C 40% (June, not pro-rated): R40 000.
+ * Used lathe R50 000, s12C year 2 at 20%: R10 000.
+ * Sold computer R30 000, year 2, Mar–Aug (6 months): R5 000.
+ *   Tax value after the allowance R15 000. Proceeds R22 000. Recoupment R7 000.
+ * Written-off computer R9 000, proceeds R12 000. Recoupment capped at cost: R9 000.
+ * Allowance total R100 000. Book depreciation R25 000. Recoupment R16 000.
+ * Depreciation add-back R41 000.
+ */
+const asset = (row: WearAsset): WearAsset => row;
+const fixture: WearAsset[] = [
+  asset({
+    id: "laptop",
+    description: "Laptop",
+    costCents: 3_600_000,
+    broughtIntoUse: "2025-03-01",
+    category: "Personal computers",
+    section: "s11e",
+    privateUsePercent: 0,
+    newAndUnused: false,
+    additionCents: null,
+    additionDate: null,
+    disposalDate: null,
+    proceedsCents: null,
+    bookDepreciationCents: 1_500_000,
+  }),
+  asset({
+    id: "desk",
+    description: "Desk",
+    costCents: 1_800_000,
+    broughtIntoUse: "2025-09-01",
+    category: "Furniture and fittings",
+    section: "s11e",
+    privateUsePercent: 0,
+    newAndUnused: false,
+    additionCents: 1_200_000,
+    additionDate: "2025-12-01",
+    disposalDate: null,
+    proceedsCents: null,
+    bookDepreciationCents: 0,
+  }),
+  asset({
+    id: "van",
+    description: "Delivery van",
+    costCents: 12_000_000,
+    broughtIntoUse: "2023-03-01",
+    category: "Delivery vehicles",
+    section: "s11e",
+    privateUsePercent: 20,
+    newAndUnused: false,
+    additionCents: null,
+    additionDate: null,
+    disposalDate: null,
+    proceedsCents: null,
+    bookDepreciationCents: 0,
+  }),
+  asset({
+    id: "tool",
+    description: "Loose tool",
+    costCents: 700_000,
+    broughtIntoUse: "2025-12-01",
+    category: "Workshop equipment",
+    section: "s11e",
+    privateUsePercent: 0,
+    newAndUnused: false,
+    additionCents: null,
+    additionDate: null,
+    disposalDate: null,
+    proceedsCents: null,
+    bookDepreciationCents: 0,
+  }),
+  asset({
+    id: "press",
+    description: "New press",
+    costCents: 10_000_000,
+    broughtIntoUse: "2025-06-01",
+    category: "Manufacturing plant",
+    section: "s12c",
+    privateUsePercent: 0,
+    newAndUnused: true,
+    additionCents: null,
+    additionDate: null,
+    disposalDate: null,
+    proceedsCents: null,
+    bookDepreciationCents: 1_000_000,
+  }),
+  asset({
+    id: "lathe",
+    description: "Used lathe",
+    costCents: 5_000_000,
+    broughtIntoUse: "2024-03-01",
+    category: "Manufacturing plant",
+    section: "s12c",
+    privateUsePercent: 0,
+    newAndUnused: false,
+    additionCents: null,
+    additionDate: null,
+    disposalDate: null,
+    proceedsCents: null,
+    bookDepreciationCents: 0,
+  }),
+  asset({
+    id: "sold-pc",
+    description: "Sold computer",
+    costCents: 3_000_000,
+    broughtIntoUse: "2024-03-01",
+    category: "Personal computers",
+    section: "s11e",
+    privateUsePercent: 0,
+    newAndUnused: false,
+    additionCents: null,
+    additionDate: null,
+    disposalDate: "2025-08-31",
+    proceedsCents: 2_200_000,
+    bookDepreciationCents: 0,
+  }),
+  asset({
+    id: "scrap-pc",
+    description: "Fully written off computer",
+    costCents: 900_000,
+    broughtIntoUse: "2022-03-01",
+    category: "Personal computers",
+    section: "s11e",
+    privateUsePercent: 0,
+    newAndUnused: false,
+    additionCents: null,
+    additionDate: null,
+    disposalDate: "2025-06-30",
+    proceedsCents: 1_200_000,
+    bookDepreciationCents: 0,
+  }),
+];
+const schedule = wearSchedule(fixture, "2025-03-01", "2026-02-28");
+const row = (id: string) => schedule?.rows.find((line) => line.id === id);
+eq(row("laptop")?.allowanceCents, 1_200_000, "laptop is a full year at 3 years");
+eq(row("desk")?.allowanceCents, 200_000, "desk is 6 months plus a 3 month addition");
+eq(row("van")?.allowanceCents, 2_400_000, "van keeps 80% after private use");
+eq(row("tool")?.allowanceCents, 700_000, "R7 000 is written off in full");
+eq(row("press")?.allowanceCents, 4_000_000, "new s12C plant is 40% and not pro-rated");
+eq(row("lathe")?.allowanceCents, 1_000_000, "used s12C plant is 20% in year 2");
+eq(row("sold-pc")?.allowanceCents, 500_000, "a mid-year s11(e) disposal is pro-rated");
+eq(row("sold-pc")?.recoupmentCents, 700_000, "recoupment is proceeds over tax value");
+eq(row("scrap-pc")?.allowanceCents, 0, "a fully written off asset has no further allowance");
+eq(row("scrap-pc")?.recoupmentCents, 900_000, "recoupment stops at cost");
+eq(schedule?.wearAndTearCents, 10_000_000, "acceptance: fixture wear-and-tear is R100 000.00");
+eq(schedule?.recoupmentCents, 1_600_000, "fixture recoupment is R16 000.00");
+eq(schedule?.depreciationAddBackCents, 4_100_000, "add-back is book depreciation plus recoupment");
+
+const imported = importWearAssets(
+  fixture.map((line) => ({
+    description: line.description,
+    cost: (line.costCents / 100).toFixed(2),
+    dateBroughtIntoUse: line.broughtIntoUse,
+    category: line.category,
+    section: line.section === "s12c" ? "s12C" : "s11(e)",
+    privateUse: line.privateUsePercent,
+    newAndUnused: line.newAndUnused ? "yes" : "no",
+    addition: line.additionCents == null ? "" : (line.additionCents / 100).toFixed(2),
+    additionDate: line.additionDate ?? "",
+    disposalDate: line.disposalDate ?? "",
+    proceeds: line.proceedsCents == null ? "" : (line.proceedsCents / 100).toFixed(2),
+    bookDepreciation: ((line.bookDepreciationCents ?? 0) / 100).toFixed(2),
+  })),
+);
+eq(
+  wearSchedule(imported, "2025-03-01", "2026-02-28")?.wearAndTearCents,
+  10_000_000,
+  "an imported register matches the typed fixture",
+);
+
+const cheapPlant = wearSchedule(
+  [
+    asset({
+      id: "cheap",
+      description: "Small press",
+      costCents: 500_000,
+      broughtIntoUse: "2025-06-01",
+      category: "Manufacturing plant",
+      section: "s12c",
+      privateUsePercent: 0,
+      newAndUnused: true,
+      additionCents: null,
+      additionDate: null,
+      disposalDate: null,
+      proceedsCents: null,
+      bookDepreciationCents: null,
+    }),
+  ],
+  "2025-03-01",
+  "2026-02-28",
+);
+eq(cheapPlant?.wearAndTearCents, 200_000, "s12C does not use the s11(e) small-item write-off");
+
+const unknown = wearSchedule(
+  [
+    asset({
+      ...fixture[0],
+      id: "odd",
+      category: "Time machine",
+      bookDepreciationCents: null,
+    }),
+  ],
+  "2025-03-01",
+  "2026-02-28",
+);
+eq(unknown?.wearAndTearCents, null, "an unknown category does not invent a write-off period");
+const alreadySold = wearSchedule(
+  [
+    asset({
+      ...fixture[0],
+      id: "gone",
+      disposalDate: "2024-06-30",
+      proceedsCents: 1_000_000,
+    }),
+  ],
+  "2025-03-01",
+  "2026-02-28",
+);
+eq(alreadySold?.wearAndTearCents, 0, "an asset sold before this year has no allowance");
+eq(alreadySold?.recoupmentCents, 0, "an asset sold before this year is not recouped again");
+
+const registered = computeItr14({
+  client,
+  yearOfAssessment: 2026,
+  inputs: { ...base, assets: fixture },
+});
+eq(
+  registered.lines.find((line) => line.id === "wearAndTear")?.plain,
+  "100000.00",
+  "the register fills the wear-and-tear line",
+);
+eq(
+  registered.lines.find((line) => line.id === "depreciationAddBack")?.plain,
+  "41000.00",
+  "the register fills the depreciation add-back",
+);
+eq(
+  registered.lines.find((line) => line.id === "wearAndTear")?.source,
+  "worked",
+  "wear comes from the register",
+);
+eq(
+  registered.company?.taxableBeforeDonationCents,
+  175_950_000,
+  "profit plus the register still ties before the donation",
+);
+eq(
+  registered.taxableIncomeCents,
+  174_450_000,
+  "taxable income after the register is R1 744 500.00",
+);
+assert(
+  registered.checks.some((check) => check.id === "adds-up" && check.level === "ok"),
+  "acceptance: taxable income still ties",
+);
+
+const blankRegister = computeItr14({
+  client,
+  yearOfAssessment: 2026,
+  inputs: { ...base, assets: [], depreciationAddBackCents: null, wearAndTearCents: null },
+});
+eq(blankRegister.wear, null, "a blank register has no schedule");
+eq(
+  blankRegister.lines.find((line) => line.id === "wearAndTear")?.plain,
+  "",
+  "acceptance: a blank register leaves wear-and-tear blank",
+);
+eq(
+  blankRegister.lines.find((line) => line.id === "depreciationAddBack")?.plain,
+  "",
+  "acceptance: a blank register leaves depreciation blank",
+);
+assert(
+  blankRegister.lines.find((line) => line.id === "wearAndTear")?.plain !== "0.00",
+  "a blank wear-and-tear line is not zero",
+);
+
+function lossSheet(profitCents: number, lossCents: number) {
+  return computeItr14({
+    client,
+    yearOfAssessment: 2026,
+    inputs: {
+      ...emptyItr14Inputs(),
+      taxReference: "0123456789",
+      registrationNumber: "2020/123456/07",
+      companyClass: "standard",
+      yearFinal: true,
+      accountingProfitCents: profitCents,
+      depreciationAddBackCents: 0,
+      finesAddBackCents: 0,
+      wearAndTearCents: 0,
+      exemptDividendsCents: 0,
+      assessedLossBroughtForwardCents: lossCents,
+      donationCents: 0,
+      priorAssessmentCents: 0,
+      provisionalPeriod1Cents: 0,
+      provisionalPeriod2Cents: 0,
+      provisionalTopUpCents: 0,
+      turnoverCents: 1,
+      accountTbAcknowledged: true,
+      fixedAssetRegisterAcknowledged: true,
+      balanceSheetAcknowledged: true,
+    },
+  });
+}
+const eighty = lossSheet(500_000_000, 500_000_000);
+eq(eighty.assessedLoss?.eightyPercentCents, 400_000_000, "80% of R5 000 000 is R4 000 000");
+eq(eighty.assessedLoss?.limitCents, 400_000_000, "the 80% limb is above R1 000 000");
+eq(eighty.assessedLoss?.setOffCents, 400_000_000, "acceptance: set-off stops at 80%");
+eq(eighty.taxableIncomeCents, 100_000_000, "20% of the income stays taxable");
+eq(eighty.company?.assessedLossCarriedCents, 100_000_000, "the unused 20% is carried forward");
+assert(
+  eighty.checks.some((check) => check.id === "adds-up" && check.level === "ok"),
+  "the 80% set-off still ties to taxable income",
+);
+const million = lossSheet(110_000_000, 110_000_000);
+eq(million.assessedLoss?.eightyPercentCents, 88_000_000, "80% of R1 100 000 is R880 000");
+eq(
+  million.assessedLoss?.limitCents,
+  ASSESSED_LOSS_FLOOR_CENTS,
+  "acceptance: the limit is R1 000 000 when that is greater than 80%",
+);
+eq(million.assessedLoss?.setOffCents, 100_000_000, "set-off uses the R1 000 000 limb");
+eq(million.taxableIncomeCents, 10_000_000, "R100 000 stays taxable under the R1 000 000 cap");
+eq(million.assessedLoss?.carriedCents, 10_000_000, "R100 000 of the loss is carried forward");
+assert(
+  million.checks.some((check) => check.id === "adds-up" && check.level === "ok"),
+  "the R1 000 000 set-off still ties to taxable income",
+);
+const underCap = lossSheet(200_000_000, 50_000_000);
+eq(underCap.assessedLoss?.setOffCents, 50_000_000, "a loss inside the cap is set off in full");
+eq(underCap.taxableIncomeCents, 150_000_000, "the uncapped set-off still ties");
+eq(underCap.assessedLoss?.carriedCents, 0, "nothing is carried when the loss is used");
+const beforeRingFence = assessedLossWorking({
+  taxableBeforeLossCents: 500_000_000,
+  broughtForwardCents: 500_000_000,
+  yearEnd: "2023-02-28",
+});
+eq(
+  beforeRingFence.ringFenceApplies,
+  false,
+  "a year ending before 31 March 2023 is outside the ring-fence",
+);
+eq(beforeRingFence.setOffCents, 500_000_000, "the older year sets the loss off in full");
+assert(!view.includes('data-itr14-wear="true"'), "the empty sheet does not invent a register");
+
+const wearDraft = itr14InputsFromDraft({
+  id: "d2",
+  client_id: "c1",
+  form_code: "ITR14",
+  tax_year: 2026,
+  period: null,
+  subject: null,
+  fields: itr14DraftFields(registered, { ...base, assets: fixture }),
+  approvals: {},
+  status: "draft",
+  approved_by: null,
+  approved_by_name: null,
+  approved_at: null,
+  downloaded_at: null,
+  created_at: "2026-11-03T00:00:00.000Z",
+  updated_at: "2026-11-03T00:00:00.000Z",
+  version: 1,
+  supersedes_id: null,
+  superseded_by: null,
+  rules_year: ITR14_RULES_YEAR,
+  field_sources: {},
+} satisfies TaxFormDraft);
+eq(wearDraft.assets.length, fixture.length, "a saved draft restores the register");
+eq(
+  computeItr14({ client, yearOfAssessment: 2026, inputs: wearDraft }).taxableIncomeCents,
+  174_450_000,
+  "a restored register still ties",
+);
+
+const registeredPdf = await renderToBuffer(
+  createElement(Itr14PDF, {
+    clientName: client.name,
+    sheet: registered,
+    approvedByName: null,
+    approvedAt: null,
+    preparedOn: "2026-11-03",
+  }) as Parameters<typeof renderToBuffer>[0],
+);
+const registeredDoc = await getDocumentProxy(new Uint8Array(registeredPdf));
+let registeredText = "";
+for (let pageNumber = 1; pageNumber <= registeredDoc.numPages; pageNumber += 1) {
+  const page = await registeredDoc.getPage(pageNumber);
+  const content = await page.getTextContent();
+  registeredText += content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+}
+assert(registeredText.includes("100 000"), "the PDF shows the fixture wear-and-tear total");
+assert(registeredText.includes("Draft for review"), "the fixture PDF stays a draft");
+assert(!/mailto:|sars\.gov/i.test(registeredText), "the fixture PDF does not file or email");
+
+console.log("acceptance wear-and-tear cents", schedule?.wearAndTearCents);
 console.log("tax-itr14 ok");
