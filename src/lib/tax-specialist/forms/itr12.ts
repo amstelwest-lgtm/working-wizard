@@ -26,6 +26,13 @@ import {
   validTaxReference,
 } from "./irp6.ts";
 import {
+  capitalGainsSchedule,
+  cgtCsvRows,
+  cgtDisposalsFrom,
+  type CgtDisposal,
+  type CgtSchedule,
+} from "./cgt.ts";
+import {
   businessInputFrom,
   businessSchedule,
   itr12DraftTaxableIncome,
@@ -311,6 +318,10 @@ export type Itr12Inputs = {
   business?: Itr12BusinessInput | null;
   /** Empty or omitted when the local rental schedule is blank. */
   rentals?: readonly Itr12RentalProperty[] | null;
+  /** Empty or omitted when the capital gains register is blank. */
+  disposals?: readonly CgtDisposal[];
+  /** Blank is not zero. A typed zero is an assessed capital loss of nothing. */
+  assessedCapitalLossBroughtForwardCents?: number | null;
 };
 
 export type Itr12ApproverRole = "owner" | "accountant";
@@ -345,6 +356,8 @@ export type Itr12Sheet = {
   business: Itr12BusinessSchedule | null;
   /** Null when there are no properties. A blank schedule is not zero. */
   rentals: Itr12RentalSchedule | null;
+  /** Null when the disposal register is blank. A blank register is not zero. */
+  capital: CgtSchedule | null;
   /** Null while a figure it needs is blank. Never a stand-in zero. */
   taxableIncomeCents: number | null;
   /** Present only when taxable income ties to its parts. */
@@ -395,7 +408,13 @@ export function itr12YearFromLabel(text: string | null | undefined): number | nu
 }
 
 export function emptyItr12Inputs(): Itr12Inputs {
-  return { taxReference: "", lines: [], queries: intakeGapQueries(new Set<string>()) };
+  return {
+    taxReference: "",
+    lines: [],
+    queries: intakeGapQueries(new Set<string>()),
+    disposals: [],
+    assessedCapitalLossBroughtForwardCents: null,
+  };
 }
 
 function itemForField(id: Itr12MoneyFieldId): SendItemKey {
@@ -709,12 +728,19 @@ export function computeItr12(input: {
   const yearEnd = itr12YearEnd(yearOfAssessment);
   const business = businessSchedule(inputs.business, yearStart, yearEnd);
   const rentals = rentalSchedule(inputs.rentals, yearStart, yearEnd);
+  const capital = capitalGainsSchedule({
+    person: "individual",
+    yearOfAssessment,
+    disposals: inputs.disposals ?? [],
+    assessedCapitalLossBroughtForwardCents: inputs.assessedCapitalLossBroughtForwardCents ?? null,
+  });
   const taxable = itr12DraftTaxableIncome({
     employmentCents: totals.employmentIncome,
     practiceIncomeCents: totals.practiceIncome,
     practiceExpensesCents: totals.practiceExpenses,
     business,
     rentals,
+    capital,
   });
 
   const name = input.clientName.trim();
@@ -880,12 +906,13 @@ export function computeItr12(input: {
     const summed =
       tie.employmentCents +
       (tie.businessNetCents ?? tie.practiceNetCents ?? 0) +
-      (tie.rentalNetCents ?? 0);
+      (tie.rentalNetCents ?? 0) +
+      (tie.taxableCapitalGainCents ?? 0);
     if (summed !== tie.taxableIncomeCents) {
       checks.push({
         id: "tie",
         level: "error",
-        text: "Taxable income does not tie to employment, practice, and the local schedules.",
+        text: "Taxable income does not tie to employment, practice, the local schedules, and the taxable capital gain.",
       });
     }
   }
@@ -903,6 +930,7 @@ export function computeItr12(input: {
     totals,
     business,
     rentals,
+    capital,
     taxableIncomeCents: taxable.cents,
     taxableTie: taxable.tie,
   };
@@ -998,6 +1026,8 @@ export function itr12DraftFields(
       {
         business: inputs.business ?? null,
         rentals: inputs.rentals ?? [],
+        disposals: inputs.disposals ?? [],
+        assessedCapitalLossBroughtForwardCents: inputs.assessedCapitalLossBroughtForwardCents ?? null,
       },
     ] as unknown as unknown[],
     source: "input",
@@ -1029,10 +1059,39 @@ export function itr12InputsFromDraft(draft: TaxFormDraft | null | undefined): It
   const record = stored && typeof stored === "object" ? (stored as Record<string, unknown>) : null;
   const business = businessInputFrom(record?.business ?? null);
   const rentals = rentalInputsFrom(record?.rentals);
-  if (lines.length > 0 || queries.length > 0 || business || rentals.length > 0) {
-    return { taxReference, lines, queries, business, rentals };
+  const disposals = cgtDisposalsFrom(record?.disposals);
+  const assessedCapitalLossBroughtForwardCents =
+    typeof record?.assessedCapitalLossBroughtForwardCents === "number" &&
+    Number.isSafeInteger(record.assessedCapitalLossBroughtForwardCents)
+      ? record.assessedCapitalLossBroughtForwardCents
+      : null;
+  if (
+    lines.length > 0 ||
+    queries.length > 0 ||
+    business ||
+    rentals.length > 0 ||
+    disposals.length > 0 ||
+    assessedCapitalLossBroughtForwardCents != null
+  ) {
+    return {
+      taxReference,
+      lines,
+      queries,
+      business,
+      rentals,
+      disposals,
+      assessedCapitalLossBroughtForwardCents,
+    };
   }
-  return { taxReference, lines: [], queries: [], business: null, rentals: [] };
+  return {
+    taxReference,
+    lines: [],
+    queries: [],
+    business: null,
+    rentals: [],
+    disposals: [],
+    assessedCapitalLossBroughtForwardCents: null,
+  };
 }
 
 export function findItr12Draft(
@@ -1119,6 +1178,7 @@ export function itr12Csv(sheet: Itr12Sheet): string {
   } else {
     rows.push(["Local rental schedule", "", "Blank", "A blank schedule is not zero"]);
   }
+  rows.push(...cgtCsvRows(sheet.capital));
   for (const query of sheet.queries) {
     rows.push([
       query.resolved ? "Query, resolved" : "Query, open",

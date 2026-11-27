@@ -10,6 +10,7 @@
  * out here. A floor-area split, the local-interest exemption, the medical
  * credit, and the retirement deduction limit are not signed off.
  */
+import type { CgtSchedule } from "./cgt.ts";
 import {
   wearAssetsFrom,
   wearSchedule,
@@ -132,6 +133,8 @@ export type Itr12TaxableTie = {
   practiceNetCents: number | null;
   businessNetCents: number | null;
   rentalNetCents: number | null;
+  /** Null when the taxable capital gain is blank or is a loss carried forward. */
+  taxableCapitalGainCents: number | null;
   taxableIncomeCents: number;
 };
 
@@ -428,8 +431,16 @@ export function itr12DraftTaxableIncome(input: {
   practiceExpensesCents: number | null;
   business: Itr12BusinessSchedule | null;
   rentals: Itr12RentalSchedule | null;
+  capital?: CgtSchedule | null;
 }): { cents: number | null; note: string; tie: Itr12TaxableTie | null } {
   const tail = ITR12_TAXABLE_EXCLUSION_NOTE;
+  const capitalNote = (schedule: CgtSchedule | null | undefined): string => {
+    if (!schedule) return "";
+    if (schedule.incomplete) return " The capital gains schedule is incomplete, so it is not in this total.";
+    if (schedule.includedInTaxableIncome) return " The taxable capital gain is included.";
+    if (schedule.lossCarriedForward) return " A net capital loss is carried forward and is not included.";
+    return " The taxable capital gain stays blank, so it is not in this total.";
+  };
   if (input.business && input.business.netProfitCents == null) {
     return {
       cents: null,
@@ -446,6 +457,13 @@ export function itr12DraftTaxableIncome(input: {
       cents: null,
       tie: null,
       note: `The local rental schedule is incomplete. ${named}So this stays blank. ${tail}`,
+    };
+  }
+  if (input.capital?.incomplete) {
+    return {
+      cents: null,
+      tie: null,
+      note: `The capital gains schedule is incomplete, so this stays blank. A blank is not zero. ${tail}`,
     };
   }
   if (input.employmentCents == null) {
@@ -468,10 +486,15 @@ export function itr12DraftTaxableIncome(input: {
   }
   const businessNet = input.business ? input.business.netProfitCents : null;
   const rentalNet = input.rentals ? input.rentals.totalNetCents : null;
+  const capitalCents =
+    input.capital?.includedInTaxableIncome && input.capital.taxableCapitalGainCents != null
+      ? input.capital.taxableCapitalGainCents
+      : null;
   const cents =
     input.employmentCents +
     (input.business ? (businessNet ?? 0) : (practiceNet ?? 0)) +
-    (input.rentals ? (rentalNet ?? 0) : 0);
+    (input.rentals ? (rentalNet ?? 0) : 0) +
+    (capitalCents ?? 0);
   const rentalSentence = input.rentals
     ? "Local rental net is included."
     : "No rental schedule, so rental is not in this total.";
@@ -485,9 +508,10 @@ export function itr12DraftTaxableIncome(input: {
       practiceNetCents: input.business ? null : practiceNet,
       businessNetCents: businessNet,
       rentalNetCents: rentalNet,
+      taxableCapitalGainCents: capitalCents,
       taxableIncomeCents: cents,
     },
-    note: `${practiceSentence} ${rentalSentence} ${tail} s20A is an indicator only and is not applied.`,
+    note: `${practiceSentence} ${rentalSentence} ${tail} s20A is an indicator only and is not applied.${capitalNote(input.capital)}`,
   };
 }
 

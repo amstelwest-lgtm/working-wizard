@@ -48,6 +48,7 @@ import {
   type Itr14SectionId,
 } from "@/lib/tax-specialist/forms/itr14";
 import { saveCatalogDraft } from "@/lib/tax-specialist/forms/pipeline";
+import { CgtSection } from "./za-cgt-section";
 import { formatSampleCents, formatSampleDate } from "@/lib/tax-specialist/sample-compute";
 import "./za-irp6-sheet.css";
 
@@ -1025,6 +1026,15 @@ export function ZaItr14Sheet({
             </div>
           )}
         </div>
+        <CgtSection
+          form="itr14"
+          person="company"
+          disposals={inputs.disposals}
+          assessedCapitalLossBroughtForwardCents={inputs.assessedCapitalLossBroughtForwardCents}
+          schedule={sheet.capital}
+          locked={locked}
+          onChange={(next) => patch(["adjustments"], next)}
+        />
         {inputs.assessedLossBroughtForwardCents != null ? (
           <div data-itr14-assessed-loss="true" style={scheduleStyle}>
             <h4 style={scheduleTitle}>Assessed loss</h4>

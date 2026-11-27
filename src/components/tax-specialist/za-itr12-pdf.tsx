@@ -7,6 +7,7 @@ import { Document, Font, Page, StyleSheet, Text, View } from "@react-pdf/rendere
 import { MilonMark } from "@/components/pdf/glyphs";
 import { C } from "@/components/pdf/theme";
 import { zaToday } from "@/lib/tax-specialist/forms/irp6";
+import { CGT_BLANK_SCHEDULE } from "@/lib/tax-specialist/forms/cgt";
 import {
   ITR12_FOOTER,
   ITR12_SECTIONS,
@@ -235,6 +236,75 @@ function RentalSection({ sheet }: { sheet: Itr12Sheet }) {
   );
 }
 
+function CapitalSection({ sheet }: { sheet: Itr12Sheet }) {
+  const capital = sheet.capital;
+  return (
+    <View style={S.section}>
+      <Text style={S.sectionTitle}>Capital gains</Text>
+      {capital ? (
+        <>
+          {capital.rows.map((row) => (
+            <View key={row.id} style={S.row} wrap={false}>
+              <View style={S.label}>
+                <Text>{pdfText(row.description || "Disposal")}</Text>
+                <Text style={S.note}>
+                  {row.dateAcquired || "Blank"} to {row.dateDisposed || "Blank"}
+                  {row.primaryResidence == null
+                    ? ""
+                    : row.primaryResidence
+                      ? ". Primary residence"
+                      : ""}
+                </Text>
+              </View>
+              <Text style={S.value}>{money(row.gainCents)}</Text>
+              <Text style={S.source}>Proceeds {money(row.proceedsCents)}</Text>
+            </View>
+          ))}
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Aggregate gain or loss</Text>
+            <Text style={S.value}>{money(capital.aggregateCents)}</Text>
+            <Text style={S.source}>Disposal register</Text>
+          </View>
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Annual exclusion</Text>
+            <Text style={S.value}>{money(capital.annualExclusionCents)}</Text>
+            <Text style={S.source}>Individual</Text>
+          </View>
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Primary residence exclusion</Text>
+            <Text style={S.value}>{money(capital.primaryResidenceExclusionCents)}</Text>
+            <Text style={S.source}>Of the gain</Text>
+          </View>
+          <View style={S.row} wrap={false}>
+            <View style={S.label}>
+              <Text>Taxable capital gain</Text>
+              {capital.ratesNote ? <Text style={S.note}>{pdfText(capital.ratesNote)}</Text> : null}
+            </View>
+            <Text style={S.value}>{money(capital.taxableCapitalGainCents)}</Text>
+            <Text style={S.source}>
+              {capital.includedInTaxableIncome ? "Included in taxable income" : "Not included"}
+            </Text>
+          </View>
+          {capital.lossCarriedForward ? (
+            <View style={S.row} wrap={false}>
+              <Text style={S.label}>Capital loss carried forward</Text>
+              <Text style={S.value}>{money(capital.carriedForwardCents)}</Text>
+              <Text style={S.source}>Not included</Text>
+            </View>
+          ) : null}
+          {capital.notes.map((note) => (
+            <Text key={note} style={S.note}>
+              {pdfText(note)}
+            </Text>
+          ))}
+        </>
+      ) : (
+        <Text style={S.note}>{CGT_BLANK_SCHEDULE}</Text>
+      )}
+    </View>
+  );
+}
+
 export function Itr12PDF({
   clientName,
   sheet,
@@ -304,6 +374,7 @@ export function Itr12PDF({
         ))}
         <BusinessSection sheet={sheet} />
         <RentalSection sheet={sheet} />
+        <CapitalSection sheet={sheet} />
         <View style={S.footer} fixed>
           <Text>{pdfText(ITR12_FOOTER)}</Text>
         </View>

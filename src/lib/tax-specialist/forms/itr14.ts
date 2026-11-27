@@ -29,6 +29,13 @@ import {
   type WearAsset,
   type WearSchedule,
 } from "./itr14-allowances.ts";
+import {
+  capitalGainsSchedule,
+  cgtCsvRows,
+  cgtDisposalsFrom,
+  type CgtDisposal,
+  type CgtSchedule,
+} from "./cgt.ts";
 import type { TaxFormDraft, TaxFormDraftField } from "./drafts.ts";
 import {
   irp6Supported,
@@ -547,6 +554,10 @@ export type Itr14Inputs = {
   queries: Itr14Query[];
   /** Empty means no register. Wear-and-tear and depreciation stay as typed, including blank. */
   assets: WearAsset[];
+  /** Empty means no disposal register. A blank register is not zero. */
+  disposals: CgtDisposal[];
+  /** Blank is not zero. Separate from the income-tax assessed loss. */
+  assessedCapitalLossBroughtForwardCents: number | null;
 };
 
 export function emptyItr14Inputs(): Itr14Inputs {
@@ -578,6 +589,8 @@ export function emptyItr14Inputs(): Itr14Inputs {
     balanceSheetAcknowledged: false,
     queries: [],
     assets: [],
+    disposals: [],
+    assessedCapitalLossBroughtForwardCents: null,
   };
 }
 
@@ -621,6 +634,8 @@ export type Itr14Sheet = {
   wear: WearSchedule | null;
   /** Null when the brought-forward balance has not been typed. */
   assessedLoss: AssessedLossWorking | null;
+  /** Null when the disposal register is blank. A blank register is not zero. */
+  capital: CgtSchedule | null;
 };
 
 export type Itr14Client = Irp6Client;
@@ -893,6 +908,9 @@ export function computeItr14(input: {
         assessedLossCarriedCents: assessedLoss?.carriedCents ?? computed.assessedLossCarriedCents,
       }
     : null;
+  /** Unused assessed loss is carried forward. It is not shown as negative taxable income. */
+  const taxableBeforeDonationShown =
+    company == null ? null : Math.max(0, company.taxableBeforeDonationCents);
 
   const creditsReady =
     nonNegative(inputs.provisionalPeriod1Cents) &&
@@ -903,7 +921,27 @@ export function computeItr14(input: {
       inputs.provisionalPeriod2Cents! +
       inputs.provisionalTopUpCents!
     : null;
-  const taxCents = company?.taxCents ?? null;
+  const capital = capitalGainsSchedule({
+    person: "company",
+    yearOfAssessment,
+    disposals: inputs.disposals,
+    assessedCapitalLossBroughtForwardCents: inputs.assessedCapitalLossBroughtForwardCents,
+  });
+  const capitalIncluded =
+    capital?.includedInTaxableIncome === true && capital.taxableCapitalGainCents != null;
+  const shownTaxable =
+    company == null || capital?.incomplete
+      ? null
+      : capitalIncluded
+        ? company.taxableIncomeCents + capital!.taxableCapitalGainCents!
+        : company.taxableIncomeCents;
+  const shownTax =
+    shownTaxable == null || company == null
+      ? null
+      : shownTaxable === company.taxableIncomeCents
+        ? company.taxCents
+        : taxAtCompanyRate(shownTaxable);
+  const taxCents = shownTax;
   const balanceCents = taxCents != null && creditsCents != null ? taxCents - creditsCents : null;
 
   const queries: Itr14Query[] = [];
@@ -1150,9 +1188,12 @@ export function computeItr14(input: {
     "taxableBeforeDonation",
     "adjustments",
     "Taxable income before the donation limit",
-    company?.taxableBeforeDonationCents ?? null,
+    taxableBeforeDonationShown,
     company ? "worked" : "missing",
     true,
+    taxableBeforeDonationShown === 0 && company != null && company.taxableBeforeDonationCents < 0
+      ? "Set-off is limited to income. The unused balance is on the assessed-loss carried-forward line."
+      : undefined,
   );
   amount(
     "donation",
@@ -1323,24 +1364,35 @@ export function computeItr14(input: {
     missing: false,
   });
 
+  const capitalNote = !capital
+    ? ""
+    : capital.incomplete
+      ? " The capital gains schedule is incomplete, so the taxable capital gain is not in this total."
+      : capital.includedInTaxableIncome
+        ? " The taxable capital gain is included."
+        : capital.lossCarriedForward
+          ? " A net capital loss is carried forward and is not included."
+          : " The taxable capital gain stays blank, so it is not in this total.";
   const taxNote = !standard
     ? inputs.companyClass === "sbc"
       ? "Not computed. Small business corporation rates are not on this sheet."
       : "Not computed until the company is confirmed as standard."
     : !supported
       ? "Not computed. This year is before the 27% table."
-      : company
-        ? "27% of taxable income."
-        : "Not computed until the profit and adjustments are filled.";
+      : shownTaxable != null
+        ? `27% of taxable income.${capitalNote}`
+        : capital?.incomplete
+          ? `Not computed until the capital gains schedule is finished.${capitalNote}`
+          : "Not computed until the profit and adjustments are filled.";
   push({
     id: "taxableIncome",
     section: "result",
     label: "Taxable income",
-    display: company ? formatSampleCents(company.taxableIncomeCents) : "Not computed",
-    plain: company ? plainRands(company.taxableIncomeCents) : "Not computed",
-    source: company ? "worked" : "missing",
-    sourceLabel: company ? "Worked out on this sheet" : "Not computed on this sheet",
-    missing: !company,
+    display: shownTaxable != null ? formatSampleCents(shownTaxable) : "Not computed",
+    plain: shownTaxable != null ? plainRands(shownTaxable) : "Not computed",
+    source: shownTaxable != null ? "worked" : "missing",
+    sourceLabel: shownTaxable != null ? "Worked out on this sheet" : "Not computed on this sheet",
+    missing: shownTaxable == null,
     note: taxNote,
   });
   push({
@@ -1466,12 +1518,17 @@ export function computeItr14(input: {
       wearCents! -
       inputs.exemptDividendsCents! -
       lossSubtracted;
+    const beforeShown = Math.max(0, before);
     checks.push({
       id: "adds-up",
       level: before === company.taxableBeforeDonationCents ? "ok" : "error",
-      text: `${formatSampleCents(accountingProfitCents)} profit, adjustments applied, is ${formatSampleCents(company.taxableBeforeDonationCents)} before the donation limit.`,
+      text: `${formatSampleCents(accountingProfitCents)} profit, adjustments applied, is ${formatSampleCents(beforeShown)} before the donation limit.`,
     });
-    if (company.taxCents !== taxAtCompanyRate(company.taxableIncomeCents)) {
+    if (
+      shownTax != null &&
+      shownTaxable != null &&
+      shownTax !== taxAtCompanyRate(shownTaxable)
+    ) {
       checks.push({ id: "rate", level: "error", text: "The tax is not 27% of taxable income." });
     }
   }
@@ -1499,12 +1556,13 @@ export function computeItr14(input: {
     missing: lines.filter((line) => line.missing),
     checks,
     rulesYear: ITR14_RULES_YEAR,
-    taxableIncomeCents: company?.taxableIncomeCents ?? null,
+    taxableIncomeCents: shownTaxable,
     taxCents,
     balanceCents,
     company,
     wear,
     assessedLoss,
+    capital,
   };
 }
 
@@ -1663,6 +1721,8 @@ export function itr14InputsFromDraft(draft: TaxFormDraft | null | undefined): It
     balanceSheetAcknowledged: stored.balanceSheetAcknowledged === true,
     queries: stored.queries.filter(isQuery),
     assets: wearAssetsFrom(stored.assets),
+    disposals: cgtDisposalsFrom(stored.disposals),
+    assessedCapitalLossBroughtForwardCents: centsOf(stored.assessedCapitalLossBroughtForwardCents),
   };
 }
 
@@ -1738,6 +1798,7 @@ export function itr14Csv(sheet: Itr14Sheet): string {
   } else {
     rows.push(["Wear-and-tear schedule", "", "No asset register", "A blank register is not zero"]);
   }
+  rows.push(...cgtCsvRows(sheet.capital));
   if (sheet.assessedLoss) {
     rows.push([
       "Assessed loss set-off",

@@ -48,6 +48,7 @@ import {
 import { wearIssueField } from "@/lib/tax-specialist/forms/itr14-allowances";
 import { saveCatalogDraft } from "@/lib/tax-specialist/forms/pipeline";
 import { AssetDateInput } from "./asset-date-input";
+import { CgtSection } from "./za-cgt-section";
 import "./za-irp6-sheet.css";
 
 type Approvals = Partial<Record<Itr12SectionId, boolean>>;
@@ -1378,6 +1379,16 @@ export function ZaItr12Sheet({
         sheet={sheet}
         locked={locked}
         onChange={(next) => edit(["result"], next)}
+      />
+
+      <CgtSection
+        form="itr12"
+        person="individual"
+        disposals={inputs.disposals ?? []}
+        assessedCapitalLossBroughtForwardCents={inputs.assessedCapitalLossBroughtForwardCents ?? null}
+        schedule={sheet.capital}
+        locked={locked}
+        onChange={(next) => edit(["result"], { ...inputs, ...next })}
       />
 
       <section className="irp6-section" data-itr12-section="result">
