@@ -455,10 +455,11 @@ function LocalSchedules({
         )}
         {business?.assets.map((asset, index) => {
           const issue = worked?.wear?.issues.find((row) => row.id === asset.id);
+          const computed = worked?.wear?.rows.find((line) => line.id === asset.id);
           const issueOn = (field: string) =>
             issue && wearIssueField(issue.message) === field ? issue.message : "";
           return (
-            <fieldset key={asset.id} data-itr12-asset={asset.id}>
+            <fieldset key={asset.id} data-itr12-asset={asset.id} data-itr12-wear-row={asset.id}>
               <legend>Asset {index + 1}</legend>
               <label>
                 Description
@@ -592,7 +593,15 @@ function LocalSchedules({
                     }));
                   }}
                 />
+                {issueOn("private") ? (
+                  <span className="irp6-field-error" data-asset-field-issue="private">
+                    {issueOn("private")}
+                  </span>
+                ) : null}
               </label>
+              <p className="irp6-note" data-itr12-wear-allowance={asset.id}>
+                {computed ? formatSampleCents(computed.allowanceCents) : ""}
+              </p>
               {locked ? null : (
                 <button
                   type="button"

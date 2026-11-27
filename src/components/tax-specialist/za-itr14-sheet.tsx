@@ -449,7 +449,7 @@ export function ZaItr14Sheet({
   const blankAsset = (): WearAsset => ({
     id: nextId("asset"),
     description: "",
-    costCents: 0,
+    costCents: null,
     broughtIntoUse: "",
     category: "",
     section: "s11e",
@@ -862,8 +862,8 @@ export function ZaItr14Sheet({
                         key={`${asset.id}-cost`}
                         id={`itr14-asset-${asset.id}-cost`}
                         label="Cost"
-                        value={asset.description || asset.costCents ? asset.costCents : null}
-                        onChange={(cents) => updateAsset(asset.id, { costCents: cents ?? 0 })}
+                        value={asset.costCents}
+                        onChange={(cents) => updateAsset(asset.id, { costCents: cents })}
                       />
                       {issueOn("cost") ? (
                         <span className="irp6-field-error" data-asset-field-issue="cost">

@@ -225,35 +225,52 @@ type WearEffect = {
   open: boolean;
 };
 
-function readyAssets(assets: readonly Itr12WearDraft[]): WearAsset[] | "pending" {
-  if (assets.length === 0) return [];
-  const ready: WearAsset[] = [];
-  for (const asset of assets) {
-    if (
-      !asset.description.trim() ||
-      !nonNegative(asset.costCents) ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(asset.broughtIntoUse) ||
-      asset.privateUsePercent == null
-    ) {
-      return "pending";
-    }
-    ready.push({
-      id: asset.id,
-      description: asset.description.trim(),
-      costCents: asset.costCents,
-      broughtIntoUse: asset.broughtIntoUse,
-      category: asset.category,
-      section: asset.section,
-      privateUsePercent: asset.privateUsePercent,
-      newAndUnused: asset.newAndUnused,
-      additionCents: asset.additionCents,
-      additionDate: asset.additionDate,
-      disposalDate: asset.disposalDate,
-      proceedsCents: asset.proceedsCents,
-      bookDepreciationCents: asset.bookDepreciationCents,
-    });
+function draftStarted(asset: Itr12WearDraft): boolean {
+  return Boolean(
+    asset.description.trim() ||
+    asset.costCents != null ||
+    asset.broughtIntoUse.trim() ||
+    asset.category.trim() ||
+    asset.privateUsePercent != null ||
+    asset.additionCents != null ||
+    asset.additionDate ||
+    asset.disposalDate ||
+    asset.proceedsCents != null ||
+    asset.bookDepreciationCents != null,
+  );
+}
+
+/** A blank row stays blank. A started row names the first field that failed. */
+function classifyAsset(asset: Itr12WearDraft): WearAsset | { error: string } | "blank" {
+  if (!draftStarted(asset)) return "blank";
+  if (!asset.description.trim()) return { error: "An asset needs a description." };
+  if (!nonNegative(asset.costCents)) return { error: "Cost must be a nil or positive amount." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(asset.broughtIntoUse)) {
+    return { error: "Date brought into use must be a real date." };
   }
-  return ready;
+  if (
+    asset.privateUsePercent == null ||
+    !Number.isInteger(asset.privateUsePercent) ||
+    asset.privateUsePercent < 0 ||
+    asset.privateUsePercent > 100
+  ) {
+    return { error: "Private use must be a whole percent from 0 to 100." };
+  }
+  return {
+    id: asset.id,
+    description: asset.description.trim(),
+    costCents: asset.costCents,
+    broughtIntoUse: asset.broughtIntoUse,
+    category: asset.category,
+    section: asset.section,
+    privateUsePercent: asset.privateUsePercent,
+    newAndUnused: asset.newAndUnused,
+    additionCents: asset.additionCents,
+    additionDate: asset.additionDate,
+    disposalDate: asset.disposalDate,
+    proceedsCents: asset.proceedsCents,
+    bookDepreciationCents: asset.bookDepreciationCents,
+  };
 }
 
 function wearEffect(
@@ -262,26 +279,51 @@ function wearEffect(
   yearStart: string,
   yearEnd: string,
 ): WearEffect {
-  const ready = readyAssets(assets);
-  if (ready === "pending") {
+  const ready: WearAsset[] = [];
+  const blocked: WearSchedule["issues"] = [];
+  for (const asset of assets) {
+    const classified = classifyAsset(asset);
+    if (classified === "blank") continue;
+    if ("error" in classified) {
+      blocked.push({ id: asset.id, message: classified.error });
+      continue;
+    }
+    ready.push(classified);
+  }
+  if (ready.length === 0 && blocked.length === 0) {
+    if (assets.length === 0 && nonNegative(typedCents)) {
+      return { wear: null, cents: typedCents, recoupmentCents: null, open: false };
+    }
     return { wear: null, cents: null, recoupmentCents: null, open: true };
   }
-  if (ready.length > 0) {
-    const wear = wearSchedule(ready, yearStart, yearEnd);
-    if (wear?.wearAndTearCents == null) {
-      return { wear, cents: null, recoupmentCents: null, open: true };
-    }
-    return {
-      wear,
-      cents: wear.wearAndTearCents,
-      recoupmentCents: wear.recoupmentCents,
-      open: false,
-    };
+  const computed = ready.length > 0 ? wearSchedule(ready, yearStart, yearEnd) : null;
+  const issues = [...(computed?.issues ?? []), ...blocked];
+  const wear: WearSchedule | null = computed
+    ? { ...computed, issues }
+    : {
+        draft: true,
+        rows: [],
+        issues,
+        wearAndTearCents: null,
+        bookDepreciationCents: null,
+        recoupmentCents: 0,
+        depreciationAddBackCents: null,
+        notes: [],
+      };
+  if (
+    blocked.length > 0 ||
+    computed == null ||
+    computed.wearAndTearCents == null ||
+    computed.issues.length > 0
+  ) {
+    return { wear, cents: null, recoupmentCents: null, open: true };
   }
-  if (nonNegative(typedCents)) {
-    return { wear: null, cents: typedCents, recoupmentCents: null, open: false };
-  }
-  return { wear: null, cents: null, recoupmentCents: null, open: true };
+  return {
+    wear,
+    cents: computed.wearAndTearCents,
+    recoupmentCents: computed.recoupmentCents,
+    open: false,
+  };
 }
 
 /** Null when the accountant has not started a local business schedule. */

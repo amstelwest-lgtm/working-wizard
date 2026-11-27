@@ -25,7 +25,8 @@ export type WearSection = "s11e" | "s12c";
 export type WearAsset = {
   id: string;
   description: string;
-  costCents: number;
+  /** Whole cents. Null is blank, not zero. */
+  costCents: number | null;
   broughtIntoUse: string;
   category: string;
   section: WearSection;
@@ -456,13 +457,15 @@ function disposalInYear(asset: WearAsset, yearStart: string, yearEnd: string): s
 function rowFor(asset: WearAsset, yearStart: string, yearEnd: string): WearRow | { error: string } {
   const problem = assetProblem(asset);
   if (problem) return { error: problem };
+  const costCents = asset.costCents;
+  if (costCents == null) return { error: "Cost must be a nil or positive amount." };
   if (asset.disposalDate && asset.disposalDate < yearStart) {
     return {
       id: asset.id,
       description: asset.description,
       sectionLabel: asset.section === "s12c" ? "s12C" : "s11(e)",
       category: asset.category,
-      costCents: asset.costCents + (asset.additionCents ?? 0),
+      costCents: costCents + (asset.additionCents ?? 0),
       allowanceCents: 0,
       recoupmentCents: 0,
       taxValueCents: 0,
@@ -471,7 +474,7 @@ function rowFor(asset: WearAsset, yearStart: string, yearEnd: string): WearRow |
   }
   const disposal = disposalInYear(asset, yearStart, yearEnd);
   const components: Component[] = [
-    { costCents: asset.costCents, broughtIntoUse: asset.broughtIntoUse, label: asset.description },
+    { costCents, broughtIntoUse: asset.broughtIntoUse, label: asset.description },
   ];
   if (asset.additionCents != null && asset.additionCents > 0 && asset.additionDate) {
     const addBy = disposal ?? yearEnd;
@@ -521,7 +524,7 @@ function rowFor(asset: WearAsset, yearStart: string, yearEnd: string): WearRow |
 
 function assetProblem(asset: WearAsset): string | null {
   if (!asset.description.trim()) return "An asset needs a description.";
-  if (!Number.isSafeInteger(asset.costCents) || asset.costCents < 0)
+  if (asset.costCents == null || !Number.isSafeInteger(asset.costCents) || asset.costCents < 0)
     return "Cost must be a nil or positive amount.";
   if (!parseIso(asset.broughtIntoUse)) return "Date brought into use must be a real date.";
   if (asset.section !== "s11e" && asset.section !== "s12c")
@@ -704,9 +707,10 @@ function coerceAsset(value: unknown, index: number): WearAsset | null {
   const row = value as Record<string, unknown>;
   const description = text(row.description) || text(row.name);
   const costCents = money(row, "costCents", "cost");
-  const broughtIntoUse = parseDate(row.broughtIntoUse) || parseDate(row.dateBroughtIntoUse);
+  const broughtIntoUse = parseDate(row.broughtIntoUse) || parseDate(row.dateBroughtIntoUse) || "";
+  const category = text(row.category);
   const section = parseSection(row.section);
-  if (!description || costCents == null || !broughtIntoUse || !section) return null;
+  if (!description && costCents == null && !broughtIntoUse && !category && !section) return null;
   const privateUse = parsePercent(row.privateUsePercent ?? row.privateUse);
   const additionCents = money(row, "additionCents", "addition");
   const proceedsCents = money(row, "proceedsCents", "proceeds");
@@ -716,8 +720,8 @@ function coerceAsset(value: unknown, index: number): WearAsset | null {
     description,
     costCents,
     broughtIntoUse,
-    category: text(row.category),
-    section,
+    category,
+    section: section ?? "s11e",
     privateUsePercent: privateUse ?? -1,
     newAndUnused: parseFlag(row.newAndUnused ?? row.newAndUnusedAsset),
     smallItem: row.smallItem === true || row.section === "small",
@@ -729,7 +733,10 @@ function coerceAsset(value: unknown, index: number): WearAsset | null {
   };
 }
 
-/** Typed assets and imported rows share one shape. Rows that are not assets are dropped. */
+/**
+ * Typed assets and imported rows share one shape. A row with no asset fields
+ * is dropped. A blank cost stays on the row so the accountant can see it.
+ */
 export function wearAssetsFrom(value: unknown): WearAsset[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((row, index) => {

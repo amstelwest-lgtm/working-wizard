@@ -317,6 +317,7 @@ assert(sheetSrc.includes("AssetDateInput"), "the asset date uses the shared inpu
 assert(!sheetSrc.includes('type="date"'), "the asset date is not the browser date control");
 assert(sheetSrc.includes("Asset {index + 1}"), "an asset legend does not echo the description");
 assert(sheetSrc.includes("data-itr12-gap"), "a missing rental field is named beside the input");
+assert(sheetSrc.includes('data-asset-field-issue="cost"'), "a failed asset cost is named beside the field");
 const dateSrc = readFileSync("src/components/tax-specialist/asset-date-input.tsx", "utf8");
 assert(dateSrc.includes("onBlur"), "the date commits on blur");
 assert(dateSrc.includes('type="text"'), "the date is a plain text input");
@@ -435,6 +436,87 @@ const wearBlank = businessSchedule(
 );
 eq(wearBlank?.wearAndTearCents, null, "wear without a register stays blank");
 eq(wearBlank?.netProfitCents, null, "a missing wear figure does not become zero");
+const clearedCost = {
+  ...laptop,
+  id: "cleared",
+  description: "Printer",
+  costCents: null,
+};
+const mixedWear = businessSchedule(
+  { ...businessInput, assets: [laptop, clearedCost] },
+  yearStart,
+  yearEnd,
+);
+eq(mixedWear?.wear?.rows.some((row) => row.id === "pc"), true, "a complete asset stays beside the cleared cost");
+eq(mixedWear?.wear?.rows.find((row) => row.id === "pc")?.allowanceCents, 1_200_000, "the complete asset keeps its allowance");
+eq(mixedWear?.wear?.rows.some((row) => row.id === "cleared"), false, "a cleared cost is not given an allowance");
+eq(
+  mixedWear?.wear?.issues.find((issue) => issue.id === "cleared")?.message,
+  "Cost must be a nil or positive amount.",
+  "a cleared cost names the cost field",
+);
+eq(mixedWear?.wearAndTearCents, null, "one cleared cost keeps the wear total blank");
+eq(mixedWear?.netProfitCents, null, "one cleared cost keeps the net blank");
+assert(
+  mixedWear?.notes.includes(
+    "Wear-and-tear is blank. A blank register is not zero, so the net stays blank.",
+  ),
+  "the footer summary stays",
+);
+const untouched = {
+  ...laptop,
+  id: "empty",
+  description: "",
+  costCents: null,
+  broughtIntoUse: "",
+  category: "",
+  privateUsePercent: null,
+};
+const blankBeside = businessSchedule(
+  { ...businessInput, assets: [laptop, untouched] },
+  yearStart,
+  yearEnd,
+);
+eq(blankBeside?.wear?.issues.some((issue) => issue.id === "empty"), false, "a blank asset is not an error");
+eq(blankBeside?.wearAndTearCents, 1_200_000, "a blank asset stays blank and does not wipe the complete row");
+eq(blankBeside?.netProfitCents, 17_100_000, "a blank asset is not treated as zero");
+const mixedAssetView = renderToStaticMarkup(
+  createElement(ZaItr12Sheet, {
+    client: { id: "c1", name: "Nicola Physio" },
+    today: "2026-11-03",
+    drafts: [],
+    initialYear: 2026,
+    seed: {
+      ...emptyItr12Inputs(),
+      business: { ...businessInput, assets: [laptop, clearedCost] },
+    },
+    onSaved: () => undefined,
+    onBack: () => undefined,
+  }),
+);
+assert(mixedAssetView.includes('data-itr12-wear-row="pc"'), "the complete asset row stays on the sheet");
+assert(mixedAssetView.includes('data-itr12-wear-row="cleared"'), "the cleared cost row stays on the sheet");
+const clearedAssetHtml =
+  mixedAssetView.split('data-itr12-wear-row="cleared"')[1]?.split("data-itr12-asset-add")[0] ?? "";
+assert(
+  clearedAssetHtml.includes('data-asset-field-issue="cost"'),
+  "the cost message sits beside the cost field",
+);
+assert(
+  clearedAssetHtml.includes("Cost must be a nil or positive amount."),
+  "the cost sentence is on that row",
+);
+assert(
+  mixedAssetView.includes(
+    "Wear-and-tear is blank. A blank register is not zero, so the net stays blank.",
+  ),
+  "the sheet keeps the footer summary",
+);
+assert(!clearedAssetHtml.includes("0.00"), "a cleared cost stays blank");
+assert(
+  mixedAssetView.includes('data-itr12-wear-allowance="pc">R 12 000.00'),
+  "the complete row still shows its allowance",
+);
 
 function rental(id: string, description: string, privateUsePercent: number, amounts: number[]): Itr12RentalProperty {
   const [rent, rates, interest, insurance, repairs, levies, agent, wear] = amounts;

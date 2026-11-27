@@ -980,6 +980,63 @@ assert(
   mixedView.includes('data-asset-field-issue="category"'),
   "the category message sits beside the category field",
 );
+const clearedAsset = {
+  ...fixture[0]!,
+  id: "cleared",
+  description: "Printer",
+  costCents: null,
+};
+const clearedSchedule = wearSchedule([fixture[0]!, clearedAsset], "2025-03-01", "2026-02-28");
+eq(clearedSchedule?.rows.some((row) => row.id === "laptop"), true, "a complete asset stays beside a cleared cost");
+eq(clearedSchedule?.rows.some((row) => row.id === "cleared"), false, "a cleared cost is not given an allowance");
+eq(
+  clearedSchedule?.issues.find((issue) => issue.id === "cleared")?.message,
+  "Cost must be a nil or positive amount.",
+  "a cleared cost names the cost field",
+);
+const clearedView = renderSheet(
+  {
+    ...base,
+    assets: [fixture[0]!, clearedAsset],
+    wearAndTearCents: null,
+    depreciationAddBackCents: null,
+  },
+  "cleared-cost",
+);
+assert(clearedView.includes('data-itr14-wear-row="laptop"'), "the complete asset row stays visible");
+assert(clearedView.includes('data-itr14-wear-row="cleared"'), "the cleared cost row stays visible");
+assert(clearedView.includes('data-itr14-wear-allowance="laptop"'), "the complete allowance stays on its row");
+assert(clearedView.includes('data-itr14-wear-allowance=""'), "the cleared row allowance stays blank");
+const clearedFields =
+  clearedView.split('data-itr14-asset="cleared"')[1]?.split("data-itr14-add-asset")[0] ?? "";
+assert(
+  clearedFields.includes('data-asset-field-issue="cost"'),
+  "the cost message sits beside the cost field",
+);
+assert(
+  clearedFields.includes("Cost must be a nil or positive amount."),
+  "the cost sentence is on that row",
+);
+assert(
+  clearedView.includes("Printer: Cost must be a nil or positive amount."),
+  "the footer summary keeps the cost message",
+);
+assert(
+  /id="itr14-asset-cleared-cost"[^>]*value=""/.test(clearedView),
+  "a cleared cost stays blank",
+);
+const keptBlankCost = importWearAssets([
+  {
+    description: "Printer",
+    cost: "",
+    dateBroughtIntoUse: "2025-03-01",
+    section: "s11(e)",
+    category: "Personal computers",
+  },
+]);
+eq(keptBlankCost.length, 1, "a blank cost stays on the imported row");
+eq(keptBlankCost[0]?.costCents, null, "an imported blank cost is not zero");
+eq(importWearAssets([{}]).length, 0, "a row with no asset fields is dropped");
 assert(mixedView.includes("<legend>Asset 1</legend>"), "the first asset legend is static");
 assert(mixedView.includes("<legend>Asset 2</legend>"), "the second asset legend is static");
 const itr14SheetSrc = readFileSync("src/components/tax-specialist/za-itr14-sheet.tsx", "utf8");

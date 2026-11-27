@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { getDocumentProxy } from "unpdf";
 import { DtrPDF } from "../src/components/tax-specialist/za-dtr-pdf";
 import { ZaDtrSheet } from "../src/components/tax-specialist/za-dtr-sheet";
+import { isCatalogForm } from "../src/lib/tax-specialist/forms/pipeline";
 import { ZaTaxSpecialistPage } from "../src/components/tax-specialist/za-tax-specialist-page";
 import { TaxWorkBoard } from "../src/components/tax-specialist/za-tax-work";
 import {
@@ -347,6 +348,31 @@ const sheetSrc = readFileSync("src/components/tax-specialist/za-dtr-sheet.tsx", 
 assert(sheetSrc.includes("Add beneficial owner"), "the sheet source is the owner form");
 assert(sheetSrc.includes("Download PDF"), "the sheet source downloads a PDF");
 assert(!sheetSrc.includes("0.00"), "the sheet source does not paint 0.00");
+assert(!sheetSrc.includes("Save draft"), "the sheet has no Save until DTR is a catalog form");
+assert(!sheetSrc.includes("saveCatalogDraft"), "the sheet does not call the catalog save");
+assert(!sheetSrc.includes("saveTaxFormDraft"), "the sheet does not write tax_form_drafts");
+assert(!isCatalogForm("DTR"), "DTR is not a catalog form code");
+assert(!isCatalogForm("DTR01"), "DTR01 is not a catalog form code");
+assert(!isCatalogForm("DTR02"), "DTR02 is not a catalog form code");
+const catalogMigration = readFileSync(
+  "supabase/migrations/20261102170000_tax_form_drafts_catalog.sql",
+  "utf8",
+);
+assert(!catalogMigration.includes("'DTR'"), "the catalog migration has no DTR row");
+assert(
+  catalogMigration.includes("unknown tax form") && catalogMigration.includes("23514"),
+  "save_tax_form_draft_version rejects a code that is not in tax_form_catalog",
+);
+assert(
+  catalogMigration.includes("tax_form_drafts_form_code_fkey"),
+  "form_code references tax_form_catalog",
+);
+assert(
+  !readFileSync("src/components/tax-specialist/za-tax-work.tsx", "utf8").includes(
+    'data-tax-work-open="DTR"',
+  ),
+  "the drafts list has no DTR row until the catalog allows one",
+);
 assert(
   readFileSync("src/components/tax-specialist/za-tax-work.tsx", "utf8").includes(
     'data-tax-work-prepare="DTR"',
