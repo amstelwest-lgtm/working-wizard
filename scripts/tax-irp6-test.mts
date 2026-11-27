@@ -3,14 +3,18 @@
  * amount and the 80% check, plus due dates, validations, CSV and file name.
  * Run: pnpm test:tax-irp6
  */
+import { readFileSync } from "node:fs";
 import {
   IRP6_EMPTY_INPUTS,
   IRP6_FIELDS,
   computeIrp6,
+  IRP6_FOURTH_SCHEDULE_SIGNED_OFF_YEARS,
+  irp6BasicAmount,
   irp6CanDownload,
   irp6Csv,
   irp6DefaultPick,
   irp6FileName,
+  irp6FourthScheduleSignedOff,
   irp6MissingSentence,
   irp6PeriodDates,
   irp6YearEnd,
@@ -20,6 +24,7 @@ import {
   validTaxReference,
   type Irp6Client,
   type Irp6Inputs,
+  type Irp6LatestAssessment,
 } from "../src/lib/tax-specialist/forms/irp6.ts";
 import {
   IRP6_DEMO_CLIENT,
@@ -381,5 +386,136 @@ check(
   "CSV adjustment row is quoted",
 );
 check(csv.includes("Due date,2027-02-26"), "CSV due date");
+
+// Paragraph 19 basic amount and paragraph 20 penalty. Draft figures only.
+// docs/sars does not sign off the penalty, so the rand amount stays off the sheet.
+equal(IRP6_FOURTH_SCHEDULE_SIGNED_OFF_YEARS.length, 0, "docs/sars has not signed off paragraph 20");
+check(!irp6FourthScheduleSignedOff(2027), "2027 penalty stays hidden");
+check(
+  readFileSync(new URL("../docs/sars/README.md", import.meta.url), "utf8").includes(
+    "It is not signed off here for any year of assessment",
+  ),
+  "docs/sars records no paragraph 20 sign-off",
+);
+equal(period2.underestimationPenaltyCents, 0, "a full estimate has no paragraph 20 amount");
+
+function assessment(yearEnd: string): Irp6LatestAssessment {
+  return {
+    taxableIncomeCents: 50_000_000,
+    taxableCapitalGainCents: 2_000_000,
+    lumpSumCents: 1_000_000,
+    severanceBenefitCents: 500_000,
+    retirementFundWithdrawalCents: 1_500_000,
+    yearEnd,
+  };
+}
+
+const reduced = irp6BasicAmount(assessment("2026-02-28"), "2027-02-28");
+equal(reduced?.beforeUpliftCents, 45_000_000, "exclusions come off the assessed income");
+equal(reduced?.stale, false, "12 months is not a stale assessment");
+equal(reduced?.basicAmountCents, 45_000_000, "within 18 months the uplift is not added");
+const eighteen = irp6BasicAmount(assessment("2025-08-28"), "2027-02-28");
+equal(eighteen?.stale, false, "exactly 18 months does not uplift");
+equal(
+  irp6BasicAmount({ ...assessment("2024-02-28"), lumpSumCents: -1 }, "2027-02-28"),
+  null,
+  "a negative exclusion is not a basic amount",
+);
+
+// Estimate below the basic amount, and below 90% of actual, at R1 million.
+const belowBasic = computeIrp6({
+  client: IRP6_DEMO_CLIENT,
+  yearOfAssessment: 2027,
+  period: 2,
+  inputs: { ...IRP6_DEMO_INPUTS, estimateOverrideCents: 80_000_000 },
+});
+equal(belowBasic.workedEstimateCents, 100_000_000, "actual taxable income is R1 million");
+equal(belowBasic.estimateCents, 80_000_000, "the estimate is below the basic amount");
+equal(belowBasic.underestimationPenaltyCents, 540_000, "20% of the tax on the R100 000 gap");
+check(
+  !belowBasic.checks.some((c) => c.id === "underestimation-penalty"),
+  "the rand penalty is not a check",
+);
+check(
+  !belowBasic.checks.some((c) => c.text.includes("R 5 400.00")),
+  "the sheet does not show the rand penalty",
+);
+check(
+  !/penalty/i.test(irp6Csv(belowBasic, IRP6_DEMO_INPUTS.adjustments)),
+  "the CSV has no penalty",
+);
+
+// Estimate below 80%, taxable income over R1 million. The basic amount is not a safe harbour.
+const overMillion = computeIrp6({
+  client: IRP6_DEMO_CLIENT,
+  yearOfAssessment: 2027,
+  period: 2,
+  inputs: {
+    ...IRP6_DEMO_INPUTS,
+    adjustments: [],
+    estimateOverrideCents: 90_000_000,
+    basicAmountCents: 80_000_000,
+  },
+});
+equal(overMillion.workedEstimateCents, 120_000_000, "taxable income is over R1 million");
+equal(overMillion.estimatePercentOfActual, 75, "the estimate is below 80%");
+check(
+  overMillion.estimateCents != null && overMillion.estimateCents > 80_000_000,
+  "the estimate is above the basic amount",
+);
+equal(
+  overMillion.underestimationPenaltyCents,
+  324_000,
+  "20% of tax on 80% minus tax on the estimate",
+);
+check(
+  !overMillion.checks.some((c) => c.text.includes("R 3 240.00")),
+  "the over-R1-million penalty stays off the sheet",
+);
+equal(enough.underestimationPenaltyCents, 0, "exactly 80% is not charged");
+
+// Stale assessment: more than 18 months before the year end, uplift applied.
+const stale = computeIrp6({
+  client: IRP6_DEMO_CLIENT,
+  yearOfAssessment: 2027,
+  period: 2,
+  inputs: {
+    ...IRP6_DEMO_INPUTS,
+    assessment: assessment("2024-02-28"),
+    estimateOverrideCents: 50_000_000,
+  },
+});
+equal(stale.yearEnd, "2027-02-28", "the 2027 year ends on 28 February");
+equal(stale.basicAmountUpliftCents, 10_800_000, "8% a year for 3 years is added");
+equal(stale.basicAmountCents, 55_800_000, "the basic amount includes the uplift");
+equal(
+  stale.lines.find((line) => line.id === "basicAmount")?.plain,
+  "558000.00",
+  "the sheet shows the uplifted basic amount",
+);
+check(
+  stale.checks.some(
+    (c) =>
+      c.id === "basic-amount-uplift" &&
+      c.text.includes("3 years") &&
+      c.text.includes("R 108 000.00"),
+  ),
+  "the uplift is applied, not only flagged",
+);
+check(
+  !stale.checks.some((c) => c.text.includes("does not add it")),
+  "a known stale assessment is not left uncounted",
+);
+equal(stale.underestimationPenaltyCents, 313_200, "the penalty uses the uplifted basic amount");
+const leap = irp6BasicAmount(assessment("2024-02-29"), "2027-02-28");
+equal(leap?.upliftYears, 3, "a leap-day year end still counts three years");
+const recent = computeIrp6({
+  client: IRP6_DEMO_CLIENT,
+  yearOfAssessment: 2027,
+  period: 2,
+  inputs: { ...IRP6_DEMO_INPUTS, assessment: assessment("2026-02-28") },
+});
+equal(recent.basicAmountUpliftCents, 0, "a recent assessment is not uplifted");
+equal(recent.basicAmountCents, 45_000_000, "the recent basic amount is the reduced assessment");
 
 console.log(`tax-irp6: ${passed} checks passed`);

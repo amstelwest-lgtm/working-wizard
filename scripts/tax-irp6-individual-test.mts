@@ -23,7 +23,11 @@ import {
   type Irp6IndLine,
   type Irp6IndividualInputs,
 } from "../src/lib/tax-specialist/forms/irp6-individual";
-import type { Irp6Client } from "../src/lib/tax-specialist/forms/irp6";
+import {
+  irp6FourthScheduleSignedOff,
+  type Irp6Client,
+  type Irp6LatestAssessment,
+} from "../src/lib/tax-specialist/forms/irp6";
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg);
@@ -368,5 +372,78 @@ assert(pdfText.includes("file-emp"), "the PDF cites a file id");
 assert(pdfText.includes("116") || pdfText.includes("R 116"), "the PDF shows the tax");
 assert(!/penalty/.test(pdfText), "the PDF has no penalty");
 assert(!/mailto:/i.test(pdfText), "the PDF is not an email");
+
+const assessment: Irp6LatestAssessment = {
+  taxableIncomeCents: 50_000_000,
+  taxableCapitalGainCents: 2_000_000,
+  lumpSumCents: 1_000_000,
+  severanceBenefitCents: 500_000,
+  retirementFundWithdrawalCents: 1_500_000,
+  yearEnd: "2024-02-28",
+};
+
+const belowBasic = computeIrp6Individual({
+  client: nicola,
+  yearOfAssessment: 2027,
+  period: 2,
+  inputs: { ...filled, estimateOverrideCents: 20_000_000 },
+});
+eq(belowBasic.estimateCents, 20_000_000, "the estimate is below the basic amount");
+eq(belowBasic.basicAmountCents, 30_000_000, "the cited basic amount is used");
+eq(belowBasic.underestimationPenaltyCents, 3_600, "20% of the tax on the income gap");
+assert(
+  !belowBasic.checks.some((check) => check.id === "underestimation-penalty" || /penalty/.test(check.text)),
+  "the rand penalty stays off the individual sheet",
+);
+assert(!/penalty/.test(irp6IndividualCsv(belowBasic)), "the individual CSV has no penalty");
+eq(low.underestimationPenaltyCents, 0, "below 80% but above the basic amount is not charged under R1 million");
+
+const overLines = filled.lines.map((row) =>
+  row.fieldId === "employmentIncome"
+    ? { ...row, amountCents: 120_000_000 }
+    : row.fieldId === "practiceIncome" ||
+        row.fieldId === "localInterest" ||
+        row.fieldId === "practiceExpenses" ||
+        row.fieldId === "travelClaim"
+      ? { ...row, amountCents: 0 }
+      : row.fieldId === "basicAmount"
+        ? { ...row, amountCents: 80_000_000 }
+        : row,
+);
+const overMillion = computeIrp6Individual({
+  client: nicola,
+  yearOfAssessment: 2027,
+  period: 2,
+  inputs: { ...filled, lines: overLines, estimateOverrideCents: 90_000_000 },
+});
+eq(overMillion.workedCents, 120_000_000, "taxable income is over R1 million");
+eq(overMillion.estimatePercent, 75, "the estimate is below 80%");
+eq(overMillion.basicAmountCents, 80_000_000, "the basic amount is below the estimate");
+eq(overMillion.underestimationPenaltyCents, 492_000, "above R1 million, 20% of the tax difference");
+assert(!/penalty/.test(irp6IndividualCsv(overMillion)), "the over-R1-million penalty is not in the CSV");
+assert(!irp6FourthScheduleSignedOff(2027), "docs/sars has not signed off the 2027 penalty");
+
+const stale = computeIrp6Individual({
+  client: nicola,
+  yearOfAssessment: 2027,
+  period: 2,
+  inputs: { ...filled, assessment, estimateOverrideCents: 20_000_000 },
+});
+eq(stale.basicAmountUpliftCents, 10_800_000, "a stale assessment adds 8% a year");
+eq(stale.basicAmountCents, 55_800_000, "the uplifted basic amount replaces the cited figure");
+eq(stale.underestimationPenaltyCents, 808_840, "the penalty uses the lesser of 90% and the uplifted basic amount");
+assert(
+  stale.checks.some((check) => check.id === "basic-amount-uplift" && check.text.includes("3 years")),
+  "the uplift is applied",
+);
+assert(!/penalty/.test(stale.checks.map((check) => check.text).join(" ")), "the uplift check is not a rand penalty");
+
+const unpriced = computeIrp6Individual({
+  client: nicola,
+  yearOfAssessment: 2028,
+  period: 2,
+  inputs: { ...filled, estimateOverrideCents: 20_000_000 },
+});
+eq(unpriced.underestimationPenaltyCents, null, "a year without a rate table has no penalty amount");
 
 console.log("tax-irp6-individual ok");
