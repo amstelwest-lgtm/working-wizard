@@ -10,9 +10,10 @@
  * A blank is not zero. Tax uses the signed-off individual rate table for
  * that year of assessment. A year with no table stays blank.
  *
- * The sheet shows the estimate against 80% of the worked figure. It does
- * not compute a penalty or interest. Medical tax credit and the
- * retirement-annuity cap are not applied.
+ * The sheet shows the estimate against 80% of the worked figure. Paragraph 20
+ * is worked out for period 2 and kept off the sheet unless that year is
+ * signed off in docs/sars. Medical tax credit and the retirement-annuity
+ * cap are not applied.
  *
  * Milōn does not log into SARS, does not submit, and does not email the
  * sheet to the client.
@@ -26,12 +27,20 @@ import {
   irp6DefaultPick,
   irp6PeriodDates,
   irp6PeriodLabel,
+  IRP6_BASIC_AMOUNT_EXCLUSIONS,
+  irp6BasicAmount,
+  irp6BasicAmountNote,
+  irp6FourthScheduleSignedOff,
+  irp6UnderestimationPenalty,
+  irp6UnderestimationPenaltyText,
+  irp6UpliftCheckText,
   irp6YearEnd,
   normaliseTaxReference,
   parseRandsToCents,
   plainRands,
   validTaxReference,
   type Irp6Client,
+  type Irp6LatestAssessment,
   type Irp6Period,
   type Irp6SectionId,
   type Irp6SourceKind,
@@ -285,7 +294,7 @@ const MONEY: ReadonlyArray<{
     label: "Basic amount, from the latest assessment",
     itemKey: null,
     required: true,
-    note: "Taxable income on the latest assessment, less any taxable capital gain.",
+    note: IRP6_BASIC_AMOUNT_EXCLUSIONS,
   },
   {
     id: "payeWithheld",
@@ -480,6 +489,12 @@ export type Irp6IndividualInputs = {
   lines: Irp6IndLine[];
   estimateOverrideCents: number | null;
   queries: Irp6IndQuery[];
+  /**
+   * Latest assessment, when it is known. Paragraph 19(1)(d) then replaces
+   * the cited basic amount. Absent, the cited figure is used and the 8%
+   * uplift is not invented.
+   */
+  assessment?: Irp6LatestAssessment | null;
 };
 
 export type Irp6IndividualApproverRole = "owner" | "accountant";
@@ -648,11 +663,21 @@ export type Irp6IndividualSheet = {
   ageBand: Irp6AgeBand | null;
   workedCents: number | null;
   estimateCents: number | null;
+  /** Paragraph 19 amount used here. Null when none was supplied. */
+  basicAmountCents: number | null;
+  /** 8% included in basicAmountCents. Zero when the uplift does not apply. */
+  basicAmountUpliftCents: number;
   eightyCents: number | null;
   estimatePercent: number | null;
   estimatedTaxCents: number | null;
   taxForPeriodCents: number | null;
   taxPayableCents: number | null;
+  /**
+   * Paragraph 20 for period 2. Null when it is not period 2 or it cannot
+   * be priced. Kept off the lines, the checks, the PDF, and the CSV unless
+   * that year is signed off in docs/sars.
+   */
+  underestimationPenaltyCents: number | null;
   lines: Irp6IndividualLine[];
   queries: Irp6IndQuery[];
   missing: Irp6IndividualLine[];
@@ -892,9 +917,11 @@ export function computeIrp6Individual(input: {
     note: ageLabel ? undefined : "Age was not supplied, so only the primary rebate is taken off.",
   });
 
+  const assessed = inputs.assessment != null ? irp6BasicAmount(inputs.assessment, yearEnd) : null;
   for (const field of MONEY) {
     if (field.id === "paymentsMade" && period === 1) continue;
-    const cents = amount(field.id);
+    const fromAssessment = field.id === "basicAmount" ? assessed : null;
+    const cents = fromAssessment ? fromAssessment.basicAmountCents : amount(field.id);
     const sourced = sourceOf(field.id, cents);
     const required = field.required === true || (field.required === "after-period-1" && period > 1);
     push({
@@ -911,12 +938,12 @@ export function computeIrp6Individual(input: {
             : null,
       display: money(cents),
       plain: cents == null ? "" : plainRands(cents),
-      source: cents == null ? "input" : sourced.source,
-      sourceLabel: sourced.sourceLabel,
-      fileId: sourced.fileId,
+      source: fromAssessment ? "worked" : cents == null ? "input" : sourced.source,
+      sourceLabel: fromAssessment ? "Worked out on this sheet" : sourced.sourceLabel,
+      fileId: fromAssessment ? null : sourced.fileId,
       required,
       missing: required && cents == null,
-      note: field.note,
+      note: fromAssessment ? irp6BasicAmountNote(fromAssessment) : field.note,
     });
   }
 
@@ -1053,12 +1080,41 @@ export function computeIrp6Individual(input: {
       text: "Age was not supplied, so only the primary rebate is taken off.",
     });
   }
-  const basic = amount("basicAmount");
+  const basic = assessed ? assessed.basicAmountCents : amount("basicAmount");
   if (estimateCents != null && basic != null && estimateCents < basic) {
     checks.push({
       id: "basic-amount",
       level: "warning",
       text: `The estimate is below the basic amount of ${formatSampleCents(basic)}.`,
+    });
+  }
+  if (assessed) {
+    checks.push({
+      id: "basic-amount-uplift",
+      level: assessed.stale ? "warning" : "ok",
+      text: irp6UpliftCheckText(assessed),
+    });
+  }
+  const penalty =
+    period === 2 && estimateCents != null && workedCents != null && workedCents > 0
+      ? irp6UnderestimationPenalty({
+          actualTaxableIncomeCents: workedCents,
+          estimateCents,
+          basicAmountCents: basic,
+          employeesTaxCents: amount("payeWithheld"),
+          provisionalPaidCents: amount("paymentsMade"),
+          taxOn: (cents) => individualNormalTaxCents(yearOfAssessment, cents, inputs.ageBand),
+        })
+      : null;
+  if (
+    penalty?.penaltyCents != null &&
+    penalty.penaltyCents > 0 &&
+    irp6FourthScheduleSignedOff(yearOfAssessment)
+  ) {
+    checks.push({
+      id: "underestimation-penalty",
+      level: "warning",
+      text: irp6UnderestimationPenaltyText(penalty.penaltyCents),
     });
   }
   if (estimatePercent != null && eightyCents != null) {
@@ -1081,11 +1137,14 @@ export function computeIrp6Individual(input: {
     ageBand: inputs.ageBand,
     workedCents,
     estimateCents,
+    basicAmountCents: basic,
+    basicAmountUpliftCents: assessed?.upliftCents ?? 0,
     eightyCents,
     estimatePercent,
     estimatedTaxCents,
     taxForPeriodCents,
     taxPayableCents,
+    underestimationPenaltyCents: penalty?.penaltyCents ?? null,
     lines,
     queries: inputs.queries,
     missing: lines.filter((line) => line.missing),

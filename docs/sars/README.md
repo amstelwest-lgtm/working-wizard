@@ -22,9 +22,16 @@ What the sheet takes from them:
   nil), Foreign tax credits for this period.
 - Worked out by eFiling: Tax on estimated taxable income, Tax for the full year,
   Provisional tax paid for the first period, Tax payable for this period.
-- Basic amount: taxable income on the latest preceding assessment. SARS adds 8%
-  a year when the estimate is made more than 18 months after that year ended.
-  The sheet flags this and does not add it.
+- Basic amount (Fourth Schedule paragraph 19(1)(d)): taxable income on the
+  latest preceding assessment, excluding taxable capital gains, lump sums,
+  severance benefits and retirement-fund withdrawals. When that assessment's
+  year ended more than 18 months before the end of the year of assessment,
+  the sheet adds 8% of the reduced amount for each completed year in the gap.
+  Without the assessment year end, the sheet flags the uplift and does not
+  invent it.
+- Paragraph 20 underestimation penalty is calculated for the second period.
+  It is not signed off here for any year of assessment, so the sheet, the
+  PDF, and the CSV do not show a rand penalty.
 - A due date on a weekend or public holiday moves to the last business day
   before it (G01, "last working day prior to the public holiday or weekend"). `docs/tax-specialist-plan.md` says the next business day;
   the sheet follows SARS.

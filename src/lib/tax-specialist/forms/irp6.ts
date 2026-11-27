@@ -2,7 +2,9 @@
  * Milōn IRP6 preparation sheet for a standard resident company.
  * Our own layout, checked by the accountant, then captured on SARS eFiling.
  * v1 limits: 27% for a year of assessment ending on or after 31 March 2023,
- * no small business corporation rates, no penalty or interest amounts.
+ * no small business corporation rates. Paragraph 20 is worked out for
+ * period 2. A rand penalty is shown only when that year is signed off in
+ * docs/sars. Milōn does not file.
  * Sources: docs/sars/README.md.
  */
 import { effectivePeriodMonths } from "../../equity-coherence.ts";
@@ -31,6 +33,29 @@ export const IRP6_FIRST_SUPPORTED_YEAR_END = "2023-03-31";
 export const IRP6_RULES_YEAR = 2023;
 /** Basic amount applies when the estimate is at or under R1 million. */
 export const IRP6_BASIC_AMOUNT_LIMIT_CENTS = 100_000_000;
+
+/**
+ * Years of assessment whose Fourth Schedule paragraph 20 amount may be
+ * shown. docs/sars/README.md records the provisional-tax guides and the
+ * 8% / 18-month basic-amount rule. It does not sign off paragraph 20 for
+ * any year. Leave this empty until that sign-off is written there.
+ */
+export const IRP6_FOURTH_SCHEDULE_SIGNED_OFF_YEARS: readonly number[] = [];
+
+export function irp6FourthScheduleSignedOff(yearOfAssessment: number): boolean {
+  return IRP6_FOURTH_SCHEDULE_SIGNED_OFF_YEARS.includes(yearOfAssessment);
+}
+
+/** Latest assessment for the paragraph 19(1)(d) basic amount. Whole cents. */
+export type Irp6LatestAssessment = {
+  taxableIncomeCents: number;
+  taxableCapitalGainCents: number;
+  lumpSumCents: number;
+  severanceBenefitCents: number;
+  retirementFundWithdrawalCents: number;
+  /** Year end of that assessment, YYYY-MM-DD. */
+  yearEnd: string;
+};
 
 export type Irp6Period = 1 | 2 | 3;
 export const IRP6_PERIODS: readonly Irp6Period[] = [1, 2, 3];
@@ -292,6 +317,12 @@ export type Irp6Inputs = {
   /** A different full-year estimate to file. Empty uses the worked figure. */
   estimateOverrideCents: number | null;
   basicAmountCents: number | null;
+  /**
+   * Latest assessment, when it is known. Paragraph 19(1)(d) then replaces
+   * the typed basic amount. Absent, the typed figure is used and the 8%
+   * uplift is not invented.
+   */
+  assessment?: Irp6LatestAssessment | null;
   employeesTaxCents: number | null;
   provisionalPaidCents: number | null;
 };
@@ -353,6 +384,10 @@ export type Irp6Sheet = {
   netAdjustmentsCents: number;
   workedEstimateCents: number | null;
   estimateCents: number | null;
+  /** Paragraph 19 amount used here. Null when none was supplied. */
+  basicAmountCents: number | null;
+  /** 8% included in basicAmountCents. Zero when the uplift does not apply. */
+  basicAmountUpliftCents: number;
   basicAmountRequired: boolean;
   estimatedTaxCents: number | null;
   taxForPeriodCents: number | null;
@@ -360,6 +395,12 @@ export type Irp6Sheet = {
   taxPayableCents: number | null;
   /** Period 2 only. Estimate as a whole percent of the worked figure. */
   estimatePercentOfActual: number | null;
+  /**
+   * Paragraph 20 for period 2. Null when it is not period 2 or it cannot
+   * be priced. Kept off the lines, the checks, the PDF, and the CSV unless
+   * irp6FourthScheduleSignedOff is true for this year.
+   */
+  underestimationPenaltyCents: number | null;
   lines: Irp6Line[];
   missing: Irp6Line[];
   checks: Irp6Check[];
@@ -609,6 +650,187 @@ function money(cents: number | null): string {
   return cents == null ? "" : formatSampleCents(cents);
 }
 
+export const IRP6_BASIC_AMOUNT_EXCLUSIONS =
+  "Taxable income on the latest assessment, excluding taxable capital gains, lump sums, severance benefits and retirement-fund withdrawals.";
+
+function nonNegativeCents(value: number): number | null {
+  if (!Number.isSafeInteger(value) || value < 0) return null;
+  return value;
+}
+
+function isoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const { y, m, d } = parts(value);
+  return m >= 1 && m <= 12 && d >= 1 && d <= lastDay(y, m);
+}
+
+/** Whole months from `fromIso` to `toIso`. Month-end to month-end counts the month. */
+function wholeMonthsBetween(fromIso: string, toIso: string): number {
+  const a = parts(fromIso);
+  const b = parts(toIso);
+  let months = (b.y - a.y) * 12 + (b.m - a.m);
+  const aMonthEnd = a.d === lastDay(a.y, a.m);
+  const bMonthEnd = b.d === lastDay(b.y, b.m);
+  if (!(aMonthEnd && bMonthEnd) && b.d < a.d) months -= 1;
+  return months;
+}
+
+export type Irp6BasicAmount = {
+  beforeUpliftCents: number;
+  /** Completed years when the gap is more than 18 months. Otherwise 0. */
+  upliftYears: number;
+  upliftCents: number;
+  basicAmountCents: number;
+  stale: boolean;
+};
+
+/**
+ * Paragraph 19(1)(d). Taxable income on the latest assessment, excluding
+ * taxable capital gains, lump sums, severance benefits and retirement-fund
+ * withdrawals. When that year ended more than 18 months before the end of
+ * the year of assessment, 8% of the reduced amount is added for each
+ * completed year in the gap. docs/sars/README.md describes the same 8% and
+ * the 18-month test. Eighteen months or less adds nothing.
+ */
+export function irp6BasicAmount(
+  assessment: Irp6LatestAssessment,
+  yearOfAssessmentEnd: string,
+): Irp6BasicAmount | null {
+  const income = nonNegativeCents(assessment.taxableIncomeCents);
+  const capital = nonNegativeCents(assessment.taxableCapitalGainCents);
+  const lump = nonNegativeCents(assessment.lumpSumCents);
+  const severance = nonNegativeCents(assessment.severanceBenefitCents);
+  const retirement = nonNegativeCents(assessment.retirementFundWithdrawalCents);
+  if (
+    income == null ||
+    capital == null ||
+    lump == null ||
+    severance == null ||
+    retirement == null ||
+    !isoDate(assessment.yearEnd) ||
+    !isoDate(yearOfAssessmentEnd)
+  ) {
+    return null;
+  }
+  const beforeUpliftCents = Math.max(0, income - capital - lump - severance - retirement);
+  const months = wholeMonthsBetween(assessment.yearEnd, yearOfAssessmentEnd);
+  const stale = months > 18;
+  const upliftYears = stale ? Math.floor(months / 12) : 0;
+  const upliftCents = Math.round((beforeUpliftCents * 8 * upliftYears) / 100);
+  return {
+    beforeUpliftCents,
+    upliftYears,
+    upliftCents,
+    basicAmountCents: beforeUpliftCents + upliftCents,
+    stale,
+  };
+}
+
+export function irp6BasicAmountNote(result: Irp6BasicAmount): string {
+  if (!result.stale) {
+    return `${IRP6_BASIC_AMOUNT_EXCLUSIONS} The assessment ended 18 months or less before this year end, so the 8% uplift is not added.`;
+  }
+  const years = result.upliftYears === 1 ? "1 year" : `${result.upliftYears} years`;
+  return `${IRP6_BASIC_AMOUNT_EXCLUSIONS} The assessment ended more than 18 months before this year end, so 8% a year for ${years} is added (${formatSampleCents(result.upliftCents)}).`;
+}
+
+export function irp6UpliftCheckText(result: Irp6BasicAmount): string {
+  if (!result.stale) {
+    return "The latest assessment ended 18 months or less before this year end, so the 8% uplift is not added.";
+  }
+  const years = result.upliftYears === 1 ? "1 year" : `${result.upliftYears} years`;
+  return `The latest assessment ended more than 18 months before this year end. 8% a year for ${years} is added (${formatSampleCents(result.upliftCents)}).`;
+}
+
+function portionCents(cents: number, percent: number): number {
+  return Math.floor((cents * percent) / 100);
+}
+
+export type Irp6UnderestimationBasis = "under-1m" | "over-1m";
+
+export type Irp6UnderestimationPenalty = {
+  basis: Irp6UnderestimationBasis | null;
+  /**
+   * Null when the basic amount, the tax for this year, or a credit is missing.
+   * A blank credit is not zero. Zero when paragraph 20 does not charge, or
+   * when credits cover X.
+   */
+  penaltyCents: number | null;
+};
+
+function twentyPercentOfTax(taxCents: number): number {
+  return Math.round((taxCents * 20) / 100);
+}
+
+/** A typed nil counts. A blank does not become zero. */
+function capturedCredit(cents: number | null): number | null {
+  if (cents == null || !Number.isSafeInteger(cents) || cents < 0) return null;
+  return cents;
+}
+
+/** 20% of X minus employees' tax minus provisional tax paid, not below zero. */
+function penaltyOnCredits(
+  x: number | null,
+  paye: number | null,
+  paid: number | null,
+): number | null {
+  if (x == null || paye == null || paid == null) return null;
+  const base = x - paye - paid;
+  return base <= 0 ? 0 : twentyPercentOfTax(base);
+}
+
+/**
+ * Paragraph 20(1) on a second-period estimate.
+ * At or under R1 million the estimate must be below 90% of actual and below
+ * the basic amount. X is the lesser of the normal tax on 90% of actual and
+ * the normal tax on the basic amount.
+ * Above R1 million the estimate must be below 80% of actual. X is the normal
+ * tax on 80% of actual. The basic amount is not a safe harbour.
+ * The penalty is 20% of (X minus employees' tax minus provisional tax already
+ * paid), and not below zero. The income gap is not taxed on its own.
+ */
+export function irp6UnderestimationPenalty(input: {
+  actualTaxableIncomeCents: number;
+  estimateCents: number;
+  basicAmountCents: number | null;
+  employeesTaxCents: number | null;
+  provisionalPaidCents: number | null;
+  taxOn: (taxableCents: number) => number | null;
+}): Irp6UnderestimationPenalty {
+  const actual = input.actualTaxableIncomeCents;
+  const estimate = input.estimateCents;
+  if (
+    !Number.isSafeInteger(actual) ||
+    actual <= 0 ||
+    !Number.isSafeInteger(estimate) ||
+    estimate < 0
+  ) {
+    return { basis: null, penaltyCents: null };
+  }
+  const paye = capturedCredit(input.employeesTaxCents);
+  const paid = capturedCredit(input.provisionalPaidCents);
+  if (actual > IRP6_BASIC_AMOUNT_LIMIT_CENTS) {
+    const eighty = portionCents(actual, 80);
+    if (estimate >= eighty) return { basis: null, penaltyCents: 0 };
+    return {
+      basis: "over-1m",
+      penaltyCents: penaltyOnCredits(input.taxOn(eighty), paye, paid),
+    };
+  }
+  const ninety = portionCents(actual, 90);
+  const basic = input.basicAmountCents;
+  if (basic == null || !Number.isSafeInteger(basic)) return { basis: null, penaltyCents: null };
+  if (estimate >= ninety || estimate >= basic) return { basis: null, penaltyCents: 0 };
+  const taxNinety = input.taxOn(ninety);
+  const taxBasic = input.taxOn(basic);
+  const x = taxNinety == null || taxBasic == null ? null : Math.min(taxNinety, taxBasic);
+  return { basis: "under-1m", penaltyCents: penaltyOnCredits(x, paye, paid) };
+}
+
+export function irp6UnderestimationPenaltyText(penaltyCents: number): string {
+  return `Draft underestimation penalty ${formatSampleCents(penaltyCents)}. Milōn does not file this. A named person approves and files on eFiling.`;
+}
+
 export function computeIrp6(input: {
   client: Irp6Client;
   yearOfAssessment: number;
@@ -663,6 +885,8 @@ export function computeIrp6(input: {
   const taxPayableCents =
     taxForPeriodCents == null ? null : Math.max(0, taxForPeriodCents - creditsCents);
 
+  const assessed = inputs.assessment != null ? irp6BasicAmount(inputs.assessment, yearEnd) : null;
+  const resolvedBasicCents = assessed ? assessed.basicAmountCents : inputs.basicAmountCents;
   const basicAmountRequired =
     estimateCents != null && estimateCents <= IRP6_BASIC_AMOUNT_LIMIT_CENTS;
   const estimatePercentOfActual =
@@ -706,11 +930,13 @@ export function computeIrp6(input: {
           : undefined,
     },
     basicAmount: {
-      cents: inputs.basicAmountCents,
-      filled: inputs.basicAmountCents != null,
-      note: basicAmountRequired
-        ? "Taxable income on the latest assessment, less any taxable capital gain. Needed because the estimate is R 1 000 000.00 or less."
-        : undefined,
+      cents: resolvedBasicCents,
+      filled: resolvedBasicCents != null,
+      note: assessed
+        ? irp6BasicAmountNote(assessed)
+        : basicAmountRequired
+          ? `${IRP6_BASIC_AMOUNT_EXCLUSIONS} Needed because the estimate is R 1 000 000.00 or less.`
+          : undefined,
     },
     estimatedTax: { cents: estimatedTaxCents, filled: estimatedTaxCents != null },
     employeesTax: {
@@ -756,6 +982,7 @@ export function computeIrp6(input: {
     if (field.id === "profitBeforeTax" && books.profitCents == null) source = "input";
     if (field.id === "estimatedTaxableIncome" && inputs.estimateOverrideCents != null)
       source = "input";
+    if (field.id === "basicAmount" && assessed) source = "worked";
     const display = value.cents !== undefined ? money(value.cents) : (value.text ?? "");
     const plain =
       value.cents !== undefined
@@ -854,18 +1081,27 @@ export function computeIrp6(input: {
       text: `Credits of ${formatSampleCents(creditsCents)} are more than the tax for this period. Payable shows nil.`,
     });
   }
-  if (basicAmountRequired && inputs.basicAmountCents != null && estimateCents != null) {
-    if (estimateCents < inputs.basicAmountCents) {
+  if (basicAmountRequired && resolvedBasicCents != null && estimateCents != null) {
+    if (estimateCents < resolvedBasicCents) {
       checks.push({
         id: "basic-amount",
         level: "warning",
-        text: `The estimate is below the basic amount of ${formatSampleCents(inputs.basicAmountCents)}. SARS can ask you to justify it.`,
+        text: `The estimate is below the basic amount of ${formatSampleCents(resolvedBasicCents)}. SARS can ask you to justify it.`,
       });
     }
+    if (!assessed) {
+      checks.push({
+        id: "basic-amount-uplift",
+        level: "warning",
+        text: "If the latest assessment is for a year that ended more than 18 months before this estimate, SARS adds 8% a year to the basic amount. This sheet does not add it.",
+      });
+    }
+  }
+  if (assessed && estimateCents != null) {
     checks.push({
       id: "basic-amount-uplift",
-      level: "warning",
-      text: "If the latest assessment is for a year that ended more than 18 months before this estimate, SARS adds 8% a year to the basic amount. This sheet does not add it.",
+      level: assessed.stale ? "warning" : "ok",
+      text: irp6UpliftCheckText(assessed),
     });
   }
   if (
@@ -878,7 +1114,7 @@ export function computeIrp6(input: {
     const low = above
       ? estimatePercentOfActual < 80
       : estimatePercentOfActual < 90 &&
-        (inputs.basicAmountCents == null || estimateCents < inputs.basicAmountCents);
+        (resolvedBasicCents == null || estimateCents < resolvedBasicCents);
     checks.push({
       id: "eighty",
       level: low ? "warning" : "ok",
@@ -887,6 +1123,28 @@ export function computeIrp6(input: {
           ? `Your estimate is ${estimatePercentOfActual}% of the actual figure so far. Below 80% can bring an underestimation penalty.`
           : `Your estimate is ${estimatePercentOfActual}% of the actual figure so far and below the basic amount. Below 90% can bring an underestimation penalty.`
         : `Your estimate is ${estimatePercentOfActual}% of the actual figure so far.`,
+    });
+  }
+  const penalty =
+    period === 2 && estimateCents != null && workedEstimateCents != null && workedEstimateCents > 0
+      ? irp6UnderestimationPenalty({
+          actualTaxableIncomeCents: workedEstimateCents,
+          estimateCents,
+          basicAmountCents: resolvedBasicCents,
+          employeesTaxCents: inputs.employeesTaxCents,
+          provisionalPaidCents: inputs.provisionalPaidCents,
+          taxOn: (cents) => (supported ? taxAtCompanyRate(cents) : null),
+        })
+      : null;
+  if (
+    penalty?.penaltyCents != null &&
+    penalty.penaltyCents > 0 &&
+    irp6FourthScheduleSignedOff(yearOfAssessment)
+  ) {
+    checks.push({
+      id: "underestimation-penalty",
+      level: "warning",
+      text: irp6UnderestimationPenaltyText(penalty.penaltyCents),
     });
   }
 
@@ -909,12 +1167,15 @@ export function computeIrp6(input: {
     netAdjustmentsCents,
     workedEstimateCents,
     estimateCents,
+    basicAmountCents: resolvedBasicCents,
+    basicAmountUpliftCents: assessed?.upliftCents ?? 0,
     basicAmountRequired,
     estimatedTaxCents,
     taxForPeriodCents,
     creditsCents,
     taxPayableCents,
     estimatePercentOfActual,
+    underestimationPenaltyCents: penalty?.penaltyCents ?? null,
     lines,
     missing: lines.filter((line) => line.missing),
     checks,
