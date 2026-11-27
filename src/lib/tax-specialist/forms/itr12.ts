@@ -25,6 +25,18 @@ import {
   plainRands,
   validTaxReference,
 } from "./irp6.ts";
+import {
+  businessInputFrom,
+  businessSchedule,
+  itr12DraftTaxableIncome,
+  rentalInputsFrom,
+  rentalSchedule,
+  type Itr12BusinessInput,
+  type Itr12BusinessSchedule,
+  type Itr12RentalProperty,
+  type Itr12RentalSchedule,
+  type Itr12TaxableTie,
+} from "./itr12-schedules.ts";
 
 /**
  * Capture-sheet vintage. Section totals are sums of cited figures.
@@ -295,6 +307,10 @@ export type Itr12Inputs = {
   taxReference: string;
   lines: Itr12Cited[];
   queries: Itr12Query[];
+  /** Null or omitted when the local business schedule has not been started. */
+  business?: Itr12BusinessInput | null;
+  /** Empty or omitted when the local rental schedule is blank. */
+  rentals?: readonly Itr12RentalProperty[] | null;
 };
 
 export type Itr12ApproverRole = "owner" | "accountant";
@@ -325,6 +341,14 @@ export type Itr12Sheet = {
   missing: Itr12SheetLine[];
   checks: Itr12Check[];
   totals: Record<Itr12MoneyFieldId, number | null> & { incomeTotal: number | null };
+  /** Null when the accountant has not started this schedule. */
+  business: Itr12BusinessSchedule | null;
+  /** Null when there are no properties. A blank schedule is not zero. */
+  rentals: Itr12RentalSchedule | null;
+  /** Null while a figure it needs is blank. Never a stand-in zero. */
+  taxableIncomeCents: number | null;
+  /** Present only when taxable income ties to its parts. */
+  taxableTie: Itr12TaxableTie | null;
 };
 
 const EMPLOYMENT = /irp5|employment|salary|remuneration|\b3601\b|\b3651\b|\b3701\b/;
@@ -681,6 +705,18 @@ export function computeItr12(input: {
       ? null
       : totals.employmentIncome + totals.practiceIncome;
 
+  const yearStart = itr12YearStart(yearOfAssessment);
+  const yearEnd = itr12YearEnd(yearOfAssessment);
+  const business = businessSchedule(inputs.business, yearStart, yearEnd);
+  const rentals = rentalSchedule(inputs.rentals, yearStart, yearEnd);
+  const taxable = itr12DraftTaxableIncome({
+    employmentCents: totals.employmentIncome,
+    practiceIncomeCents: totals.practiceIncome,
+    practiceExpensesCents: totals.practiceExpenses,
+    business,
+    rentals,
+  });
+
   const name = input.clientName.trim();
   const reference = normaliseTaxReference(inputs.taxReference);
   const referenceValid = validTaxReference(reference);
@@ -719,7 +755,7 @@ export function computeItr12(input: {
     display: String(yearOfAssessment),
     plain: String(yearOfAssessment),
     source: "client",
-    sourceLabel: `${formatSampleDate(itr12YearStart(yearOfAssessment))} – ${formatSampleDate(itr12YearEnd(yearOfAssessment))}`,
+    sourceLabel: `${formatSampleDate(yearStart)} – ${formatSampleDate(yearEnd)}`,
     fileId: null,
     missing: false,
   });
@@ -785,6 +821,19 @@ export function computeItr12(input: {
     missing: totals.incomeTotal == null,
     note: "Employment income plus practice income. Medical, retirement, travel, and interest stay in their own sections.",
   });
+  const taxableText = moneyText(taxable.cents);
+  push({
+    id: "taxableIncome",
+    section: "result",
+    label: "Taxable income",
+    display: taxableText.display,
+    plain: taxableText.plain,
+    source: taxable.cents == null ? "missing" : "worked",
+    sourceLabel: taxable.cents == null ? "Needs a cited figure" : "Worked out on this sheet",
+    fileId: null,
+    missing: taxable.cents == null,
+    note: taxable.note,
+  });
   push({
     id: "taxPayable",
     section: "result",
@@ -826,11 +875,25 @@ export function computeItr12(input: {
       text: "The income tax reference number should be 10 digits.",
     });
   }
+  if (taxable.tie) {
+    const tie = taxable.tie;
+    const summed =
+      tie.employmentCents +
+      (tie.businessNetCents ?? tie.practiceNetCents ?? 0) +
+      (tie.rentalNetCents ?? 0);
+    if (summed !== tie.taxableIncomeCents) {
+      checks.push({
+        id: "tie",
+        level: "error",
+        text: "Taxable income does not tie to employment, practice, and the local schedules.",
+      });
+    }
+  }
 
   return {
     yearOfAssessment,
-    yearStart: itr12YearStart(yearOfAssessment),
-    yearEnd: itr12YearEnd(yearOfAssessment),
+    yearStart,
+    yearEnd,
     rulesYear: ITR12_RULES_YEAR,
     lines,
     cited,
@@ -838,6 +901,10 @@ export function computeItr12(input: {
     missing: lines.filter((line) => line.missing),
     checks,
     totals,
+    business,
+    rentals,
+    taxableIncomeCents: taxable.cents,
+    taxableTie: taxable.tie,
   };
 }
 
@@ -926,6 +993,15 @@ export function itr12DraftFields(
   }
   out.lines = { value: inputs.lines as unknown as unknown[], source: "file" };
   out.queries = { value: inputs.queries as unknown as unknown[], source: "input" };
+  out.schedules = {
+    value: [
+      {
+        business: inputs.business ?? null,
+        rentals: inputs.rentals ?? [],
+      },
+    ] as unknown as unknown[],
+    source: "input",
+  };
   return out;
 }
 
@@ -948,8 +1024,15 @@ export function itr12InputsFromDraft(draft: TaxFormDraft | null | undefined): It
   const queries = listed(draft.fields.queries?.value, isQuery);
   const taxReference =
     typeof draft.fields.taxReference?.value === "string" ? draft.fields.taxReference.value : "";
-  if (lines.length > 0 || queries.length > 0) return { taxReference, lines, queries };
-  return { taxReference, lines: [], queries: [] };
+  const storedSchedules = draft.fields.schedules?.value;
+  const stored = Array.isArray(storedSchedules) ? storedSchedules[0] : null;
+  const record = stored && typeof stored === "object" ? (stored as Record<string, unknown>) : null;
+  const business = businessInputFrom(record?.business ?? null);
+  const rentals = rentalInputsFrom(record?.rentals);
+  if (lines.length > 0 || queries.length > 0 || business || rentals.length > 0) {
+    return { taxReference, lines, queries, business, rentals };
+  }
+  return { taxReference, lines: [], queries: [], business: null, rentals: [] };
 }
 
 export function findItr12Draft(
@@ -995,6 +1078,46 @@ export function itr12Csv(sheet: Itr12Sheet): string {
   const rows: string[][] = [["Field", "Value", "Source", "File"]];
   for (const line of sheet.lines) {
     rows.push([line.label, line.plain, line.sourceLabel, line.fileId ?? ""]);
+  }
+  if (sheet.business) {
+    rows.push([
+      "Local business gross",
+      sheet.business.grossIncomeCents == null ? "" : plainRands(sheet.business.grossIncomeCents),
+      "Schedule",
+      "",
+    ]);
+    rows.push([
+      "Local business net",
+      sheet.business.netProfitCents == null ? "" : plainRands(sheet.business.netProfitCents),
+      "Schedule",
+      sheet.business.netProfitCents == null ? "Blank is not zero" : "",
+    ]);
+    rows.push([
+      "s20A ring-fence",
+      sheet.business.ringFenceS20A == null ? "" : sheet.business.ringFenceS20A ? "Yes" : "No",
+      "Typed indicator",
+      "Not signed off. Indicator only.",
+    ]);
+  } else {
+    rows.push(["Local business schedule", "", "Blank", "A blank schedule is not zero"]);
+  }
+  if (sheet.rentals) {
+    for (const property of sheet.rentals.properties) {
+      rows.push([
+        `Local rental, ${property.description}`,
+        property.netCents == null ? "" : plainRands(property.netCents),
+        "Schedule",
+        property.note,
+      ]);
+    }
+    rows.push([
+      "Local rental total",
+      sheet.rentals.totalNetCents == null ? "" : plainRands(sheet.rentals.totalNetCents),
+      "Schedule",
+      sheet.rentals.totalNetCents == null ? "Blank is not zero" : "",
+    ]);
+  } else {
+    rows.push(["Local rental schedule", "", "Blank", "A blank schedule is not zero"]);
   }
   for (const query of sheet.queries) {
     rows.push([

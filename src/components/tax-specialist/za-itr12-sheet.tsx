@@ -12,6 +12,7 @@ import {
   type TaxFormDraftStatus,
 } from "@/lib/tax-specialist/forms/drafts";
 import { parseRandsToCents, validTaxReference } from "@/lib/tax-specialist/forms/irp6";
+import { formatSampleCents } from "@/lib/tax-specialist/sample-compute";
 import {
   ITR12_FOOTER,
   ITR12_SECTIONS,
@@ -34,12 +35,61 @@ import {
   type Itr12Inputs,
   type Itr12MoneyFieldId,
   type Itr12SectionId,
+  type Itr12Sheet,
   type Itr12SheetLine,
 } from "@/lib/tax-specialist/forms/itr12";
 import { saveCatalogDraft } from "@/lib/tax-specialist/forms/pipeline";
 import "./za-irp6-sheet.css";
 
 type Approvals = Partial<Record<Itr12SectionId, boolean>>;
+
+function scheduleCents(cents: number | null): string {
+  return cents == null ? "Blank" : formatSampleCents(cents);
+}
+
+function ScheduleBlocks({ sheet }: { sheet: Itr12Sheet }) {
+  const business = sheet.business;
+  const rentals = sheet.rentals;
+  return (
+    <>
+      <div data-itr12-business={business ? "filled" : "blank"}>
+        <h4 className="irp6-label">Local business, trade, or profession</h4>
+        {business ? (
+          <>
+            <p className="irp6-note">
+              Gross {scheduleCents(business.grossIncomeCents)}. Wear-and-tear{" "}
+              {scheduleCents(business.wearAndTearCents)}. Net{" "}
+              {scheduleCents(business.netProfitCents)}. s20A{" "}
+              {business.ringFenceS20A == null ? "Blank" : business.ringFenceS20A ? "Yes" : "No"}.
+            </p>
+            {business.notes.map((note) => (
+              <p key={note} className="irp6-note">
+                {note}
+              </p>
+            ))}
+          </>
+        ) : (
+          <p className="irp6-note">Blank. A blank schedule is not zero.</p>
+        )}
+      </div>
+      <div data-itr12-rental={rentals ? "filled" : "blank"}>
+        <h4 className="irp6-label">Local rental income</h4>
+        {rentals ? (
+          <>
+            {rentals.properties.map((property) => (
+              <p key={property.id} className="irp6-note" data-itr12-property={property.id}>
+                {property.description}: net {scheduleCents(property.netCents)}. {property.note}
+              </p>
+            ))}
+            <p className="irp6-note">Total net rental {scheduleCents(rentals.totalNetCents)}.</p>
+          </>
+        ) : (
+          <p className="irp6-note">Blank. A blank schedule is not zero.</p>
+        )}
+      </div>
+    </>
+  );
+}
 
 function centsText(cents: number | null): string {
   if (cents == null) return "";
@@ -629,10 +679,16 @@ export function ZaItr12Sheet({
         <table className="irp6-table">
           <tbody>
             {sheet.lines
-              .filter((line) => line.id === "incomeTotal" || line.id === "taxPayable")
+              .filter(
+                (line) =>
+                  line.id === "incomeTotal" ||
+                  line.id === "taxableIncome" ||
+                  line.id === "taxPayable",
+              )
               .map((line) => fieldRow(line))}
           </tbody>
         </table>
+        <ScheduleBlocks sheet={sheet} />
       </section>
 
       <p className="irp6-purpose">{ITR12_FOOTER}</p>
