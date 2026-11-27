@@ -1101,6 +1101,8 @@ export function computeIrp6Individual(input: {
           actualTaxableIncomeCents: workedCents,
           estimateCents,
           basicAmountCents: basic,
+          employeesTaxCents: amount("payeWithheld"),
+          provisionalPaidCents: amount("paymentsMade"),
           taxOn: (cents) => individualNormalTaxCents(yearOfAssessment, cents, inputs.ageBand),
         })
       : null;

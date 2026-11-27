@@ -431,15 +431,26 @@ const belowBasic = computeIrp6({
 });
 equal(belowBasic.workedEstimateCents, 100_000_000, "actual taxable income is R1 million");
 equal(belowBasic.estimateCents, 80_000_000, "the estimate is below the basic amount");
-equal(belowBasic.underestimationPenaltyCents, 540_000, "20% of the tax on the R100 000 gap");
+equal(
+  belowBasic.underestimationPenaltyCents,
+  2_160_000,
+  "20% of tax on R900 000, less the R135 000 already paid",
+);
 check(
   !belowBasic.checks.some((c) => c.id === "underestimation-penalty"),
   "the rand penalty is not a check",
 );
 check(
-  !belowBasic.checks.some((c) => c.text.includes("R 5 400.00")),
+  !belowBasic.checks.some((c) => c.text.includes("R 21 600.00")),
   "the sheet does not show the rand penalty",
 );
+const blankCredits = computeIrp6({
+  client: IRP6_DEMO_CLIENT,
+  yearOfAssessment: 2027,
+  period: 2,
+  inputs: { ...IRP6_DEMO_INPUTS, estimateOverrideCents: 80_000_000, provisionalPaidCents: null },
+});
+equal(blankCredits.underestimationPenaltyCents, null, "a blank credit leaves the penalty blank");
 check(
   !/penalty/i.test(irp6Csv(belowBasic, IRP6_DEMO_INPUTS.adjustments)),
   "the CSV has no penalty",
@@ -465,11 +476,11 @@ check(
 );
 equal(
   overMillion.underestimationPenaltyCents,
-  324_000,
-  "20% of tax on 80% minus tax on the estimate",
+  2_484_000,
+  "20% of tax on 80% of actual, less the R135 000 already paid",
 );
 check(
-  !overMillion.checks.some((c) => c.text.includes("R 3 240.00")),
+  !overMillion.checks.some((c) => c.text.includes("R 24 840.00")),
   "the over-R1-million penalty stays off the sheet",
 );
 equal(enough.underestimationPenaltyCents, 0, "exactly 80% is not charged");
@@ -506,7 +517,11 @@ check(
   !stale.checks.some((c) => c.text.includes("does not add it")),
   "a known stale assessment is not left uncounted",
 );
-equal(stale.underestimationPenaltyCents, 313_200, "the penalty uses the uplifted basic amount");
+equal(
+  stale.underestimationPenaltyCents,
+  313_200,
+  "20% of tax on the uplifted basic amount, less the R135 000 already paid",
+);
 const leap = irp6BasicAmount(assessment("2024-02-29"), "2027-02-28");
 equal(leap?.upliftYears, 3, "a leap-day year end still counts three years");
 const recent = computeIrp6({

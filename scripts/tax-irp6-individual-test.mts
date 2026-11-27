@@ -390,7 +390,7 @@ const belowBasic = computeIrp6Individual({
 });
 eq(belowBasic.estimateCents, 20_000_000, "the estimate is below the basic amount");
 eq(belowBasic.basicAmountCents, 30_000_000, "the cited basic amount is used");
-eq(belowBasic.underestimationPenaltyCents, 3_600, "20% of the tax on the income gap");
+eq(belowBasic.underestimationPenaltyCents, 0, "PAYE and provisional tax cover the tax on the basic amount");
 assert(
   !belowBasic.checks.some((check) => check.id === "underestimation-penalty" || /penalty/.test(check.text)),
   "the rand penalty stays off the individual sheet",
@@ -419,7 +419,11 @@ const overMillion = computeIrp6Individual({
 eq(overMillion.workedCents, 120_000_000, "taxable income is over R1 million");
 eq(overMillion.estimatePercent, 75, "the estimate is below 80%");
 eq(overMillion.basicAmountCents, 80_000_000, "the basic amount is below the estimate");
-eq(overMillion.underestimationPenaltyCents, 492_000, "above R1 million, 20% of the tax difference");
+eq(
+  overMillion.underestimationPenaltyCents,
+  3_637_860,
+  "above R1 million, 20% of tax on 80% of actual less PAYE and provisional tax",
+);
 assert(!/penalty/.test(irp6IndividualCsv(overMillion)), "the over-R1-million penalty is not in the CSV");
 assert(!irp6FourthScheduleSignedOff(2027), "docs/sars has not signed off the 2027 penalty");
 
@@ -431,7 +435,11 @@ const stale = computeIrp6Individual({
 });
 eq(stale.basicAmountUpliftCents, 10_800_000, "a stale assessment adds 8% a year");
 eq(stale.basicAmountCents, 55_800_000, "the uplifted basic amount replaces the cited figure");
-eq(stale.underestimationPenaltyCents, 808_840, "the penalty uses the lesser of 90% and the uplifted basic amount");
+eq(
+  stale.underestimationPenaltyCents,
+  165_240,
+  "20% of the lesser tax, less PAYE of R80 000 and provisional tax of R10 000",
+);
 assert(
   stale.checks.some((check) => check.id === "basic-amount-uplift" && check.text.includes("3 years")),
   "the uplift is applied",
@@ -445,5 +453,16 @@ const unpriced = computeIrp6Individual({
   inputs: { ...filled, estimateOverrideCents: 20_000_000 },
 });
 eq(unpriced.underestimationPenaltyCents, null, "a year without a rate table has no penalty amount");
+const noCredits = computeIrp6Individual({
+  client: nicola,
+  yearOfAssessment: 2027,
+  period: 2,
+  inputs: {
+    ...filled,
+    estimateOverrideCents: 20_000_000,
+    lines: filled.lines.filter((row) => row.fieldId !== "payeWithheld" && row.fieldId !== "paymentsMade"),
+  },
+});
+eq(noCredits.underestimationPenaltyCents, null, "blank PAYE and provisional tax leave the penalty blank");
 
 console.log("tax-irp6-individual ok");

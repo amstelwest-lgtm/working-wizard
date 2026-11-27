@@ -751,8 +751,9 @@ export type Irp6UnderestimationBasis = "under-1m" | "over-1m";
 export type Irp6UnderestimationPenalty = {
   basis: Irp6UnderestimationBasis | null;
   /**
-   * Null when the basic amount or the tax for this year is missing.
-   * Zero when paragraph 20 does not charge.
+   * Null when the basic amount, the tax for this year, or a credit is missing.
+   * A blank credit is not zero. Zero when paragraph 20 does not charge, or
+   * when credits cover X.
    */
   penaltyCents: number | null;
 };
@@ -761,19 +762,39 @@ function twentyPercentOfTax(taxCents: number): number {
   return Math.round((taxCents * 20) / 100);
 }
 
+/** A typed nil counts. A blank does not become zero. */
+function capturedCredit(cents: number | null): number | null {
+  if (cents == null || !Number.isSafeInteger(cents) || cents < 0) return null;
+  return cents;
+}
+
+/** 20% of X minus employees' tax minus provisional tax paid, not below zero. */
+function penaltyOnCredits(
+  x: number | null,
+  paye: number | null,
+  paid: number | null,
+): number | null {
+  if (x == null || paye == null || paid == null) return null;
+  const base = x - paye - paid;
+  return base <= 0 ? 0 : twentyPercentOfTax(base);
+}
+
 /**
- * Paragraph 20 on a second-period estimate.
+ * Paragraph 20(1) on a second-period estimate.
  * At or under R1 million the estimate must be below 90% of actual and below
- * the basic amount. The penalty is 20% of the tax on the difference between
- * the estimate and the lesser of 90% of actual and the basic amount.
- * Above R1 million the estimate must be below 80% of actual. The penalty is
- * 20% of the tax on 80% of actual minus the tax on the estimate. The basic
- * amount is not a safe harbour. Same 80% / 90% split the sheet already uses.
+ * the basic amount. X is the lesser of the normal tax on 90% of actual and
+ * the normal tax on the basic amount.
+ * Above R1 million the estimate must be below 80% of actual. X is the normal
+ * tax on 80% of actual. The basic amount is not a safe harbour.
+ * The penalty is 20% of (X minus employees' tax minus provisional tax already
+ * paid), and not below zero. The income gap is not taxed on its own.
  */
 export function irp6UnderestimationPenalty(input: {
   actualTaxableIncomeCents: number;
   estimateCents: number;
   basicAmountCents: number | null;
+  employeesTaxCents: number | null;
+  provisionalPaidCents: number | null;
   taxOn: (taxableCents: number) => number | null;
 }): Irp6UnderestimationPenalty {
   const actual = input.actualTaxableIncomeCents;
@@ -786,27 +807,24 @@ export function irp6UnderestimationPenalty(input: {
   ) {
     return { basis: null, penaltyCents: null };
   }
+  const paye = capturedCredit(input.employeesTaxCents);
+  const paid = capturedCredit(input.provisionalPaidCents);
   if (actual > IRP6_BASIC_AMOUNT_LIMIT_CENTS) {
     const eighty = portionCents(actual, 80);
     if (estimate >= eighty) return { basis: null, penaltyCents: 0 };
-    const taxEighty = input.taxOn(eighty);
-    const taxEstimate = input.taxOn(estimate);
-    if (taxEighty == null || taxEstimate == null) return { basis: "over-1m", penaltyCents: null };
-    const difference = taxEighty - taxEstimate;
     return {
       basis: "over-1m",
-      penaltyCents: difference <= 0 ? 0 : twentyPercentOfTax(difference),
+      penaltyCents: penaltyOnCredits(input.taxOn(eighty), paye, paid),
     };
   }
   const ninety = portionCents(actual, 90);
   const basic = input.basicAmountCents;
   if (basic == null || !Number.isSafeInteger(basic)) return { basis: null, penaltyCents: null };
   if (estimate >= ninety || estimate >= basic) return { basis: null, penaltyCents: 0 };
-  const gap = Math.min(ninety, basic) - estimate;
-  if (gap <= 0) return { basis: null, penaltyCents: 0 };
-  const taxOnGap = input.taxOn(gap);
-  if (taxOnGap == null) return { basis: "under-1m", penaltyCents: null };
-  return { basis: "under-1m", penaltyCents: taxOnGap <= 0 ? 0 : twentyPercentOfTax(taxOnGap) };
+  const taxNinety = input.taxOn(ninety);
+  const taxBasic = input.taxOn(basic);
+  const x = taxNinety == null || taxBasic == null ? null : Math.min(taxNinety, taxBasic);
+  return { basis: "under-1m", penaltyCents: penaltyOnCredits(x, paye, paid) };
 }
 
 export function irp6UnderestimationPenaltyText(penaltyCents: number): string {
@@ -1113,6 +1131,8 @@ export function computeIrp6(input: {
           actualTaxableIncomeCents: workedEstimateCents,
           estimateCents,
           basicAmountCents: resolvedBasicCents,
+          employeesTaxCents: inputs.employeesTaxCents,
+          provisionalPaidCents: inputs.provisionalPaidCents,
           taxOn: (cents) => (supported ? taxAtCompanyRate(cents) : null),
         })
       : null;
