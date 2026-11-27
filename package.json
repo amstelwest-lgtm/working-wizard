@@ -215,6 +215,7 @@
     "test:tax-itr12": "vite-node --config scripts/vite-test.config.ts scripts/tax-itr12-test.mts",
     "test:tax-itr14": "vite-node --config scripts/vite-test.config.ts scripts/tax-itr14-test.mts",
     "test:tax-cgt": "vite-node --config scripts/vite-test.config.ts scripts/tax-cgt-test.mts",
+    "test:tax-dtr": "vite-node --config scripts/vite-test.config.ts scripts/tax-dtr-test.mts",
     "test:theme-pref": "vite-node --config scripts/vite-test.config.ts scripts/theme-pref-test.mts",
     "test:palette-contrast": "vite-node --config scripts/vite-test.config.ts scripts/palette-contrast-test.mts",
     "test:firm-brand": "vite-node --config scripts/vite-test.config.ts scripts/firm-brand-test.mts",

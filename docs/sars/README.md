@@ -3,10 +3,10 @@
 Downloaded on 29 October 2026 from sars.gov.za. The IRP6 preparation sheet
 (`src/lib/tax-specialist/forms/irp6.ts`) follows these two guides.
 
-| File | Source | Version |
-| --- | --- | --- |
-| `GEN-PT-01-G01-Guide-for-Provisional-Tax-External-Guide.pdf` | https://www.sars.gov.za/wp-content/uploads/Ops/Guides/GEN-PT-01-G01-Guide-for-Provisional-Tax-External-Guide.pdf | Revision 28, effective 16 October 2026 |
-| `GEN-PT-01-G02-How-to-eFile-your-Provisional-Tax-Return-External-Guide.pdf` | https://www.sars.gov.za/wp-content/uploads/Ops/Guides/GEN-PT-01-G02-How-to-eFile-your-Provisional-Tax-Return-External-Guide.pdf | Revision 5, effective 27 June 2025 |
+| File                                                                        | Source                                                                                                                          | Version                                |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `GEN-PT-01-G01-Guide-for-Provisional-Tax-External-Guide.pdf`                | https://www.sars.gov.za/wp-content/uploads/Ops/Guides/GEN-PT-01-G01-Guide-for-Provisional-Tax-External-Guide.pdf                | Revision 28, effective 16 October 2026 |
+| `GEN-PT-01-G02-How-to-eFile-your-Provisional-Tax-Return-External-Guide.pdf` | https://www.sars.gov.za/wp-content/uploads/Ops/Guides/GEN-PT-01-G02-How-to-eFile-your-Provisional-Tax-Return-External-Guide.pdf | Revision 5, effective 27 June 2025     |
 
 The G02 guide ("How to eFile your Provisional Tax Return") is the current SARS
 guide to completing the IRP6. It lists the eFiling field names the sheet maps to.
@@ -88,3 +88,21 @@ The Capital Gains Tax rates page shows the same effective rates for 2026 and
 did not change.
 
 The sheet is our own layout. It does not copy the SARS form artwork or logo.
+
+## Dividends tax (DTR01 and DTR02)
+
+Fetched 27 November 2026.
+
+- Rate 20% for a dividend paid on or after 22 February 2017:
+  https://www.sars.gov.za/faq/faq-what-is-the-rate-of-dividends-tax/
+- Published rates table, 20%, no change noted 25 February 2026. The table's
+  current year column is 2027:
+  https://www.sars.gov.za/tax-rates/income-tax/interest-and-dividends/
+- Pay on or before the last day of the month after the month the dividend was
+  paid. The payment is accompanied by the DTR01 and the DTR02 returns:
+  https://www.sars.gov.za/types-of-tax/dividends-tax/
+
+The draft pack (`src/lib/tax-specialist/forms/dtr.ts`) uses that 20% only when
+the payment date is on or after 22 February 2017 and the beneficial owner is on
+the standard rate. A reduced DTA rate is the figure the accountant types. An
+exempt line is nil. A missing figure stays blank. The pack is not filed.
