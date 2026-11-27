@@ -276,7 +276,10 @@ function CapitalSection({ sheet }: { sheet: Itr12Sheet }) {
             <Text style={S.source}>Of the gain</Text>
           </View>
           <View style={S.row} wrap={false}>
-            <Text style={S.label}>Taxable capital gain</Text>
+            <View style={S.label}>
+              <Text>Taxable capital gain</Text>
+              {capital.ratesNote ? <Text style={S.note}>{pdfText(capital.ratesNote)}</Text> : null}
+            </View>
             <Text style={S.value}>{money(capital.taxableCapitalGainCents)}</Text>
             <Text style={S.source}>
               {capital.includedInTaxableIncome ? "Included in taxable income" : "Not included"}

@@ -2,8 +2,8 @@
  * Eighth Schedule disposal register on the ITR12 and ITR14 draft sheets.
  * Run: pnpm test:tax-cgt
  *
- * docs/sars does not sign off an inclusion rate or an exclusion, so the
- * taxable capital gain stays blank. Row gains are still worked out.
+ * 2026 and 2027 are signed off in docs/sars. Any other year stays blank.
+ * Row gains are worked out either way.
  */
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
@@ -11,7 +11,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ZaItr12Sheet } from "../src/components/tax-specialist/za-itr12-sheet";
 import { ZaItr14Sheet } from "../src/components/tax-specialist/za-itr14-sheet";
 import {
-  CGT_YEAR_TABLE,
   capitalGainsSchedule,
   cgtYear,
   type CgtDisposal,
@@ -43,17 +42,39 @@ function eq(actual: unknown, expected: unknown, msg: string) {
   }
 }
 
-eq(CGT_YEAR_TABLE.length, 0, "no year is signed off in docs/sars");
-eq(cgtYear(2026), null, "2026 has no signed-off capital gains table");
+const year2026 = cgtYear(2026);
+const year2027 = cgtYear(2027);
+eq(year2026?.annualExclusionCents, 4_000_000, "2026 annual exclusion is R40 000");
+eq(year2026?.primaryResidenceExclusionCents, 200_000_000, "2026 primary residence exclusion is R2 000 000");
+eq(year2026?.individualInclusionPercent, 40, "2026 individual inclusion is 40%");
+eq(year2026?.companyInclusionPercent, 80, "2026 company inclusion is 80%");
+eq(year2027?.annualExclusionCents, 5_000_000, "2027 annual exclusion is R50 000");
+eq(year2027?.primaryResidenceExclusionCents, 300_000_000, "2027 primary residence exclusion is R3 000 000");
+eq(year2027?.individualInclusionPercent, 40, "2027 individual inclusion is 40%");
+eq(year2027?.companyInclusionPercent, 80, "2027 company inclusion is 80%");
+eq(cgtYear(2025), null, "2025 is not signed off");
+eq(cgtYear(2028), null, "2028 is not signed off");
 const readme = readFileSync("docs/sars/README.md", "utf8");
-const cgtNote = readme.split("Eighth Schedule capital gains")[1]?.split("\n- ")[0] ?? "";
+assert(readme.includes("Fetched on 27 November 2026"), "docs/sars records the fetch date");
 assert(
-  /not signed off/i.test(cgtNote),
-  "docs/sars records that the capital gains rates are not signed off",
+  readme.includes("https://www.sars.gov.za/tax-rates/income-tax/capital-gains-tax-cgt/"),
+  "docs/sars cites the capital gains rates page",
 );
 assert(
-  !/40%|80%|R40 000|R2 000 000/.test(cgtNote),
-  "docs/sars does not invent an inclusion rate or an exclusion",
+  readme.includes("https://www.sars.gov.za/wp-content/uploads/20256/Budget-tax-guide-21-May-2025.pdf"),
+  "docs/sars cites the 2025/26 budget tax guide",
+);
+assert(
+  readme.includes(
+    "https://www.sars.gov.za/wp-content/uploads/Docs/Budget/Budget2026/Budget-tax-guide-2026-web-version.pdf",
+  ),
+  "docs/sars cites the 2026/27 budget tax guide",
+);
+assert(
+  readme.includes(
+    "https://www.sars.gov.za/wp-content/uploads/Ops/Guides/Legal-Pub-Guide-IT11-Tax-guide-for-share-owners.pdf",
+  ),
+  "docs/sars cites the share owners guide for the inclusion rates",
 );
 
 const residence: CgtDisposal = {
@@ -78,6 +99,18 @@ const shares: CgtDisposal = {
   sellingCostsCents: 1_000_000,
   primaryResidence: false,
 };
+const ya2027 = capitalGainsSchedule({
+  person: "individual",
+  yearOfAssessment: 2027,
+  disposals: [
+    { ...residence, id: "home-2027" },
+    { ...shares, id: "shares-2027" },
+  ],
+  assessedCapitalLossBroughtForwardCents: 0,
+});
+eq(ya2027?.primaryResidenceExclusionCents, 290_000_000, "2027 disregards the whole residence gain under the R3 000 000 cap");
+eq(ya2027?.annualExclusionCents, 5_000_000, "2027 uses the R50 000 annual exclusion");
+eq(ya2027?.taxableCapitalGainCents, 7_600_000, "2027 taxable capital gain is the shares balance at 40%");
 
 const individualInputs: Itr12Inputs = {
   taxReference: "1234567890",
@@ -127,30 +160,45 @@ assert((home?.gainCents ?? 0) > 200_000_000, "the primary residence gain is abov
 eq(home?.primaryResidence, true, "the primary residence mark is kept");
 eq(listed?.gainCents, 24_000_000, "the second disposal gain is proceeds minus base cost");
 eq(individual.capital?.aggregateCents, 314_000_000, "the two disposals aggregate");
-eq(individual.capital?.annualExclusionCents, null, "the annual exclusion stays blank");
-eq(individual.capital?.primaryResidenceExclusionCents, null, "the primary residence exclusion stays blank");
-eq(individual.capital?.inclusionPercent, null, "the individual inclusion rate stays blank");
+eq(individual.capital?.primaryResidenceExclusionCents, 200_000_000, "R2 000 000 of the residence gain is excluded");
+eq(individual.capital?.annualExclusionCents, 4_000_000, "the R40 000 annual exclusion is applied");
+eq(individual.capital?.netCapitalGainCents, 110_000_000, "net capital gain is R1 100 000");
+eq(individual.capital?.inclusionPercent, 40, "the individual inclusion rate is 40%");
 eq(
-  individual.capital?.taxableCapitalGainCents ?? null,
-  null,
-  "acceptance: taxable capital gain stays blank because the year is not signed off",
+  individual.capital?.taxableCapitalGainCents,
+  44_000_000,
+  "acceptance: taxable capital gain is R440 000",
 );
-eq(individual.capital?.includedInTaxableIncome, false, "a blank taxable capital gain is not added");
-eq(individual.taxableIncomeCents, 6_500_000, "taxable income stays employment plus practice net");
+eq(individual.capital?.includedInTaxableIncome, true, "the taxable capital gain is included");
+eq(
+  individual.capital?.ratesNote,
+  "Rates from SARS published tables YA2026; accountant to confirm",
+  "the sheet names the signed-off year for the accountant to confirm",
+);
+eq(individual.taxableIncomeCents, 50_500_000, "taxable income includes the taxable capital gain");
 eq(
   (individual.taxableTie?.employmentCents ?? 0) +
     (individual.taxableTie?.practiceNetCents ?? 0) +
     (individual.taxableTie?.taxableCapitalGainCents ?? 0),
   individual.taxableIncomeCents,
-  "acceptance: taxable income ties without an invented capital gain",
+  "acceptance: taxable income ties to employment, practice, and the taxable capital gain",
 );
 assert(
   !individual.checks.some((check) => check.id === "tie"),
   "the tie check passes",
 );
+
+const unsignedIndividual = computeItr12({
+  clientName: "Nicola Physio",
+  yearOfAssessment: 2025,
+  inputs: individualInputs,
+});
+eq(unsignedIndividual.capital?.taxableCapitalGainCents ?? null, null, "an unsigned year leaves the taxable capital gain blank");
+eq(unsignedIndividual.capital?.ratesNote, null, "an unsigned year has no rates note");
+eq(unsignedIndividual.taxableIncomeCents, 6_500_000, "an unsigned year does not add a capital gain to taxable income");
 assert(
-  individual.capital?.notes.some((note) => /not signed off/i.test(note)),
-  "the sheet says the rates are not signed off",
+  !unsignedIndividual.checks.some((check) => check.id === "tie"),
+  "the unsigned year still ties",
 );
 
 const storedIndividual = itr12DraftFields(individual, individualInputs);
@@ -242,15 +290,32 @@ const gained = computeItr14({
   },
 });
 eq(gained.capital?.rows[0]?.gainCents, 80_000_000, "the company disposal gain is proceeds minus base cost");
-eq(gained.capital?.inclusionPercent, null, "acceptance: company inclusion stays blank; 80% is not signed off");
-eq(gained.capital?.taxableCapitalGainCents ?? null, null, "the company taxable capital gain stays blank");
+eq(gained.capital?.inclusionPercent, 80, "the company inclusion rate is 80%");
+eq(gained.capital?.taxableCapitalGainCents, 64_000_000, "acceptance: company taxable capital gain is R800 000 at 80%");
 eq(gained.capital?.annualExclusionApplies, false, "a company has no annual exclusion");
 eq(gained.capital?.primaryResidenceApplies, false, "a company has no primary residence exclusion");
-eq(gained.taxableIncomeCents, 182_850_000, "taxable income is unchanged while the inclusion is blank");
+eq(gained.taxableIncomeCents, 246_850_000, "taxable income includes the company taxable capital gain");
+eq(gained.taxCents, 66_649_500, "normal tax is 27% of taxable income after the capital gain");
 assert(
   gained.checks.some((check) => check.id === "adds-up" && check.level === "ok"),
   "the company bridge still ties",
 );
+assert(
+  !gained.checks.some((check) => check.id === "rate"),
+  "the rate check passes after the capital gain is included",
+);
+const unsignedCompany = computeItr14({
+  client: companyClient,
+  yearOfAssessment: 2025,
+  inputs: {
+    ...companyBase,
+    disposals: [companyGain],
+    assessedCapitalLossBroughtForwardCents: 0,
+  },
+});
+eq(unsignedCompany.capital?.inclusionPercent, null, "an unsigned company year does not apply 80%");
+eq(unsignedCompany.capital?.taxableCapitalGainCents ?? null, null, "an unsigned company year leaves the taxable capital gain blank");
+eq(unsignedCompany.taxableIncomeCents, 182_850_000, "an unsigned company year does not add a capital gain");
 
 const companyLoss: CgtDisposal = {
   id: "loss",
@@ -412,6 +477,10 @@ assert(sectionSrc.includes('data-cgt-entry="primary-residence"'), "the sheet sou
 assert(sectionSrc.includes("Add a disposal"), "the sheet source can add a disposal");
 assert(sectionSrc.includes("Remove disposal"), "the sheet source can remove a disposal");
 assert(sectionSrc.includes("key={`${row.id}-proceeds`}"), "amount keys stay on the disposal id");
+assert(sectionSrc.includes("ratesNote"), "the taxable capital gain line carries the rates note");
+assert(pdf12.includes("ratesNote"), "the ITR12 PDF carries the rates note");
+assert(pdf14.includes("ratesNote"), "the ITR14 PDF carries the rates note");
+assert(!/sars\.gov/i.test(cgtSrc), "the capital gains source does not embed a SARS address");
 assert(pdf12.includes("Capital gains"), "the ITR12 PDF has a capital gains section");
 assert(pdf14.includes("Capital gains"), "the ITR14 PDF has a capital gains section");
 assert(pdf12.includes("Not a SARS return"), "the ITR12 PDF is not a SARS return");
@@ -444,7 +513,10 @@ for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
 assert(pdfText.includes("Not a SARS return"), "the PDF pages say it is not a SARS return");
 assert(pdfText.includes("Capital gains"), "the PDF has the capital gains section");
 assert(pdfText.includes("Primary residence"), "the PDF names the primary residence");
-assert(/not signed off/i.test(pdfText), "the PDF says the rates are not signed off");
+assert(
+  pdfText.includes("Rates from SARS published tables YA2026; accountant to confirm"),
+  "the PDF asks the accountant to confirm the signed-off rates",
+);
 
 console.log("acceptance residence gain cents", home?.gainCents);
 console.log("acceptance shares gain cents", listed?.gainCents);

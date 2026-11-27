@@ -392,6 +392,11 @@ export function CgtSection({
                 <th scope="row">{label}</th>
                 <td className="irp6-value" data-cgt-summary={label}>
                   {value}
+                  {label === "Taxable capital gain" && schedule.ratesNote ? (
+                    <span className="irp6-note" data-cgt-rates-note="true">
+                      {schedule.ratesNote}
+                    </span>
+                  ) : null}
                 </td>
               </tr>
             ))}

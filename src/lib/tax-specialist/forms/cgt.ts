@@ -5,10 +5,10 @@
  * file, and does not write a ledger. A blank register is not zero.
  *
  * Inclusion rates and exclusions live in a dated year table. A year is used
- * only when docs/sars/README.md signs that year off. The guides in docs/sars
- * do not sign off any year, so the table stays empty and the taxable capital
- * gain stays blank. A finished net capital loss is carried forward and is
- * not included in taxable income.
+ * only when docs/sars/README.md signs that year off. Signed-off years are
+ * 2026 and 2027. Any other year leaves the taxable capital gain blank.
+ * A finished net capital loss is carried forward and is not included in
+ * taxable income. The death-year exclusion is not applied.
  */
 
 export const CGT_BLANK_SCHEDULE = "A blank schedule is not zero";
@@ -38,10 +38,33 @@ export type CgtYear = {
 };
 
 /**
- * Empty until docs/sars/README.md signs a year off. Do not add a rate or an
- * exclusion that is not written there.
+ * Signed off in docs/sars/README.md. Amounts are cents. Do not add a year
+ * that is not written there.
+ * 2026: annual exclusion R40 000, primary residence R2 000 000, inclusion 40/80.
+ * 2027: annual exclusion R50 000, primary residence R3 000 000, inclusion 40/80.
  */
-export const CGT_YEAR_TABLE: readonly CgtYear[] = [];
+export const CGT_YEAR_TABLE: readonly CgtYear[] = [
+  {
+    year: 2026,
+    annualExclusionCents: 4_000_000,
+    primaryResidenceExclusionCents: 200_000_000,
+    individualInclusionPercent: 40,
+    companyInclusionPercent: 80,
+  },
+  {
+    year: 2027,
+    annualExclusionCents: 5_000_000,
+    primaryResidenceExclusionCents: 300_000_000,
+    individualInclusionPercent: 40,
+    companyInclusionPercent: 80,
+  },
+];
+
+/** Shown next to the taxable capital gain when this year is signed off. */
+export function cgtRatesNote(year: number): string | null {
+  if (!cgtYear(year)) return null;
+  return `Rates from SARS published tables YA${year}; accountant to confirm`;
+}
 
 export function cgtYear(year: number): CgtYear | null {
   return CGT_YEAR_TABLE.find((row) => row.year === year) ?? null;
@@ -101,6 +124,8 @@ export type CgtSchedule = {
   /** True only when taxableCapitalGainCents is added to taxable income. */
   includedInTaxableIncome: boolean;
   incomplete: boolean;
+  /** Null when this year is not signed off, or the register is incomplete. */
+  ratesNote: string | null;
   notes: readonly string[];
 };
 
@@ -192,6 +217,7 @@ export function capitalGainsSchedule(input: {
     lossCarriedForward: false,
     includedInTaxableIncome: false,
     incomplete: false,
+    ratesNote: null,
     notes: [],
   };
   if (rows.some((row) => rowIncomplete(row, person)) || (brought != null && brought < 0)) {
@@ -270,6 +296,7 @@ export function capitalGainsSchedule(input: {
     lossCarriedForward,
     includedInTaxableIncome,
     incomplete: false,
+    ratesNote: cgtRatesNote(input.yearOfAssessment),
     notes,
   };
 }
