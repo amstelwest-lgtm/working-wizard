@@ -45,7 +45,9 @@ import {
   type Itr12RentalProperty,
   type Itr12WearDraft,
 } from "@/lib/tax-specialist/forms/itr12-schedules";
+import { wearIssueField } from "@/lib/tax-specialist/forms/itr14-allowances";
 import { saveCatalogDraft } from "@/lib/tax-specialist/forms/pipeline";
+import { AssetDateInput } from "./asset-date-input";
 import "./za-irp6-sheet.css";
 
 type Approvals = Partial<Record<Itr12SectionId, boolean>>;
@@ -450,124 +452,163 @@ function LocalSchedules({
             Wear-and-tear assets: Blank
           </p>
         )}
-        {business?.assets.map((asset) => (
-          <div key={asset.id} data-itr12-asset={asset.id}>
-            <BlurText
-              id={`itr12-asset-description-${asset.id}`}
-              entry="asset-description"
-              label="Asset description"
-              disabled={locked}
-              value={asset.description}
-              onCommit={(description) =>
-                patchBusiness((current) => ({
-                  ...current,
-                  assets: current.assets.map((item) =>
-                    item.id === asset.id ? { ...item, description } : item,
-                  ),
-                }))
-              }
-            />
-            <BlurAmount
-              id={`itr12-asset-cost-${asset.id}`}
-              entry="asset-cost"
-              label="Asset cost"
-              disabled={locked}
-              value={asset.costCents}
-              onCommit={(costCents) =>
-                patchBusiness((current) => ({
-                  ...current,
-                  assets: current.assets.map((item) =>
-                    item.id === asset.id ? { ...item, costCents } : item,
-                  ),
-                }))
-              }
-            />
-            <input
-              id={`itr12-asset-date-${asset.id}`}
-              className="irp6-input"
-              type="date"
-              aria-label="Date brought into use"
-              disabled={locked}
-              value={asset.broughtIntoUse}
-              data-itr12-entry="asset-date"
-              onChange={(event) =>
-                patchBusiness((current) => ({
-                  ...current,
-                  assets: current.assets.map((item) =>
-                    item.id === asset.id ? { ...item, broughtIntoUse: event.target.value } : item,
-                  ),
-                }))
-              }
-            />
-            <BlurText
-              id={`itr12-asset-category-${asset.id}`}
-              entry="asset-category"
-              label="Asset category"
-              disabled={locked}
-              value={asset.category}
-              onCommit={(category) =>
-                patchBusiness((current) => ({
-                  ...current,
-                  assets: current.assets.map((item) =>
-                    item.id === asset.id ? { ...item, category } : item,
-                  ),
-                }))
-              }
-            />
-            <select
-              id={`itr12-asset-section-${asset.id}`}
-              className="irp6-input"
-              aria-label="Wear-and-tear section"
-              disabled={locked}
-              value={asset.section}
-              data-itr12-entry="asset-section"
-              onChange={(event) =>
-                patchBusiness((current) => ({
-                  ...current,
-                  assets: current.assets.map((item) =>
-                    item.id === asset.id
-                      ? { ...item, section: event.target.value === "s12c" ? "s12c" : "s11e" }
-                      : item,
-                  ),
-                }))
-              }
-            >
-              <option value="s11e">s11(e)</option>
-              <option value="s12c">s12C</option>
-            </select>
-            <BlurText
-              id={`itr12-asset-private-${asset.id}`}
-              entry="asset-private-use"
-              label="Asset private use percent"
-              disabled={locked}
-              value={asset.privateUsePercent == null ? "" : String(asset.privateUsePercent)}
-              onCommit={(text) => {
-                const percent = text === "" ? null : /^\d{1,3}$/.test(text) ? Number(text) : null;
-                if (text !== "" && (percent == null || percent > 100)) return;
-                patchBusiness((current) => ({
-                  ...current,
-                  assets: current.assets.map((item) =>
-                    item.id === asset.id ? { ...item, privateUsePercent: percent } : item,
-                  ),
-                }));
-              }}
-            />
-            {locked ? null : (
-              <button
-                type="button"
-                className="irp6-back"
-                onClick={() =>
+        {business?.assets.map((asset, index) => {
+          const issue = worked?.wear?.issues.find((row) => row.id === asset.id);
+          const issueOn = (field: string) =>
+            issue && wearIssueField(issue.message) === field ? issue.message : "";
+          return (
+            <fieldset key={asset.id} data-itr12-asset={asset.id}>
+              <legend>Asset {index + 1}</legend>
+              <label>
+                Description
+                <BlurText
+                  id={`itr12-asset-description-${asset.id}`}
+                  entry="asset-description"
+                  label="Description"
+                  disabled={locked}
+                  value={asset.description}
+                  onCommit={(description) =>
+                    patchBusiness((current) => ({
+                      ...current,
+                      assets: current.assets.map((item) =>
+                        item.id === asset.id ? { ...item, description } : item,
+                      ),
+                    }))
+                  }
+                />
+                {issueOn("description") ? (
+                  <span className="irp6-field-error" data-asset-field-issue="description">
+                    {issueOn("description")}
+                  </span>
+                ) : null}
+              </label>
+              <label>
+                Cost
+                <BlurAmount
+                  id={`itr12-asset-cost-${asset.id}`}
+                  entry="asset-cost"
+                  label="Cost"
+                  disabled={locked}
+                  value={asset.costCents}
+                  onCommit={(costCents) =>
+                    patchBusiness((current) => ({
+                      ...current,
+                      assets: current.assets.map((item) =>
+                        item.id === asset.id ? { ...item, costCents } : item,
+                      ),
+                    }))
+                  }
+                />
+                {issueOn("cost") ? (
+                  <span className="irp6-field-error" data-asset-field-issue="cost">
+                    {issueOn("cost")}
+                  </span>
+                ) : null}
+              </label>
+              <AssetDateInput
+                id={`itr12-asset-date-${asset.id}`}
+                label="Date brought into use"
+                disabled={locked}
+                value={asset.broughtIntoUse}
+                onCommit={(iso) =>
                   patchBusiness((current) => ({
                     ...current,
-                    assets: current.assets.filter((item) => item.id !== asset.id),
+                    assets: current.assets.map((item) =>
+                      item.id === asset.id ? { ...item, broughtIntoUse: iso } : item,
+                    ),
                   }))
                 }
-              >
-                Remove asset
-              </button>
-            )}
-          </div>
-        ))}
+              />
+              {issueOn("date") ? (
+                <span className="irp6-field-error" data-asset-field-issue="date">
+                  {issueOn("date")}
+                </span>
+              ) : null}
+              <label>
+                Category
+                <BlurText
+                  id={`itr12-asset-category-${asset.id}`}
+                  entry="asset-category"
+                  label="Category"
+                  disabled={locked}
+                  value={asset.category}
+                  onCommit={(category) =>
+                    patchBusiness((current) => ({
+                      ...current,
+                      assets: current.assets.map((item) =>
+                        item.id === asset.id ? { ...item, category } : item,
+                      ),
+                    }))
+                  }
+                />
+                {issueOn("category") ? (
+                  <span className="irp6-field-error" data-asset-field-issue="category">
+                    {issueOn("category")}
+                  </span>
+                ) : null}
+              </label>
+              <label>
+                Section
+                <select
+                  id={`itr12-asset-section-${asset.id}`}
+                  className="irp6-input"
+                  aria-label="Section"
+                  disabled={locked}
+                  value={asset.section}
+                  data-itr12-entry="asset-section"
+                  onChange={(event) =>
+                    patchBusiness((current) => ({
+                      ...current,
+                      assets: current.assets.map((item) =>
+                        item.id === asset.id
+                          ? { ...item, section: event.target.value === "s12c" ? "s12c" : "s11e" }
+                          : item,
+                      ),
+                    }))
+                  }
+                >
+                  <option value="s11e">s11(e)</option>
+                  <option value="s12c">s12C</option>
+                </select>
+              </label>
+              <label>
+                Private use %
+                <BlurText
+                  id={`itr12-asset-private-${asset.id}`}
+                  entry="asset-private-use"
+                  label="Private use %"
+                  disabled={locked}
+                  value={asset.privateUsePercent == null ? "" : String(asset.privateUsePercent)}
+                  onCommit={(text) => {
+                    const percent =
+                      text === "" ? null : /^\d{1,3}$/.test(text) ? Number(text) : null;
+                    if (text !== "" && (percent == null || percent > 100)) return;
+                    patchBusiness((current) => ({
+                      ...current,
+                      assets: current.assets.map((item) =>
+                        item.id === asset.id ? { ...item, privateUsePercent: percent } : item,
+                      ),
+                    }));
+                  }}
+                />
+              </label>
+              {locked ? null : (
+                <button
+                  type="button"
+                  className="irp6-back"
+                  onClick={() =>
+                    patchBusiness((current) => ({
+                      ...current,
+                      assets: current.assets.filter((item) => item.id !== asset.id),
+                    }))
+                  }
+                >
+                  Remove asset
+                </button>
+              )}
+            </fieldset>
+          );
+        })}
         {locked ? null : (
           <button
             type="button"
@@ -653,6 +694,13 @@ function LocalSchedules({
                       patchProperty(property.id, (current) => ({ ...current, [key]: cents }))
                     }
                   />
+                  {workedProperty?.gaps
+                    .filter((gap) => gap.field === key)
+                    .map((gap) => (
+                      <span key={gap.field} className="irp6-field-error" data-itr12-gap={gap.field}>
+                        {gap.prompt}
+                      </span>
+                    ))}
                 </span>
               ))}
               <span className="irp6-note">
@@ -682,6 +730,13 @@ function LocalSchedules({
                   }));
                 }}
               />
+              {workedProperty?.gaps
+                .filter((gap) => gap.field === "privateUsePercent")
+                .map((gap) => (
+                  <span key={gap.field} className="irp6-field-error" data-itr12-gap={gap.field}>
+                    {gap.prompt}
+                  </span>
+                ))}
               <p className="irp6-note">
                 Net rental: {scheduleCents(workedProperty?.netCents ?? null)}
               </p>
@@ -982,10 +1037,15 @@ export function ZaItr12Sheet({
 
   const setLineAmount = (id: string, cents: number | null) => {
     edit(
-      [itr12MoneyField(inputs.lines.find((line) => line.id === id)?.fieldId ?? "employmentIncome").section],
+      [
+        itr12MoneyField(inputs.lines.find((line) => line.id === id)?.fieldId ?? "employmentIncome")
+          .section,
+      ],
       {
         ...inputs,
-        lines: inputs.lines.map((line) => (line.id === id ? { ...line, amountCents: cents } : line)),
+        lines: inputs.lines.map((line) =>
+          line.id === id ? { ...line, amountCents: cents } : line,
+        ),
       },
     );
   };
@@ -1005,10 +1065,10 @@ export function ZaItr12Sheet({
   };
 
   const removeLine = (line: Itr12Cited) => {
-    edit(
-      [itr12MoneyField(line.fieldId).section],
-      { ...inputs, lines: inputs.lines.filter((item) => item.id !== line.id) },
-    );
+    edit([itr12MoneyField(line.fieldId).section], {
+      ...inputs,
+      lines: inputs.lines.filter((item) => item.id !== line.id),
+    });
   };
 
   const resolveQuery = (id: string, resolved: boolean) => {
@@ -1042,7 +1102,11 @@ export function ZaItr12Sheet({
   };
 
   const fieldRow = (line: Itr12SheetLine, children?: ReactNode) => (
-    <tr key={line.id} data-itr12-field={line.id} data-itr12-missing={line.missing ? "true" : undefined}>
+    <tr
+      key={line.id}
+      data-itr12-field={line.id}
+      data-itr12-missing={line.missing ? "true" : undefined}
+    >
       <th scope="row">
         <span className="irp6-label">{line.label}</span>
         {line.note ? <span className="irp6-note">{line.note}</span> : null}
@@ -1113,7 +1177,11 @@ export function ZaItr12Sheet({
                             : `File ${line.fileId}`}
                         </span>
                         {locked ? null : (
-                          <button type="button" className="irp6-back" onClick={() => removeLine(line)}>
+                          <button
+                            type="button"
+                            className="irp6-back"
+                            onClick={() => removeLine(line)}
+                          >
                             Remove
                           </button>
                         )}
@@ -1146,7 +1214,12 @@ export function ZaItr12Sheet({
   };
 
   return (
-    <div className="irp6" data-itr12-sheet="true" data-itr12-status={status} data-itr12-role={approverRole}>
+    <div
+      className="irp6"
+      data-itr12-sheet="true"
+      data-itr12-status={status}
+      data-itr12-role={approverRole}
+    >
       <header className="irp6-head">
         <button type="button" className="irp6-back" onClick={onBack}>
           ← {backLabel}
@@ -1216,7 +1289,9 @@ export function ZaItr12Sheet({
         </header>
         <table className="irp6-table">
           <tbody>
-            {sheet.lines.filter((line) => line.id === "fullName" || line.id === "yearOfAssessment").map((line) => fieldRow(line))}
+            {sheet.lines
+              .filter((line) => line.id === "fullName" || line.id === "yearOfAssessment")
+              .map((line) => fieldRow(line))}
             {fieldRow(
               sheet.lines.find((line) => line.id === "taxReference")!,
               <>
@@ -1229,7 +1304,9 @@ export function ZaItr12Sheet({
                   placeholder="10 digits"
                   value={inputs.taxReference}
                   disabled={locked}
-                  onChange={(event) => edit(["taxpayer"], { ...inputs, taxReference: event.target.value })}
+                  onChange={(event) =>
+                    edit(["taxpayer"], { ...inputs, taxReference: event.target.value })
+                  }
                 />
                 {refInvalid ? <span className="irp6-field-error">Should be 10 digits.</span> : null}
               </>,
@@ -1275,7 +1352,11 @@ export function ZaItr12Sheet({
         ) : (
           <ul className="irp6-gate-list" data-itr12-queries="true">
             {inputs.queries.map((query) => (
-              <li key={query.id} data-itr12-query={query.id} data-itr12-query-open={query.resolved ? "false" : "true"}>
+              <li
+                key={query.id}
+                data-itr12-query={query.id}
+                data-itr12-query-open={query.resolved ? "false" : "true"}
+              >
                 <span>{query.text}</span>
                 <button
                   type="button"
@@ -1328,7 +1409,13 @@ export function ZaItr12Sheet({
         </p>
       ) : null}
       <div className="irp6-actions">
-        <button type="button" className="irp6-save" data-itr12-save="true" disabled={locked || busy != null} onClick={() => void saveDraft()}>
+        <button
+          type="button"
+          className="irp6-save"
+          data-itr12-save="true"
+          disabled={locked || busy != null}
+          onClick={() => void saveDraft()}
+        >
           {busy === "save" ? "Saving…" : "Save draft"}
         </button>
         <button
