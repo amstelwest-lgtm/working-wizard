@@ -36,6 +36,7 @@ import {
   type CgtDisposal,
   type CgtSchedule,
 } from "./cgt.ts";
+import { NIL_CONFIRMED_NOTE, nilMarkFrom, rememberNilKey, type NilMark } from "./nil-mark.ts";
 import type { TaxFormDraft, TaxFormDraftField } from "./drafts.ts";
 import {
   irp6Supported,
@@ -558,6 +559,10 @@ export type Itr14Inputs = {
   disposals: CgtDisposal[];
   /** Blank is not zero. Separate from the income-tax assessed loss. */
   assessedCapitalLossBroughtForwardCents: number | null;
+  /** Set only when the accountant marks the remaining adjustment lines as nil. */
+  adjustmentNilMark?: NilMark | null;
+  /** Set only when the accountant marks the brought-forward capital loss as nil. */
+  assessedCapitalLossNilMark?: NilMark | null;
 };
 
 export function emptyItr14Inputs(): Itr14Inputs {
@@ -591,7 +596,88 @@ export function emptyItr14Inputs(): Itr14Inputs {
     assets: [],
     disposals: [],
     assessedCapitalLossBroughtForwardCents: null,
+    adjustmentNilMark: null,
+    assessedCapitalLossNilMark: null,
   };
+}
+
+export const ITR14_ADJUSTMENT_NIL_FIELDS = [
+  "depreciationAddBackCents",
+  "finesAddBackCents",
+  "wearAndTearCents",
+  "exemptDividendsCents",
+  "assessedLossBroughtForwardCents",
+  "donationCents",
+] as const;
+
+export type Itr14AdjustmentNilField = (typeof ITR14_ADJUSTMENT_NIL_FIELDS)[number];
+
+/** Adjustment lines that are still blank. Books and a register are not blank. */
+export function itr14AdjustmentBlankKeys(
+  inputs: Itr14Inputs,
+  supplied: { depreciation: boolean; wear: boolean },
+): string[] {
+  const keys: string[] = [];
+  for (const key of ITR14_ADJUSTMENT_NIL_FIELDS) {
+    if (key === "depreciationAddBackCents" && supplied.depreciation) continue;
+    if (key === "wearAndTearCents" && supplied.wear) continue;
+    if (inputs[key] == null) keys.push(key);
+  }
+  for (const row of inputs.adjustments) {
+    if (row.amountCents == null) keys.push(`adjustment:${row.id}`);
+  }
+  return keys;
+}
+
+/** Sets only the adjustment lines named in blankKeys. Typed lines stay. */
+export function markItr14AdjustmentsNil(
+  inputs: Itr14Inputs,
+  blankKeys: readonly string[],
+): Itr14Inputs {
+  let keys = [...(inputs.adjustmentNilMark?.keys ?? [])];
+  const next: Itr14Inputs = {
+    ...inputs,
+    adjustments: inputs.adjustments.map((row) => ({ ...row })),
+  };
+  for (const key of blankKeys) {
+    if (key.startsWith("adjustment:")) {
+      const id = key.slice("adjustment:".length);
+      next.adjustments = next.adjustments.map((row) => {
+        if (row.id !== id || row.amountCents != null) return row;
+        keys = rememberNilKey({ keys }, key);
+        return { ...row, amountCents: 0 };
+      });
+      continue;
+    }
+    const field = key as Itr14AdjustmentNilField;
+    if (!ITR14_ADJUSTMENT_NIL_FIELDS.includes(field) || next[field] != null) continue;
+    next[field] = 0;
+    keys = rememberNilKey({ keys }, key);
+  }
+  next.adjustmentNilMark = { keys };
+  return next;
+}
+
+/** Puts back exactly the adjustment lines the nil button set. Typed lines stay. */
+export function undoItr14AdjustmentsNil(inputs: Itr14Inputs): Itr14Inputs {
+  const keys = inputs.adjustmentNilMark?.keys ?? [];
+  const next: Itr14Inputs = {
+    ...inputs,
+    adjustments: inputs.adjustments.map((row) => ({ ...row })),
+    adjustmentNilMark: null,
+  };
+  for (const key of keys) {
+    if (key.startsWith("adjustment:")) {
+      const id = key.slice("adjustment:".length);
+      next.adjustments = next.adjustments.map((row) =>
+        row.id === id ? { ...row, amountCents: null } : row,
+      );
+      continue;
+    }
+    const field = key as Itr14AdjustmentNilField;
+    if (ITR14_ADJUSTMENT_NIL_FIELDS.includes(field)) next[field] = null;
+  }
+  return next;
 }
 
 export type Itr14ApproverRole = "owner" | "accountant";
@@ -636,6 +722,11 @@ export type Itr14Sheet = {
   assessedLoss: AssessedLossWorking | null;
   /** Null when the disposal register is blank. A blank register is not zero. */
   capital: CgtSchedule | null;
+  assessedCapitalLossBroughtForwardCents: number | null;
+  /** Set while the accountant's nil mark applies to the brought-forward capital loss. */
+  assessedCapitalLossNilNote: string | null;
+  /** Set while the accountant's nil mark applies to the tax adjustments. */
+  adjustmentNilNote: string | null;
 };
 
 export type Itr14Client = Irp6Client;
@@ -1524,11 +1615,7 @@ export function computeItr14(input: {
       level: before === company.taxableBeforeDonationCents ? "ok" : "error",
       text: `${formatSampleCents(accountingProfitCents)} profit, adjustments applied, is ${formatSampleCents(beforeShown)} before the donation limit.`,
     });
-    if (
-      shownTax != null &&
-      shownTaxable != null &&
-      shownTax !== taxAtCompanyRate(shownTaxable)
-    ) {
+    if (shownTax != null && shownTaxable != null && shownTax !== taxAtCompanyRate(shownTaxable)) {
       checks.push({ id: "rate", level: "error", text: "The tax is not 27% of taxable income." });
     }
   }
@@ -1563,6 +1650,9 @@ export function computeItr14(input: {
     wear,
     assessedLoss,
     capital,
+    assessedCapitalLossBroughtForwardCents: inputs.assessedCapitalLossBroughtForwardCents,
+    assessedCapitalLossNilNote: inputs.assessedCapitalLossNilMark ? NIL_CONFIRMED_NOTE : null,
+    adjustmentNilNote: inputs.adjustmentNilMark ? NIL_CONFIRMED_NOTE : null,
   };
 }
 
@@ -1723,6 +1813,8 @@ export function itr14InputsFromDraft(draft: TaxFormDraft | null | undefined): It
     assets: wearAssetsFrom(stored.assets),
     disposals: cgtDisposalsFrom(stored.disposals),
     assessedCapitalLossBroughtForwardCents: centsOf(stored.assessedCapitalLossBroughtForwardCents),
+    adjustmentNilMark: nilMarkFrom(stored.adjustmentNilMark),
+    assessedCapitalLossNilMark: nilMarkFrom(stored.assessedCapitalLossNilMark),
   };
 }
 
@@ -1799,6 +1891,19 @@ export function itr14Csv(sheet: Itr14Sheet): string {
     rows.push(["Wear-and-tear schedule", "", "No asset register", "A blank register is not zero"]);
   }
   rows.push(...cgtCsvRows(sheet.capital));
+  if (sheet.adjustmentNilNote) {
+    rows.push(["Tax adjustments", "", NIL_CONFIRMED_NOTE, sheet.adjustmentNilNote]);
+  }
+  if (sheet.assessedCapitalLossNilNote) {
+    rows.push([
+      "Assessed capital loss brought forward",
+      sheet.assessedCapitalLossBroughtForwardCents == null
+        ? ""
+        : plainRands(sheet.assessedCapitalLossBroughtForwardCents),
+      NIL_CONFIRMED_NOTE,
+      sheet.assessedCapitalLossNilNote,
+    ]);
+  }
   if (sheet.assessedLoss) {
     rows.push([
       "Assessed loss set-off",

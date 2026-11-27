@@ -6,12 +6,16 @@
 import { useEffect, useRef, useState } from "react";
 import {
   CGT_BLANK_SCHEDULE,
+  markAssessedCapitalLossNil,
+  undoAssessedCapitalLossNil,
   type CgtDisposal,
   type CgtPerson,
   type CgtSchedule,
 } from "@/lib/tax-specialist/forms/cgt";
+import type { NilMark } from "@/lib/tax-specialist/forms/nil-mark";
 import { parseRandsToCents } from "@/lib/tax-specialist/forms/irp6";
 import { formatSampleCents } from "@/lib/tax-specialist/sample-compute";
+import { NilBlanksControl } from "./za-nil-blanks-control";
 
 const BLANK_LINES = [
   "Description",
@@ -166,20 +170,24 @@ export function CgtSection({
   person,
   disposals,
   assessedCapitalLossBroughtForwardCents,
+  assessedCapitalLossNilMark,
   schedule,
   locked,
   onChange,
+  onNilMark,
 }: {
   form: "itr12" | "itr14";
   person: CgtPerson;
   disposals: readonly CgtDisposal[];
   assessedCapitalLossBroughtForwardCents: number | null;
+  assessedCapitalLossNilMark: NilMark | null;
   schedule: CgtSchedule | null;
   locked: boolean;
   onChange: (next: {
     disposals: CgtDisposal[];
     assessedCapitalLossBroughtForwardCents: number | null;
   }) => void;
+  onNilMark: (mark: NilMark | null, cents: number | null) => void;
 }) {
   const blank = schedule == null;
   const update = (id: string, patch: Partial<CgtDisposal>) => {
@@ -194,7 +202,9 @@ export function CgtSection({
         ["Aggregate gain or loss", showCents(schedule.aggregateCents)],
         [
           "Annual exclusion",
-          schedule.annualExclusionApplies ? showCents(schedule.annualExclusionCents) : "Does not apply",
+          schedule.annualExclusionApplies
+            ? showCents(schedule.annualExclusionCents)
+            : "Does not apply",
         ],
         [
           "Primary residence exclusion",
@@ -202,12 +212,12 @@ export function CgtSection({
             ? showCents(schedule.primaryResidenceExclusionCents)
             : "Does not apply",
         ],
-        ["Assessed capital loss brought forward", showCents(schedule.assessedCapitalLossBroughtForwardCents)],
-        ["Net capital gain", showCents(schedule.netCapitalGainCents)],
         [
-          "Inclusion",
-          schedule.inclusionPercent == null ? "" : `${schedule.inclusionPercent}%`,
+          "Assessed capital loss brought forward",
+          showCents(schedule.assessedCapitalLossBroughtForwardCents),
         ],
+        ["Net capital gain", showCents(schedule.netCapitalGainCents)],
+        ["Inclusion", schedule.inclusionPercent == null ? "" : `${schedule.inclusionPercent}%`],
         ["Taxable capital gain", showCents(schedule.taxableCapitalGainCents)],
         [
           "Capital loss carried forward",
@@ -220,7 +230,9 @@ export function CgtSection({
       className="irp6-section"
       data-cgt={blank ? "blank" : "filled"}
       data-cgt-form={form}
-      {...(form === "itr12" ? { "data-itr12-cgt": blank ? "blank" : "filled" } : { "data-itr14-cgt": blank ? "blank" : "filled" })}
+      {...(form === "itr12"
+        ? { "data-itr12-cgt": blank ? "blank" : "filled" }
+        : { "data-itr14-cgt": blank ? "blank" : "filled" })}
     >
       <h3 className="irp6-section-title">Capital gains</h3>
       <p className="irp6-note">Eighth Schedule disposals. Draft for checking. Not a SARS return.</p>
@@ -228,14 +240,15 @@ export function CgtSection({
       {blank ? (
         <table className="irp6-table" data-cgt-blank="true">
           <tbody>
-            {(person === "individual" ? [...BLANK_LINES.slice(0, 8), "Primary residence", BLANK_LINES[8]] : BLANK_LINES).map(
-              (label) => (
-                <tr key={label}>
-                  <th scope="row">{label}</th>
-                  <td className="irp6-value" data-cgt-blank-line={label}></td>
-                </tr>
-              ),
-            )}
+            {(person === "individual"
+              ? [...BLANK_LINES.slice(0, 8), "Primary residence", BLANK_LINES[8]]
+              : BLANK_LINES
+            ).map((label) => (
+              <tr key={label}>
+                <th scope="row">{label}</th>
+                <td className="irp6-value" data-cgt-blank-line={label}></td>
+              </tr>
+            ))}
           </tbody>
         </table>
       ) : null}
@@ -336,7 +349,8 @@ export function CgtSection({
             </label>
           ) : null}
           <p className="irp6-note" data-cgt-gain={row.id}>
-            Gain or loss: {showCents(schedule?.rows.find((item) => item.id === row.id)?.gainCents ?? null)}
+            Gain or loss:{" "}
+            {showCents(schedule?.rows.find((item) => item.id === row.id)?.gainCents ?? null)}
           </p>
           {locked ? null : (
             <button
@@ -383,6 +397,25 @@ export function CgtSection({
             assessedCapitalLossBroughtForwardCents: assessedCapitalLossBroughtForwardCentsNext,
           })
         }
+      />
+      <NilBlanksControl
+        target={`${form}-cgt-assessed-loss`}
+        active={assessedCapitalLossNilMark != null}
+        locked={locked}
+        onMark={() => {
+          const marked = markAssessedCapitalLossNil(
+            assessedCapitalLossBroughtForwardCents,
+            assessedCapitalLossNilMark,
+          );
+          onNilMark(marked.mark, marked.cents);
+        }}
+        onUndo={() => {
+          const undone = undoAssessedCapitalLossNil(
+            assessedCapitalLossBroughtForwardCents,
+            assessedCapitalLossNilMark,
+          );
+          onNilMark(undone.mark, undone.cents);
+        }}
       />
       {blank ? null : (
         <table className="irp6-table">

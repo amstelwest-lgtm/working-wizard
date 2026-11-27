@@ -8,11 +8,8 @@ import { MilonMark } from "@/components/pdf/glyphs";
 import { C } from "@/components/pdf/theme";
 import { zaToday } from "@/lib/tax-specialist/forms/irp6";
 import { CGT_BLANK_SCHEDULE } from "@/lib/tax-specialist/forms/cgt";
-import {
-  ITR12_FOOTER,
-  ITR12_SECTIONS,
-  type Itr12Sheet,
-} from "@/lib/tax-specialist/forms/itr12";
+import { NIL_CONFIRMED_NOTE } from "@/lib/tax-specialist/forms/nil-mark";
+import { ITR12_FOOTER, ITR12_SECTIONS, type Itr12Sheet } from "@/lib/tax-specialist/forms/itr12";
 import { formatSampleCents, formatSampleDate } from "@/lib/tax-specialist/sample-compute";
 
 Font.registerHyphenationCallback((word) => [word]);
@@ -219,6 +216,9 @@ function RentalSection({ sheet }: { sheet: Itr12Sheet }) {
                 <Text style={S.value}>{money(property.netCents)}</Text>
                 <Text style={S.source}>This property</Text>
               </View>
+              {property.nilConfirmed ? (
+                <Text style={S.note}>{pdfText(NIL_CONFIRMED_NOTE)}</Text>
+              ) : null}
             </View>
           ))}
           <View style={S.row} wrap={false}>
@@ -301,6 +301,9 @@ function CapitalSection({ sheet }: { sheet: Itr12Sheet }) {
       ) : (
         <Text style={S.note}>{CGT_BLANK_SCHEDULE}</Text>
       )}
+      {sheet.assessedCapitalLossNilNote ? (
+        <Text style={S.note}>{pdfText(sheet.assessedCapitalLossNilNote)}</Text>
+      ) : null}
     </View>
   );
 }

@@ -17,11 +17,12 @@ import {
   type Irp6Client,
 } from "@/lib/tax-specialist/forms/irp6";
 import {
-  wearIssueField,
+  assetFieldIssue,
   type WearAsset,
   type WearSection,
 } from "@/lib/tax-specialist/forms/itr14-allowances";
 import { AssetDateInput } from "./asset-date-input";
+import { NilBlanksControl } from "./za-nil-blanks-control";
 import {
   ITR14_FOOTER,
   ITR14_SECTIONS,
@@ -37,8 +38,11 @@ import {
   itr14FileName,
   itr14InputsFromDraft,
   itr14MissingSentence,
+  itr14AdjustmentBlankKeys,
   itr14OpenQueries,
   itr14YearChoices,
+  markItr14AdjustmentsNil,
+  undoItr14AdjustmentsNil,
   type Itr14Adjustment,
   type Itr14ApproverRole,
   type Itr14CompanyClass,
@@ -449,7 +453,7 @@ export function ZaItr14Sheet({
   const blankAsset = (): WearAsset => ({
     id: nextId("asset"),
     description: "",
-    costCents: 0,
+    costCents: null,
     broughtIntoUse: "",
     category: "",
     section: "s11e",
@@ -695,6 +699,26 @@ export function ZaItr14Sheet({
 
       <section className="irp6-section" data-itr14-section="adjustments">
         {sectionHead("adjustments")}
+        <NilBlanksControl
+          target="itr14-adjustments"
+          active={inputs.adjustmentNilMark != null}
+          locked={locked}
+          onMark={() =>
+            patch(
+              ["adjustments"],
+              markItr14AdjustmentsNil(
+                inputs,
+                itr14AdjustmentBlankKeys(inputs, {
+                  depreciation:
+                    lineOf("depreciationAddBack")?.source === "books" ||
+                    lineOf("depreciationAddBack")?.source === "worked",
+                  wear: lineOf("wearAndTear")?.source === "worked",
+                }),
+              ),
+            )
+          }
+          onUndo={() => patch(["adjustments"], undoItr14AdjustmentsNil(inputs))}
+        />
         <table className="irp6-table">
           <tbody>
             {money(
@@ -834,9 +858,11 @@ export function ZaItr14Sheet({
           {locked ? null : (
             <div data-itr14-assets="true">
               {inputs.assets.map((asset, index) => {
-                const issue = sheet.wear?.issues.find((row) => row.id === asset.id);
-                const issueOn = (field: string) =>
-                  issue && wearIssueField(issue.message) === field ? issue.message : "";
+                const issue = assetFieldIssue({
+                  ...asset,
+                  privateUsePercent: asset.privateUsePercent,
+                });
+                const issueOn = (field: string) => (issue?.field === field ? issue.message : "");
                 return (
                   <fieldset key={asset.id} data-itr14-asset={asset.id} style={assetStyle}>
                     <legend>Asset {index + 1}</legend>
@@ -862,8 +888,8 @@ export function ZaItr14Sheet({
                         key={`${asset.id}-cost`}
                         id={`itr14-asset-${asset.id}-cost`}
                         label="Cost"
-                        value={asset.description || asset.costCents ? asset.costCents : null}
-                        onChange={(cents) => updateAsset(asset.id, { costCents: cents ?? 0 })}
+                        value={asset.costCents}
+                        onChange={(cents) => updateAsset(asset.id, { costCents: cents })}
                       />
                       {issueOn("cost") ? (
                         <span className="irp6-field-error" data-asset-field-issue="cost">
@@ -876,13 +902,9 @@ export function ZaItr14Sheet({
                       label="Date brought into use"
                       value={asset.broughtIntoUse}
                       disabled={locked}
+                      issue={issueOn("date")}
                       onCommit={(iso) => updateAsset(asset.id, { broughtIntoUse: iso })}
                     />
-                    {issueOn("date") ? (
-                      <span className="irp6-field-error" data-asset-field-issue="date">
-                        {issueOn("date")}
-                      </span>
-                    ) : null}
                     <label>
                       Category
                       <input
@@ -921,6 +943,11 @@ export function ZaItr14Sheet({
                         <option value="s12c">s12C</option>
                         <option value="small">R7 000 or less</option>
                       </select>
+                      {issueOn("section") ? (
+                        <span className="irp6-field-error" data-asset-field-issue="section">
+                          {issueOn("section")}
+                        </span>
+                      ) : null}
                     </label>
                     <label>
                       Private use %
@@ -938,6 +965,11 @@ export function ZaItr14Sheet({
                           });
                         }}
                       />
+                      {issueOn("private") ? (
+                        <span className="irp6-field-error" data-asset-field-issue="private">
+                          {issueOn("private")}
+                        </span>
+                      ) : null}
                     </label>
                     {asset.section === "s12c" && !asset.smallItem ? (
                       <label>
@@ -1031,9 +1063,16 @@ export function ZaItr14Sheet({
           person="company"
           disposals={inputs.disposals}
           assessedCapitalLossBroughtForwardCents={inputs.assessedCapitalLossBroughtForwardCents}
+          assessedCapitalLossNilMark={inputs.assessedCapitalLossNilMark ?? null}
           schedule={sheet.capital}
           locked={locked}
           onChange={(next) => patch(["adjustments"], next)}
+          onNilMark={(mark, cents) =>
+            patch(["adjustments"], {
+              assessedCapitalLossBroughtForwardCents: cents,
+              assessedCapitalLossNilMark: mark,
+            })
+          }
         />
         {inputs.assessedLossBroughtForwardCents != null ? (
           <div data-itr14-assessed-loss="true" style={scheduleStyle}>

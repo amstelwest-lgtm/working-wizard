@@ -17,6 +17,7 @@ import {
   type WearAsset,
   type WearSchedule,
 } from "./itr14-allowances.ts";
+import { NIL_CONFIRMED_NOTE, nilMarkFrom, rememberNilKey, type NilMark } from "./nil-mark.ts";
 
 export type Itr12BusinessDeduction = {
   id: string;
@@ -58,6 +59,8 @@ export type Itr12BusinessInput = {
   wearAndTearCents: number | null;
   /** Typist mark only. Null means not marked. It does not change the net. */
   ringFenceS20A: boolean | null;
+  /** Set only when the accountant marks the remaining blank lines as nil. */
+  nilMark?: NilMark | null;
 };
 
 export type Itr12HomeOfficeResult = {
@@ -97,6 +100,8 @@ export type Itr12RentalProperty = {
   assets: readonly WearAsset[];
   /** Whole percent, 0 to 100. Null stays blank and blocks the net. */
   privateUsePercent: number | null;
+  /** Set only when the accountant marks this property's remaining blank lines as nil. */
+  nilMark?: NilMark | null;
 };
 
 export type Itr12RentalPropertyResult = {
@@ -118,6 +123,8 @@ export type Itr12RentalPropertyResult = {
   note: string;
   /** Named blanks. A blank field is not treated as zero. */
   gaps: readonly { field: string; prompt: string }[];
+  /** True while this property's nil mark applies. */
+  nilConfirmed: boolean;
 };
 
 export type Itr12RentalSchedule = {
@@ -305,6 +312,7 @@ export function businessSchedule(
       "Recoupment is blank because there is no asset register, so it is left out of the net.",
     );
   }
+  if (input.nilMark) notes.push(NIL_CONFIRMED_NOTE);
   const netProfitCents =
     open || !nonNegative(input.grossIncomeCents) || "open" in deductions || wear.cents == null
       ? null
@@ -403,7 +411,113 @@ function propertyResult(
     netCents,
     note,
     gaps,
+    nilConfirmed: property.nilMark != null,
   };
+}
+
+const BUSINESS_NIL_FIELDS = ["grossIncomeCents", "wearAndTearCents"] as const;
+
+function blankBusiness(): Itr12BusinessInput {
+  return {
+    grossIncomeCents: null,
+    deductions: [],
+    homeOffice: null,
+    assets: [],
+    wearAndTearCents: null,
+    ringFenceS20A: null,
+    nilMark: null,
+  };
+}
+
+/** Sets only the business lines that are still blank to 0. Typed lines stay. */
+export function markItr12BusinessNil(input: Itr12BusinessInput | null): Itr12BusinessInput {
+  const current = input ?? blankBusiness();
+  let keys = [...(current.nilMark?.keys ?? [])];
+  const next: Itr12BusinessInput = {
+    ...current,
+    deductions: current.deductions.map((row) => ({ ...row })),
+    homeOffice: current.homeOffice ? { ...current.homeOffice } : null,
+  };
+  const take = (key: string, blank: boolean, write: () => void) => {
+    if (!blank) return;
+    write();
+    keys = rememberNilKey({ keys }, key);
+  };
+  for (const key of BUSINESS_NIL_FIELDS) {
+    if (key === "wearAndTearCents" && next.assets.length > 0) continue;
+    take(key, next[key] == null, () => {
+      next[key] = 0;
+    });
+  }
+  next.deductions = next.deductions.map((row) => {
+    const key = `deduction:${row.id}`;
+    if (row.amountCents != null) return row;
+    keys = rememberNilKey({ keys }, key);
+    return { ...row, amountCents: 0 };
+  });
+  if (next.homeOffice != null && next.homeOffice.amountCents == null) {
+    keys = rememberNilKey({ keys }, "homeOffice.amountCents");
+    next.homeOffice = { ...next.homeOffice, amountCents: 0 };
+  }
+  next.nilMark = { keys };
+  return next;
+}
+
+/** Puts back exactly the business lines the nil button set. Typed lines stay. */
+export function undoItr12BusinessNil(input: Itr12BusinessInput): Itr12BusinessInput {
+  const keys = new Set(input.nilMark?.keys ?? []);
+  const next: Itr12BusinessInput = {
+    ...input,
+    deductions: input.deductions.map((row) =>
+      keys.has(`deduction:${row.id}`) ? { ...row, amountCents: null } : row,
+    ),
+    homeOffice: input.homeOffice ? { ...input.homeOffice } : null,
+    nilMark: null,
+  };
+  if (keys.has("grossIncomeCents")) next.grossIncomeCents = null;
+  if (keys.has("wearAndTearCents")) next.wearAndTearCents = null;
+  if (keys.has("homeOffice.amountCents") && next.homeOffice) {
+    const home = { ...next.homeOffice, amountCents: null };
+    const untouched = home.specificallyEquipped == null && home.regularlyAndExclusivelyUsed == null;
+    next.homeOffice = untouched ? null : home;
+  }
+  return next;
+}
+
+const RENTAL_NIL_FIELDS = [
+  "rentReceivedCents",
+  "ratesCents",
+  "interestCents",
+  "insuranceCents",
+  "repairsCents",
+  "leviesCents",
+  "agentFeesCents",
+  "wearAndTearCents",
+  "privateUsePercent",
+] as const;
+
+/** Sets only this property's blank lines to 0. Typed lines stay. */
+export function markItr12RentalNil(property: Itr12RentalProperty): Itr12RentalProperty {
+  let keys = [...(property.nilMark?.keys ?? [])];
+  const next: Itr12RentalProperty = { ...property };
+  for (const key of RENTAL_NIL_FIELDS) {
+    if (key === "wearAndTearCents" && next.assets.length > 0) continue;
+    if (next[key] != null) continue;
+    next[key] = 0;
+    keys = rememberNilKey({ keys }, key);
+  }
+  next.nilMark = { keys };
+  return next;
+}
+
+/** Puts back exactly the rental lines the nil button set. Typed lines stay. */
+export function undoItr12RentalNil(property: Itr12RentalProperty): Itr12RentalProperty {
+  const keys = new Set(property.nilMark?.keys ?? []);
+  const next: Itr12RentalProperty = { ...property, nilMark: null };
+  for (const key of RENTAL_NIL_FIELDS) {
+    if (keys.has(key)) next[key] = null;
+  }
+  return next;
 }
 
 /** Null when there are no properties. An empty list is a blank schedule. */
@@ -436,9 +550,11 @@ export function itr12DraftTaxableIncome(input: {
   const tail = ITR12_TAXABLE_EXCLUSION_NOTE;
   const capitalNote = (schedule: CgtSchedule | null | undefined): string => {
     if (!schedule) return "";
-    if (schedule.incomplete) return " The capital gains schedule is incomplete, so it is not in this total.";
+    if (schedule.incomplete)
+      return " The capital gains schedule is incomplete, so it is not in this total.";
     if (schedule.includedInTaxableIncome) return " The taxable capital gain is included.";
-    if (schedule.lossCarriedForward) return " A net capital loss is carried forward and is not included.";
+    if (schedule.lossCarriedForward)
+      return " A net capital loss is carried forward and is not included.";
     return " The taxable capital gain stays blank, so it is not in this total.";
   };
   if (input.business && input.business.netProfitCents == null) {
@@ -567,6 +683,7 @@ export function businessInputFrom(value: unknown): Itr12BusinessInput | null {
     assets: wearDraftsFrom(record.assets),
     wearAndTearCents: centsField(record.wearAndTearCents),
     ringFenceS20A: markField(record.ringFenceS20A),
+    nilMark: nilMarkFrom(record.nilMark),
   };
   return businessStarted(input) ? input : null;
 }
@@ -625,6 +742,7 @@ function propertyFrom(value: unknown, index: number): Itr12RentalProperty | null
       typeof percent === "number" && Number.isInteger(percent) && percent >= 0 && percent <= 100
         ? percent
         : null,
+    nilMark: nilMarkFrom(row.nilMark),
   };
 }
 

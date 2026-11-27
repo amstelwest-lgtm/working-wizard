@@ -13,11 +13,15 @@ import { ZaItr14Sheet } from "../src/components/tax-specialist/za-itr14-sheet";
 import {
   capitalGainsSchedule,
   cgtYear,
+  markAssessedCapitalLossNil,
+  undoAssessedCapitalLossNil,
   type CgtDisposal,
 } from "../src/lib/tax-specialist/forms/cgt";
+import { NIL_CONFIRMED_NOTE } from "../src/lib/tax-specialist/forms/nil-mark";
 import type { TaxFormDraft } from "../src/lib/tax-specialist/forms/drafts";
 import {
   computeItr12,
+  emptyItr12Inputs,
   itr12Csv,
   itr12DraftFields,
   itr12InputsFromDraft,
@@ -516,6 +520,87 @@ assert(pdfText.includes("Primary residence"), "the PDF names the primary residen
 assert(
   pdfText.includes("Rates from SARS published tables YA2026; accountant to confirm"),
   "the PDF asks the accountant to confirm the signed-off rates",
+);
+
+const blankLoss = markAssessedCapitalLossNil(null, null);
+eq(blankLoss.cents, 0, "a blank assessed capital loss becomes 0");
+const typedLoss = markAssessedCapitalLossNil(40_000, null);
+eq(typedLoss.cents, 40_000, "a typed assessed capital loss stays");
+const undoneLoss = undoAssessedCapitalLossNil(blankLoss.cents, blankLoss.mark);
+eq(undoneLoss.cents, null, "undo puts the assessed capital loss back to blank");
+eq(undoneLoss.mark, null, "undo clears the assessed capital loss nil mark");
+const undoneTyped = undoAssessedCapitalLossNil(typedLoss.cents, typedLoss.mark);
+eq(undoneTyped.cents, 40_000, "undo leaves a typed assessed capital loss");
+const nilLossSheet = computeItr12({
+  clientName: "Nicola Physio",
+  yearOfAssessment: 2026,
+  inputs: {
+    ...emptyItr12Inputs(),
+    assessedCapitalLossBroughtForwardCents: blankLoss.cents,
+    assessedCapitalLossNilMark: blankLoss.mark,
+  },
+});
+eq(
+  nilLossSheet.assessedCapitalLossNilNote,
+  NIL_CONFIRMED_NOTE,
+  "the capital gains schedule carries the nil note",
+);
+const nilLossCsv = itr12Csv(nilLossSheet);
+assert(nilLossCsv.includes(NIL_CONFIRMED_NOTE), "the capital gains CSV carries the nil note");
+assert(nilLossCsv.includes("0.00"), "the capital gains CSV shows the nil amount");
+const nilLossView = renderToStaticMarkup(
+  createElement(ZaItr12Sheet, {
+    client: { id: "c1", name: "Nicola Physio" },
+    today: "2026-11-03",
+    drafts: [],
+    initialYear: 2026,
+    seed: {
+      ...emptyItr12Inputs(),
+      assessedCapitalLossBroughtForwardCents: blankLoss.cents,
+      assessedCapitalLossNilMark: blankLoss.mark,
+    },
+    onSaved: () => undefined,
+    onBack: () => undefined,
+  }),
+);
+assert(
+  nilLossView.includes('data-nil-note="itr12-cgt-assessed-loss"'),
+  "the capital gains sheet shows the nil note",
+);
+assert(
+  nilLossView.includes('data-nil-blanks="itr12-cgt-assessed-loss"'),
+  "the capital gains sheet has the nil button",
+);
+const nilLossPdf = await renderToBuffer(
+  createElement(Itr12PDF, {
+    clientName: "Nicola Physio",
+    sheet: nilLossSheet,
+    approvedByName: null,
+    approvedAt: null,
+    preparedOn: "2026-11-03",
+  }) as Parameters<typeof renderToBuffer>[0],
+);
+const nilLossDoc = await getDocumentProxy(new Uint8Array(nilLossPdf));
+let nilLossPdfText = "";
+for (let pageNumber = 1; pageNumber <= nilLossDoc.numPages; pageNumber += 1) {
+  const page = await nilLossDoc.getPage(pageNumber);
+  const content = await page.getTextContent();
+  nilLossPdfText += content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+}
+assert(nilLossPdfText.includes(NIL_CONFIRMED_NOTE), "the capital gains PDF carries the nil note");
+const clearedLossSheet = computeItr12({
+  clientName: "Nicola Physio",
+  yearOfAssessment: 2026,
+  inputs: {
+    ...emptyItr12Inputs(),
+    assessedCapitalLossBroughtForwardCents: undoneLoss.cents,
+    assessedCapitalLossNilMark: undoneLoss.mark,
+  },
+});
+eq(clearedLossSheet.assessedCapitalLossNilNote, null, "undo removes the capital gains nil note");
+assert(
+  !itr12Csv(clearedLossSheet).includes(NIL_CONFIRMED_NOTE),
+  "undo removes the nil note from the CSV",
 );
 
 console.log("acceptance residence gain cents", home?.gainCents);

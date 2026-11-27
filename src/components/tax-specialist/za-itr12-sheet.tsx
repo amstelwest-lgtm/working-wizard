@@ -44,10 +44,16 @@ import {
   type Itr12HomeOffice,
   type Itr12RentalProperty,
   type Itr12WearDraft,
+  markItr12BusinessNil,
+  markItr12RentalNil,
+  undoItr12BusinessNil,
+  undoItr12RentalNil,
 } from "@/lib/tax-specialist/forms/itr12-schedules";
-import { wearIssueField } from "@/lib/tax-specialist/forms/itr14-allowances";
+import { assetFieldIssue } from "@/lib/tax-specialist/forms/itr14-allowances";
+import { NIL_CONFIRMED_NOTE } from "@/lib/tax-specialist/forms/nil-mark";
 import { saveCatalogDraft } from "@/lib/tax-specialist/forms/pipeline";
 import { AssetDateInput } from "./asset-date-input";
+import { NilBlanksControl } from "./za-nil-blanks-control";
 import { CgtSection } from "./za-cgt-section";
 import "./za-irp6-sheet.css";
 
@@ -454,11 +460,10 @@ function LocalSchedules({
           </p>
         )}
         {business?.assets.map((asset, index) => {
-          const issue = worked?.wear?.issues.find((row) => row.id === asset.id);
-          const issueOn = (field: string) =>
-            issue && wearIssueField(issue.message) === field ? issue.message : "";
+          const issue = assetFieldIssue(asset);
+          const issueOn = (field: string) => (issue?.field === field ? issue.message : "");
           return (
-            <fieldset key={asset.id} data-itr12-asset={asset.id}>
+            <fieldset key={asset.id} data-itr12-asset={asset.id} data-asset-row={asset.id}>
               <legend>Asset {index + 1}</legend>
               <label>
                 Description
@@ -511,6 +516,7 @@ function LocalSchedules({
                 label="Date brought into use"
                 disabled={locked}
                 value={asset.broughtIntoUse}
+                issue={issueOn("date")}
                 onCommit={(iso) =>
                   patchBusiness((current) => ({
                     ...current,
@@ -520,11 +526,6 @@ function LocalSchedules({
                   }))
                 }
               />
-              {issueOn("date") ? (
-                <span className="irp6-field-error" data-asset-field-issue="date">
-                  {issueOn("date")}
-                </span>
-              ) : null}
               <label>
                 Category
                 <BlurText
@@ -569,8 +570,13 @@ function LocalSchedules({
                   }
                 >
                   <option value="s11e">s11(e)</option>
-                  <option value="s12c">s12C</option>
+                  <option value="s12c">s12C </option>
                 </select>
+                {issueOn("section") ? (
+                  <span className="irp6-field-error" data-asset-field-issue="section">
+                    {issueOn("section")}
+                  </span>
+                ) : null}
               </label>
               <label>
                 Private use %
@@ -592,6 +598,11 @@ function LocalSchedules({
                     }));
                   }}
                 />
+                {issueOn("private") ? (
+                  <span className="irp6-field-error" data-asset-field-issue="private">
+                    {issueOn("private")}
+                  </span>
+                ) : null}
               </label>
               {locked ? null : (
                 <button
@@ -625,11 +636,20 @@ function LocalSchedules({
             Add a wear-and-tear asset
           </button>
         )}
-        {worked?.notes.map((note) => (
-          <p key={note} className="irp6-note">
-            {note}
-          </p>
-        ))}
+        <NilBlanksControl
+          target="itr12-business"
+          active={business?.nilMark != null}
+          locked={locked}
+          onMark={() => onChange({ ...inputs, business: markItr12BusinessNil(business) })}
+          onUndo={() => saveBusiness(undoItr12BusinessNil(business ?? emptyBusiness()))}
+        />
+        {worked?.notes
+          .filter((note) => note !== NIL_CONFIRMED_NOTE)
+          .map((note) => (
+            <p key={note} className="irp6-note">
+              {note}
+            </p>
+          ))}
       </section>
       <section className="irp6-section" data-itr12-rental={rentals ? "filled" : "blank"}>
         <h3 className="irp6-section-title">Local rental income</h3>
@@ -750,6 +770,25 @@ function LocalSchedules({
                   Remove property
                 </button>
               )}
+              <NilBlanksControl
+                target={`itr12-rental-${property.id}`}
+                active={property.nilMark != null}
+                locked={locked}
+                onMark={() =>
+                  saveRentals(
+                    properties.map((item) =>
+                      item.id === property.id ? markItr12RentalNil(item) : item,
+                    ),
+                  )
+                }
+                onUndo={() =>
+                  saveRentals(
+                    properties.map((item) =>
+                      item.id === property.id ? undoItr12RentalNil(item) : item,
+                    ),
+                  )
+                }
+              />
             </div>
           );
         })}
@@ -1385,10 +1424,20 @@ export function ZaItr12Sheet({
         form="itr12"
         person="individual"
         disposals={inputs.disposals ?? []}
-        assessedCapitalLossBroughtForwardCents={inputs.assessedCapitalLossBroughtForwardCents ?? null}
+        assessedCapitalLossBroughtForwardCents={
+          inputs.assessedCapitalLossBroughtForwardCents ?? null
+        }
+        assessedCapitalLossNilMark={inputs.assessedCapitalLossNilMark ?? null}
         schedule={sheet.capital}
         locked={locked}
         onChange={(next) => edit(["result"], { ...inputs, ...next })}
+        onNilMark={(mark, cents) =>
+          edit(["result"], {
+            ...inputs,
+            assessedCapitalLossBroughtForwardCents: cents,
+            assessedCapitalLossNilMark: mark,
+          })
+        }
       />
 
       <section className="irp6-section" data-itr12-section="result">

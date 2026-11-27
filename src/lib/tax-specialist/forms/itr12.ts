@@ -44,6 +44,7 @@ import {
   type Itr12RentalSchedule,
   type Itr12TaxableTie,
 } from "./itr12-schedules.ts";
+import { NIL_CONFIRMED_NOTE, nilMarkFrom, type NilMark } from "./nil-mark.ts";
 
 /**
  * Capture-sheet vintage. Section totals are sums of cited figures.
@@ -322,6 +323,8 @@ export type Itr12Inputs = {
   disposals?: readonly CgtDisposal[];
   /** Blank is not zero. A typed zero is an assessed capital loss of nothing. */
   assessedCapitalLossBroughtForwardCents?: number | null;
+  /** Set only when the accountant marks that brought-forward loss as nil. */
+  assessedCapitalLossNilMark?: NilMark | null;
 };
 
 export type Itr12ApproverRole = "owner" | "accountant";
@@ -358,6 +361,9 @@ export type Itr12Sheet = {
   rentals: Itr12RentalSchedule | null;
   /** Null when the disposal register is blank. A blank register is not zero. */
   capital: CgtSchedule | null;
+  assessedCapitalLossBroughtForwardCents: number | null;
+  /** Set while the accountant's nil mark applies to the brought-forward loss. */
+  assessedCapitalLossNilNote: string | null;
   /** Null while a figure it needs is blank. Never a stand-in zero. */
   taxableIncomeCents: number | null;
   /** Present only when taxable income ties to its parts. */
@@ -931,6 +937,8 @@ export function computeItr12(input: {
     business,
     rentals,
     capital,
+    assessedCapitalLossBroughtForwardCents: inputs.assessedCapitalLossBroughtForwardCents ?? null,
+    assessedCapitalLossNilNote: inputs.assessedCapitalLossNilMark ? NIL_CONFIRMED_NOTE : null,
     taxableIncomeCents: taxable.cents,
     taxableTie: taxable.tie,
   };
@@ -1028,6 +1036,7 @@ export function itr12DraftFields(
         rentals: inputs.rentals ?? [],
         disposals: inputs.disposals ?? [],
         assessedCapitalLossBroughtForwardCents: inputs.assessedCapitalLossBroughtForwardCents ?? null,
+        assessedCapitalLossNilMark: inputs.assessedCapitalLossNilMark ?? null,
       },
     ] as unknown as unknown[],
     source: "input",
@@ -1065,13 +1074,15 @@ export function itr12InputsFromDraft(draft: TaxFormDraft | null | undefined): It
     Number.isSafeInteger(record.assessedCapitalLossBroughtForwardCents)
       ? record.assessedCapitalLossBroughtForwardCents
       : null;
+  const assessedCapitalLossNilMark = nilMarkFrom(record?.assessedCapitalLossNilMark);
   if (
     lines.length > 0 ||
     queries.length > 0 ||
     business ||
     rentals.length > 0 ||
     disposals.length > 0 ||
-    assessedCapitalLossBroughtForwardCents != null
+    assessedCapitalLossBroughtForwardCents != null ||
+    assessedCapitalLossNilMark != null
   ) {
     return {
       taxReference,
@@ -1081,6 +1092,7 @@ export function itr12InputsFromDraft(draft: TaxFormDraft | null | undefined): It
       rentals,
       disposals,
       assessedCapitalLossBroughtForwardCents,
+      assessedCapitalLossNilMark,
     };
   }
   return {
@@ -1157,6 +1169,9 @@ export function itr12Csv(sheet: Itr12Sheet): string {
       "Typed indicator",
       "Not signed off. Indicator only.",
     ]);
+    if (sheet.business.notes.includes(NIL_CONFIRMED_NOTE)) {
+      rows.push(["Local business schedule", "", NIL_CONFIRMED_NOTE, ""]);
+    }
   } else {
     rows.push(["Local business schedule", "", "Blank", "A blank schedule is not zero"]);
   }
@@ -1166,7 +1181,7 @@ export function itr12Csv(sheet: Itr12Sheet): string {
         `Local rental, ${property.description}`,
         property.netCents == null ? "" : plainRands(property.netCents),
         "Schedule",
-        property.note,
+        property.nilConfirmed ? `${property.note} ${NIL_CONFIRMED_NOTE}` : property.note,
       ]);
     }
     rows.push([
@@ -1179,6 +1194,16 @@ export function itr12Csv(sheet: Itr12Sheet): string {
     rows.push(["Local rental schedule", "", "Blank", "A blank schedule is not zero"]);
   }
   rows.push(...cgtCsvRows(sheet.capital));
+  if (sheet.assessedCapitalLossNilNote) {
+    rows.push([
+      "Assessed capital loss brought forward",
+      sheet.assessedCapitalLossBroughtForwardCents == null
+        ? ""
+        : plainRands(sheet.assessedCapitalLossBroughtForwardCents),
+      NIL_CONFIRMED_NOTE,
+      sheet.assessedCapitalLossNilNote,
+    ]);
+  }
   for (const query of sheet.queries) {
     rows.push([
       query.resolved ? "Query, resolved" : "Query, open",

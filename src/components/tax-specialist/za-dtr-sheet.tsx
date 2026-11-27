@@ -20,6 +20,7 @@ import {
 } from "@/lib/tax-specialist/forms/dtr";
 import { parseRandsToCents, zaToday } from "@/lib/tax-specialist/forms/irp6";
 import { formatSampleDate } from "@/lib/tax-specialist/sample-compute";
+import { AssetDateInput } from "./asset-date-input";
 import "./za-irp6-sheet.css";
 
 function centsText(cents: number | null): string {
@@ -231,11 +232,12 @@ export function ZaDtrSheet({
             <tr>
               <th scope="row">Declaration date</th>
               <td>
-                <YmdInput
+                <AssetDateInput
                   id="dtr-declaration-date"
                   label="Declaration date"
+                  hideLabel
                   value={inputs.declarationDate}
-                  onChange={(declarationDate) => patch({ declarationDate })}
+                  onCommit={(declarationDate) => patch({ declarationDate })}
                 />
               </td>
             </tr>

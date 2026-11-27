@@ -17,17 +17,30 @@ export function validIsoDate(value: string): boolean {
   return day >= 1 && day <= last;
 }
 
+function invalidDateMessage(label: string): string {
+  const text = label.toLowerCase();
+  if (text.includes("disposal")) return "Disposal date must be a real date.";
+  if (text.includes("addition")) return "An addition needs the date it was brought into use.";
+  if (text.includes("declaration")) return "Declaration date must be a real date.";
+  return "Date brought into use must be a real date.";
+}
+
 export function AssetDateInput({
   id,
   label,
   value,
   disabled,
+  hideLabel = false,
+  issue,
   onCommit,
 }: {
   id: string;
   label: string;
   value: string;
   disabled?: boolean;
+  hideLabel?: boolean;
+  /** Stored-field message. A half-typed date uses the same spot. */
+  issue?: string;
   onCommit: (iso: string) => void;
 }) {
   const [text, setText] = useState(value);
@@ -53,9 +66,10 @@ export function AssetDateInput({
     setText(next);
     if (next !== value) onCommit(next);
   };
+  const message = bad ? invalidDateMessage(label) : (issue ?? "");
   return (
     <label>
-      {label}
+      {hideLabel ? null : label}
       <input
         id={id}
         className="irp6-input"
@@ -87,6 +101,11 @@ export function AssetDateInput({
           commit(text);
         }}
       />
+      {message ? (
+        <span className="irp6-field-error" data-asset-field-issue="date">
+          {message}
+        </span>
+      ) : null}
     </label>
   );
 }
