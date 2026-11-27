@@ -26,9 +26,17 @@ import {
   itr12InputsFromDraft,
   itr12YearEnd,
   itr12YearOfAssessment,
+  itr12YearStart,
   type Itr12Inputs,
   type Itr12SectionId,
 } from "../src/lib/tax-specialist/forms/itr12";
+import {
+  businessSchedule,
+  rentalSchedule,
+  type Itr12BusinessInput,
+  type Itr12RentalProperty,
+} from "../src/lib/tax-specialist/forms/itr12-schedules";
+import { wearSchedule, type WearAsset } from "../src/lib/tax-specialist/forms/itr14-allowances";
 import { taxFormSchema } from "../src/lib/tax-specialist/forms/pipeline";
 
 function assert(cond: unknown, msg: string): asserts cond {
@@ -248,6 +256,19 @@ assert(view.includes("not sent to the client"), "the sheet says it is not sent t
 assert(view.includes('data-itr12-open-queries='), "open queries are counted");
 assert(view.includes("disabled"), "Approve is blocked while queries are open");
 assert(!view.includes("mailto:"), "the sheet has no email link");
+assert(view.includes("A blank schedule is not zero"), "a blank schedule says it is not zero");
+assert(view.includes('data-itr12-entry="business-gross"'), "business gross is on the sheet");
+assert(view.includes("data-itr12-deduction-add"), "a deduction line can be added");
+assert(view.includes('data-itr12-entry="home-equipped"'), "the s23(b) equipped mark is on the sheet");
+assert(view.includes('data-itr12-entry="s20a"'), "the s20A mark is on the sheet");
+assert(view.includes("data-itr12-rental-add"), "a rental property can be added");
+assert(view.includes('data-itr12-entry="private-use"') || view.includes("Private use: Blank"), "private use is on the blank rental schedule");
+const blankBusiness = view.split('data-itr12-business="blank"')[1]?.split("data-itr12-rental=")[0] ?? "";
+assert(blankBusiness.includes("A blank schedule is not zero"), "the blank business section says it is not zero");
+assert(!blankBusiness.includes("0.00"), "a blank business schedule does not show 0.00");
+const blankRental = view.split('data-itr12-rental="blank"')[1]?.split('data-itr12-section="result"')[0] ?? "";
+assert(blankRental.includes("A blank schedule is not zero"), "the blank rental section says it is not zero");
+assert(!blankRental.includes("0.00"), "a blank rental schedule does not show 0.00");
 
 const owner = renderToStaticMarkup(
   createElement(ZaItr12Sheet, {
@@ -264,12 +285,33 @@ const owner = renderToStaticMarkup(
 assert(owner.includes('data-itr12-role="owner"'), "the owner view is marked");
 assert(owner.includes("The owner cannot approve a section."), "the owner is told they cannot approve");
 assert(!owner.includes('data-itr12-add='), "the owner cannot type a figure");
+assert(!owner.includes("data-itr12-deduction-add"), "the owner cannot add a deduction");
+assert(!owner.includes("data-itr12-asset-add"), "the owner cannot add a wear-and-tear asset");
+assert(!owner.includes("data-itr12-rental-add"), "the owner cannot add a property");
+assert(owner.includes("A blank schedule is not zero"), "the owner still sees a blank schedule");
 
 const sheetSrc = readFileSync("src/components/tax-specialist/za-itr12-sheet.tsx", "utf8");
 const pdfSrc = readFileSync("src/components/tax-specialist/za-itr12-pdf.tsx", "utf8");
-for (const src of [sheetSrc, pdfSrc, readFileSync("src/lib/tax-specialist/forms/itr12.ts", "utf8")]) {
+const scheduleSrc = readFileSync("src/lib/tax-specialist/forms/itr12-schedules.ts", "utf8");
+for (const src of [
+  sheetSrc,
+  pdfSrc,
+  scheduleSrc,
+  readFileSync("src/lib/tax-specialist/forms/itr12.ts", "utf8"),
+]) {
   assert(!/mailto:|sendEmail|resend|eFiling login|sars\.gov/i.test(src), "no send and no SARS login");
 }
+assert(sheetSrc.includes("A blank schedule is not zero"), "the sheet source names a blank schedule");
+assert(sheetSrc.includes('entry="business-gross"'), "the sheet source has a gross income control");
+assert(sheetSrc.includes("data-itr12-deduction-add"), "the sheet source can add a deduction");
+assert(sheetSrc.includes('entry="home-equipped"'), "the sheet source has the equipped s23(b) mark");
+assert(sheetSrc.includes('entry="home-exclusive"'), "the sheet source has the exclusive s23(b) mark");
+assert(sheetSrc.includes('entry="s20a"'), "the sheet source has the s20A mark");
+assert(sheetSrc.includes('entry="asset-description"'), "the sheet source has a wear-and-tear asset control");
+assert(sheetSrc.includes("data-itr12-asset-add"), "the sheet source can add an asset");
+assert(sheetSrc.includes("data-itr12-rental-add"), "the sheet source can add a property");
+assert(sheetSrc.includes('entry="private-use"'), "the sheet source has private use");
+assert(sheetSrc.includes("onBlur"), "schedule amounts commit on blur");
 assert(pdfSrc.includes("Not a SARS return"), "the PDF is labelled not a SARS return");
 assert(ITR12_FOOTER.includes("Not a SARS return"), "the footer is the capture-sheet label");
 
@@ -287,14 +329,280 @@ const pdf = await renderToBuffer(
 assert(pdf.subarray(0, 5).toString() === "%PDF-", "the capture sheet is a PDF");
 const { getDocumentProxy } = await import("unpdf");
 const doc = await getDocumentProxy(new Uint8Array(pdf));
-const page = await doc.getPage(1);
-const content = await page.getTextContent();
-const pdfText = content.items
-  .map((item) => ("str" in item ? item.str : ""))
-  .join(" ");
+let pdfText = "";
+for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
+  const page = await doc.getPage(pageNumber);
+  const content = await page.getTextContent();
+  pdfText += content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+}
 assert(pdfText.includes("Not a SARS return"), "the PDF pages say it is not a SARS return");
 assert(pdfText.includes("Not computed"), "the PDF does not invent tax payable");
 assert(pdfText.includes("file-0"), "the PDF cites a file id");
+assert(pdfText.includes("A blank schedule is not zero"), "a blank schedule is not shown as zero");
 assert(!/mailto:/i.test(pdfText), "the PDF is not an email");
+
+const yearStart = itr12YearStart(2026);
+const yearEnd = itr12YearEnd(2026);
+const laptop: WearAsset = {
+  id: "pc",
+  description: "Laptop",
+  costCents: 3_600_000,
+  broughtIntoUse: "2025-03-01",
+  category: "Personal computers",
+  section: "s11e",
+  privateUsePercent: 0,
+  newAndUnused: false,
+  additionCents: null,
+  additionDate: null,
+  disposalDate: null,
+  proceedsCents: null,
+  bookDepreciationCents: null,
+};
+const businessInput: Itr12BusinessInput = {
+  grossIncomeCents: 20_000_000,
+  deductions: [
+    { id: "fees", label: "Accounting fees", amountCents: 1_000_000 },
+    { id: "phone", label: "Telephone", amountCents: 500_000 },
+  ],
+  homeOffice: {
+    amountCents: 200_000,
+    specificallyEquipped: true,
+    regularlyAndExclusivelyUsed: true,
+  },
+  assets: [laptop],
+  wearAndTearCents: null,
+  ringFenceS20A: false,
+};
+const business = businessSchedule(businessInput, yearStart, yearEnd);
+eq(business?.wearAndTearCents, wearSchedule([laptop], yearStart, yearEnd)?.wearAndTearCents, "wear comes from the asset register");
+eq(business?.wearAndTearCents, 1_200_000, "the laptop is a full year at 3 years");
+eq(business?.netProfitCents, 17_100_000, "acceptance: business fixture net profit is R171 000.00");
+const ringFenced = businessSchedule({ ...businessInput, ringFenceS20A: true }, yearStart, yearEnd);
+eq(ringFenced?.netProfitCents, business?.netProfitCents, "the s20A mark does not change the net");
+eq(ringFenced?.ringFenceS20A, true, "the s20A mark is kept");
+const homeRefused = businessSchedule(
+  {
+    ...businessInput,
+    assets: [],
+    wearAndTearCents: 0,
+    homeOffice: {
+      amountCents: 200_000,
+      specificallyEquipped: false,
+      regularlyAndExclusivelyUsed: true,
+    },
+  },
+  yearStart,
+  yearEnd,
+);
+eq(homeRefused?.homeOffice?.deductedCents, 0, "a failed s23(b) mark does not deduct the home office");
+eq(homeRefused?.netProfitCents, 18_500_000, "the refused home office stays out of the net");
+const homeOpen = businessSchedule(
+  {
+    ...businessInput,
+    assets: [],
+    wearAndTearCents: 0,
+    homeOffice: {
+      amountCents: 200_000,
+      specificallyEquipped: null,
+      regularlyAndExclusivelyUsed: true,
+    },
+  },
+  yearStart,
+  yearEnd,
+);
+eq(homeOpen?.netProfitCents, null, "an unmarked s23(b) condition leaves the net blank");
+eq(homeOpen?.homeOffice?.deductedCents, null, "an unmarked home office deduction stays blank");
+const wearBlank = businessSchedule(
+  {
+    grossIncomeCents: 20_000_000,
+    deductions: [],
+    homeOffice: null,
+    assets: [],
+    wearAndTearCents: null,
+    ringFenceS20A: null,
+  },
+  yearStart,
+  yearEnd,
+);
+eq(wearBlank?.wearAndTearCents, null, "wear without a register stays blank");
+eq(wearBlank?.netProfitCents, null, "a missing wear figure does not become zero");
+
+function rental(id: string, description: string, privateUsePercent: number, amounts: number[]): Itr12RentalProperty {
+  const [rent, rates, interest, insurance, repairs, levies, agent, wear] = amounts;
+  return {
+    id,
+    description,
+    rentReceivedCents: rent,
+    ratesCents: rates,
+    interestCents: interest,
+    insuranceCents: insurance,
+    repairsCents: repairs,
+    leviesCents: levies,
+    agentFeesCents: agent,
+    wearAndTearCents: wear,
+    assets: [],
+    privateUsePercent,
+  };
+}
+const rentals = [
+  rental("flat", "Flat", 0, [10_000_000, 1_000_000, 2_000_000, 500_000, 300_000, 200_000, 1_000_000, 1_000_000]),
+  rental("house", "House", 25, [8_000_000, 800_000, 1_200_000, 400_000, 600_000, 0, 800_000, 1_200_000]),
+];
+const rentalSheet = rentalSchedule(rentals, yearStart, yearEnd);
+const flat = rentalSheet?.properties.find((row) => row.id === "flat");
+const house = rentalSheet?.properties.find((row) => row.id === "house");
+eq(flat?.netCents, 4_000_000, "the flat has no private use, so every expense is allowed");
+eq(house?.allowableExpensesCents, 3_750_000, "25% private use leaves 75% of the house expenses");
+eq(house?.netCents, 4_250_000, "acceptance: the house net is rent minus the apportioned expenses");
+eq(rentalSheet?.totalNetCents, 8_250_000, "acceptance: two-property net rental is R82 500.00");
+const rentalGap = rentalSchedule(
+  [rental("flat", "Flat", 0, [10_000_000, 1_000_000, 2_000_000, 500_000, 300_000, 200_000, 1_000_000, 1_000_000]), { ...rentals[1], privateUsePercent: null }],
+  yearStart,
+  yearEnd,
+);
+eq(rentalGap?.properties[1]?.netCents, null, "a missing private-use percent stays blank");
+eq(rentalGap?.totalNetCents, null, "one blank property does not become zero in the total");
+
+const combinedInputs: Itr12Inputs = {
+  taxReference: "1234567890",
+  lines: (
+    [
+      ["employmentIncome", 5_000_000],
+      ["practiceIncome", 1_000_000],
+      ["practiceExpenses", 400_000],
+      ["medicalContributions", 1],
+      ["raContributions", 1],
+      ["travelClaim", 1],
+      ["localInterest", 1],
+    ] as const
+  ).map(([fieldId, amountCents], index) => ({
+    id: `sched-${index}`,
+    fieldId,
+    label: fieldId,
+    amountCents,
+    fileId: `file-${index}`,
+    source: "file" as const,
+    note: null,
+  })),
+  queries: [],
+  business: businessInput,
+  rentals,
+};
+const combined = computeItr12({
+  clientName: "Nicola Physio",
+  yearOfAssessment: 2026,
+  inputs: combinedInputs,
+});
+eq(combined.totals.incomeTotal, 6_000_000, "the income tie is still employment plus practice");
+eq(
+  combined.totals.incomeTotal,
+  combined.totals.employmentIncome! + combined.totals.practiceIncome!,
+  "the existing income bridge still ties",
+);
+eq(combined.business?.netProfitCents, 17_100_000, "the business net flows onto the ITR12");
+eq(combined.rentals?.totalNetCents, 8_250_000, "the rental total flows onto the ITR12");
+eq(combined.taxableIncomeCents, 30_350_000, "acceptance: both schedules flow into taxable income");
+eq(combined.taxableTie?.practiceNetCents, null, "the business schedule replaces practice income and expenses");
+eq(
+  combined.taxableTie?.employmentCents! +
+    combined.taxableTie?.businessNetCents! +
+    combined.taxableTie?.rentalNetCents!,
+  combined.taxableIncomeCents,
+  "taxable income ties to employment, business net, and rental net",
+);
+assert(!combined.checks.some((check) => check.id === "tie"), "the tie check passes");
+assert(
+  combined.lines.some((line) => line.id === "taxableIncome" && line.note?.includes("not signed off")),
+  "unsigned interest, medical, and retirement limits stay out",
+);
+
+const blankSheet = computeItr12({
+  clientName: "Nicola Physio",
+  yearOfAssessment: 2026,
+  inputs: emptyItr12Inputs(),
+});
+eq(blankSheet.business, null, "acceptance: a blank business schedule stays blank");
+eq(blankSheet.rentals, null, "acceptance: a blank rental schedule stays blank");
+eq(blankSheet.taxableIncomeCents, null, "a blank draft does not invent taxable income");
+eq(
+  blankSheet.lines.find((line) => line.id === "taxableIncome")?.plain,
+  "",
+  "a blank taxable income line is empty",
+);
+assert(
+  blankSheet.lines.find((line) => line.id === "taxableIncome")?.plain !== "0.00",
+  "a blank taxable income line is not zero",
+);
+
+const restored = itr12InputsFromDraft({
+  id: "d-sched",
+  client_id: "c1",
+  form_code: "ITR12",
+  tax_year: 2026,
+  period: null,
+  subject: null,
+  fields: itr12DraftFields(combined, combinedInputs),
+  approvals: {},
+  status: "draft",
+  approved_by: null,
+  approved_by_name: null,
+  approved_at: null,
+  downloaded_at: null,
+  created_at: "2026-11-03T00:00:00.000Z",
+  updated_at: "2026-11-03T00:00:00.000Z",
+  version: 1,
+  supersedes_id: null,
+  superseded_by: null,
+  rules_year: ITR12_RULES_YEAR,
+  field_sources: {},
+} satisfies TaxFormDraft);
+eq(
+  computeItr12({ clientName: "Nicola Physio", yearOfAssessment: 2026, inputs: restored }).taxableIncomeCents,
+  30_350_000,
+  "a saved draft keeps both schedules in taxable income",
+);
+
+const schedulePdf = await renderToBuffer(
+  createElement(Itr12PDF, {
+    clientName: "Nicola Physio",
+    sheet: combined,
+    approvedByName: "Ada Mbeki",
+    approvedAt: "2026-11-03T08:00:00.000Z",
+    preparedOn: "2026-11-03",
+  }) as Parameters<typeof renderToBuffer>[0],
+);
+const scheduleDoc = await getDocumentProxy(new Uint8Array(schedulePdf));
+let scheduleText = "";
+for (let pageNumber = 1; pageNumber <= scheduleDoc.numPages; pageNumber += 1) {
+  const page = await scheduleDoc.getPage(pageNumber);
+  const content = await page.getTextContent();
+  scheduleText += content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+}
+assert(scheduleText.includes("Local business, trade, or profession"), "the PDF has the business schedule");
+assert(scheduleText.includes("Local rental income"), "the PDF has the rental schedule");
+assert(scheduleText.includes("R 171 000.00"), "the PDF shows the business net");
+assert(scheduleText.includes("R 40 000.00"), "the PDF shows the flat net");
+assert(scheduleText.includes("R 42 500.00"), "the PDF shows the house net");
+assert(scheduleText.includes("R 82 500.00"), "the PDF shows the rental total");
+assert(scheduleText.includes("R 303 500.00"), "the PDF shows taxable income");
+assert(scheduleText.includes("not signed off"), "the PDF says what is not signed off");
+assert(scheduleText.includes("Not a SARS return"), "the schedule PDF is not a SARS return");
+assert(!/mailto:/i.test(scheduleText), "the schedule PDF is not an email");
+
+const scheduledView = renderToStaticMarkup(
+  createElement(ZaItr12Sheet, {
+    client: { id: "c1", name: "Nicola Physio" },
+    today: "2026-11-03",
+    drafts: [],
+    initialYear: 2026,
+    seed: combinedInputs,
+    onSaved: () => undefined,
+    onBack: () => undefined,
+  }),
+);
+assert(scheduledView.includes('data-itr12-business="filled"'), "the sheet shows the business schedule");
+assert(scheduledView.includes('data-itr12-rental="filled"'), "the sheet shows the rental schedule");
+assert(scheduledView.includes("R 171 000.00"), "the sheet shows the business net");
+assert(scheduledView.includes("not signed off"), "the sheet says what is not signed off");
 
 console.log("tax-itr12 ok");

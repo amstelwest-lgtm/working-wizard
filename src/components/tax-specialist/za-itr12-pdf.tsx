@@ -12,7 +12,7 @@ import {
   ITR12_SECTIONS,
   type Itr12Sheet,
 } from "@/lib/tax-specialist/forms/itr12";
-import { formatSampleDate } from "@/lib/tax-specialist/sample-compute";
+import { formatSampleCents, formatSampleDate } from "@/lib/tax-specialist/sample-compute";
 
 Font.registerHyphenationCallback((word) => [word]);
 
@@ -66,6 +66,173 @@ const S = StyleSheet.create({
 
 function pdfText(value: string): string {
   return value.replace(/\u2212/g, "-").replace(/ō/g, "o");
+}
+
+function money(cents: number | null): string {
+  return cents == null ? "Blank" : pdfText(formatSampleCents(cents));
+}
+
+function mark(value: boolean | null): string {
+  if (value == null) return "Blank";
+  return value ? "Yes" : "No";
+}
+
+function BusinessSection({ sheet }: { sheet: Itr12Sheet }) {
+  const business = sheet.business;
+  return (
+    <View style={S.section}>
+      <Text style={S.sectionTitle}>Local business, trade, or profession</Text>
+      {business ? (
+        <>
+          {business.notes.map((note) => (
+            <Text key={note} style={S.note}>
+              {pdfText(note)}
+            </Text>
+          ))}
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Gross income</Text>
+            <Text style={S.value}>{money(business.grossIncomeCents)}</Text>
+            <Text style={S.source}>Typed</Text>
+          </View>
+          {business.deductions.map((row) => (
+            <View key={row.id} style={S.row} wrap={false}>
+              <Text style={S.label}>{pdfText(row.label || "Deduction")}</Text>
+              <Text style={S.value}>{money(row.amountCents)}</Text>
+              <Text style={S.source}>Allowable deduction</Text>
+            </View>
+          ))}
+          <View style={S.row} wrap={false}>
+            <View style={S.label}>
+              <Text>Home office</Text>
+              <Text style={S.note}>
+                {business.homeOffice
+                  ? pdfText(business.homeOffice.note)
+                  : "No home office claim. A blank claim is not zero."}
+              </Text>
+            </View>
+            <Text style={S.value}>
+              {business.homeOffice ? money(business.homeOffice.deductedCents) : "Blank"}
+            </Text>
+            <Text style={S.source}>
+              {business.homeOffice
+                ? `Equipped ${mark(business.homeOffice.specificallyEquipped)}. Exclusive ${mark(business.homeOffice.regularlyAndExclusivelyUsed)}.`
+                : "s23(b)"}
+            </Text>
+          </View>
+          {business.wear?.rows.map((row) => (
+            <View key={row.id} style={S.row} wrap={false}>
+              <View style={S.label}>
+                <Text>
+                  {pdfText(row.description)} ({row.sectionLabel})
+                </Text>
+                <Text style={S.note}>{pdfText(row.detail)}</Text>
+              </View>
+              <Text style={S.value}>{money(row.allowanceCents)}</Text>
+              <Text style={S.source}>Asset register</Text>
+            </View>
+          ))}
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Wear-and-tear</Text>
+            <Text style={S.value}>{money(business.wearAndTearCents)}</Text>
+            <Text style={S.source}>
+              {business.wear ? "Asset register" : "Typed. A blank register is not zero."}
+            </Text>
+          </View>
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Recoupment</Text>
+            <Text style={S.value}>{money(business.recoupmentCents)}</Text>
+            <Text style={S.source}>Not a scrapping allowance</Text>
+          </View>
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>s20A ring-fence</Text>
+            <Text style={S.value}>{mark(business.ringFenceS20A)}</Text>
+            <Text style={S.source}>Indicator only. Not signed off.</Text>
+          </View>
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Net profit or loss</Text>
+            <Text style={S.value}>{money(business.netProfitCents)}</Text>
+            <Text style={S.source}>Draft for review</Text>
+          </View>
+        </>
+      ) : (
+        <Text style={S.note}>
+          Blank. A blank schedule is not zero. Gross income, deductions, home office, and
+          wear-and-tear stay blank.
+        </Text>
+      )}
+    </View>
+  );
+}
+
+function RentalSection({ sheet }: { sheet: Itr12Sheet }) {
+  const rentals = sheet.rentals;
+  return (
+    <View style={S.section}>
+      <Text style={S.sectionTitle}>Local rental income</Text>
+      {rentals ? (
+        <>
+          {rentals.notes.map((note) => (
+            <Text key={note} style={S.note}>
+              {pdfText(note)}
+            </Text>
+          ))}
+          {rentals.properties.map((property) => (
+            <View key={property.id} wrap={false}>
+              <Text style={S.sectionTitle}>{pdfText(property.description)}</Text>
+              <View style={S.row}>
+                <Text style={S.label}>Rent received</Text>
+                <Text style={S.value}>{money(property.rentReceivedCents)}</Text>
+                <Text style={S.source}>Typed</Text>
+              </View>
+              {(
+                [
+                  ["Rates", property.ratesCents],
+                  ["Interest", property.interestCents],
+                  ["Insurance", property.insuranceCents],
+                  ["Repairs", property.repairsCents],
+                  ["Levies", property.leviesCents],
+                  ["Agent fees", property.agentFeesCents],
+                  ["Wear-and-tear", property.wearAndTearCents],
+                ] as const
+              ).map(([label, cents]) => (
+                <View key={label} style={S.row}>
+                  <Text style={S.label}>{label}</Text>
+                  <Text style={S.value}>{money(cents)}</Text>
+                  <Text style={S.source}>Expense</Text>
+                </View>
+              ))}
+              <View style={S.row}>
+                <Text style={S.label}>Private use</Text>
+                <Text style={S.value}>
+                  {property.privateUsePercent == null ? "Blank" : `${property.privateUsePercent}%`}
+                </Text>
+                <Text style={S.source}>Typed</Text>
+              </View>
+              <View style={S.row}>
+                <Text style={S.label}>Allowable expenses</Text>
+                <Text style={S.value}>{money(property.allowableExpensesCents)}</Text>
+                <Text style={S.source}>{pdfText(property.note)}</Text>
+              </View>
+              <View style={S.row}>
+                <Text style={S.label}>Net rental</Text>
+                <Text style={S.value}>{money(property.netCents)}</Text>
+                <Text style={S.source}>This property</Text>
+              </View>
+            </View>
+          ))}
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Total net rental</Text>
+            <Text style={S.value}>{money(rentals.totalNetCents)}</Text>
+            <Text style={S.source}>All properties</Text>
+          </View>
+        </>
+      ) : (
+        <Text style={S.note}>
+          Blank. A blank schedule is not zero. Rent, expenses, and private use stay blank.
+        </Text>
+      )}
+    </View>
+  );
 }
 
 export function Itr12PDF({
@@ -135,6 +302,8 @@ export function Itr12PDF({
             )}
           </View>
         ))}
+        <BusinessSection sheet={sheet} />
+        <RentalSection sheet={sheet} />
         <View style={S.footer} fixed>
           <Text>{pdfText(ITR12_FOOTER)}</Text>
         </View>
