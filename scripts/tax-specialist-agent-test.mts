@@ -248,8 +248,8 @@ const withClient = renderToStaticMarkup(
 );
 eq(
   withClient.split('class="tax-page-form is-open"').length - 1,
-  TAX_FORM_GALLERY.filter((form) => form.status === "ready").length,
-  "with a client each ready form opens a sheet",
+  TAX_FORM_GALLERY.filter((form) => form.status === "ready").length + 1,
+  "with a client each ready form opens a sheet, and dividends tax does too",
 );
 assert(withClient.includes('data-tax-form="ITR12"'), "ITR12 is on the gallery");
 assert(withClient.includes("Ready to prepare"), "ITR12 is ready to prepare");
