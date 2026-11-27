@@ -764,7 +764,19 @@ eq(
   "a year ending before 31 March 2023 is outside the ring-fence",
 );
 eq(beforeRingFence.setOffCents, 500_000_000, "the older year sets the loss off in full");
-assert(!view.includes('data-itr14-wear="true"'), "the empty sheet does not invent a register");
+assert(
+  view.includes('data-itr14-wear="true"'),
+  "a blank register still shows the wear-and-tear section",
+);
+assert(view.includes('data-itr14-wear-blank="true"'), "the blank schedule has blank lines");
+assert(
+  view.includes('data-itr14-wear-allowance=""></td>'),
+  "a blank wear-and-tear allowance is empty, not zero",
+);
+assert(
+  !view.includes('data-itr14-assessed-loss="true"'),
+  "no assessed-loss box before a balance is typed",
+);
 
 const wearDraft = itr14InputsFromDraft({
   id: "d2",
@@ -814,6 +826,175 @@ for (let pageNumber = 1; pageNumber <= registeredDoc.numPages; pageNumber += 1) 
 assert(registeredText.includes("100 000"), "the PDF shows the fixture wear-and-tear total");
 assert(registeredText.includes("Draft for review"), "the fixture PDF stays a draft");
 assert(!/mailto:|sars\.gov/i.test(registeredText), "the fixture PDF does not file or email");
+
+function sheetDraft(inputs: Itr14Inputs, id: string): TaxFormDraft {
+  const built = computeItr14({ client, yearOfAssessment: 2026, inputs });
+  return {
+    id,
+    client_id: "c1",
+    form_code: "ITR14",
+    tax_year: 2026,
+    period: null,
+    subject: null,
+    fields: itr14DraftFields(built, inputs),
+    approvals: {},
+    status: "draft",
+    approved_by: null,
+    approved_by_name: null,
+    approved_at: null,
+    downloaded_at: null,
+    created_at: "2026-11-03T00:00:00.000Z",
+    updated_at: "2026-11-03T00:00:00.000Z",
+    version: 1,
+    supersedes_id: null,
+    superseded_by: null,
+    rules_year: ITR14_RULES_YEAR,
+    field_sources: {},
+  };
+}
+function renderSheet(inputs: Itr14Inputs, id: string) {
+  return renderToStaticMarkup(
+    createElement(ZaItr14Sheet, {
+      client: { ...client, id: "c1" },
+      today: "2026-11-03",
+      drafts: [sheetDraft(inputs, id)],
+      initialYear: 2026,
+      onSaved: () => undefined,
+      onBack: () => undefined,
+    }),
+  );
+}
+const laptopInputs: Itr14Inputs = {
+  ...base,
+  assets: [fixture[0]!],
+  wearAndTearCents: null,
+  depreciationAddBackCents: null,
+};
+const laptopView = renderSheet(laptopInputs, "laptop");
+assert(
+  laptopView.includes('data-itr14-wear-allowance="laptop"'),
+  "one asset renders on the schedule",
+);
+assert(laptopView.includes("R 12 000.00"), "the schedule shows that asset's wear-and-tear");
+assert(
+  laptopView.includes("From the asset register"),
+  "the wear-and-tear line is the computed register total",
+);
+const lossOnlyView = renderSheet(
+  { ...emptyItr14Inputs(), assessedLossBroughtForwardCents: 50_000_000 },
+  "loss-only",
+);
+assert(
+  lossOnlyView.includes('data-itr14-assessed-loss="true"'),
+  "typing a brought-forward loss shows the working",
+);
+assert(lossOnlyView.includes("R 500 000.00"), "the working shows the balance brought forward");
+assert(
+  lossOnlyView.includes('data-itr14-loss-setoff=""></td>'),
+  "set-off stays blank until there is taxable income",
+);
+assert(
+  lossOnlyView.includes('data-itr14-loss-cf=""></td>'),
+  "carried forward stays blank until there is taxable income",
+);
+const capInputs: Itr14Inputs = {
+  ...emptyItr14Inputs(),
+  taxReference: "0123456789",
+  registrationNumber: "2020/123456/07",
+  companyClass: "standard",
+  yearFinal: true,
+  accountingProfitCents: 500_000_000,
+  depreciationAddBackCents: 0,
+  finesAddBackCents: 0,
+  wearAndTearCents: 0,
+  exemptDividendsCents: 0,
+  assessedLossBroughtForwardCents: 500_000_000,
+  donationCents: 0,
+  priorAssessmentCents: 0,
+  provisionalPeriod1Cents: 0,
+  provisionalPeriod2Cents: 0,
+  provisionalTopUpCents: 0,
+  turnoverCents: 1,
+  accountTbAcknowledged: true,
+  fixedAssetRegisterAcknowledged: true,
+  balanceSheetAcknowledged: true,
+};
+const capView = renderSheet(capInputs, "cap");
+assert(capView.includes("R 4 000 000.00"), "the working shows the 80% cap");
+assert(capView.includes("R 1 000 000.00"), "taxable income uses the limited set-off");
+
+const { Window } = await import("happy-dom");
+const dom = new Window({
+  url: "http://127.0.0.1:5000/clients/qa",
+  settings: { disableCSSFileLoading: true },
+});
+for (const key of [
+  "window",
+  "document",
+  "navigator",
+  "HTMLElement",
+  "HTMLInputElement",
+  "Node",
+  "Element",
+  "Document",
+  "Event",
+] as const) {
+  Object.defineProperty(globalThis, key, {
+    configurable: true,
+    writable: true,
+    value: dom[key as keyof typeof dom],
+  });
+}
+Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
+  configurable: true,
+  writable: true,
+  value: true,
+});
+const { act } = await import("react");
+const { createRoot } = await import("react-dom/client");
+const host = document.createElement("div");
+document.body.appendChild(host);
+const root = createRoot(host);
+await act(async () => {
+  root.render(
+    createElement(ZaItr14Sheet, {
+      client: { ...client, id: "c1" },
+      today: "2026-11-03",
+      drafts: [],
+      initialYear: 2026,
+      onSaved: () => undefined,
+      onBack: () => undefined,
+    }),
+  );
+});
+const lossInput = document.querySelector(
+  "#itr14-input-assessedLossBroughtForward",
+) as HTMLInputElement;
+const donationInput = document.querySelector("#itr14-input-donation") as HTMLInputElement;
+assert(lossInput && donationInput, "the loss and donation fields are separate inputs");
+const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+assert(valueSetter, "the input value can be set the way a keystroke does");
+await act(async () => {
+  lossInput.focus();
+});
+for (const digit of "500000") {
+  await act(async () => {
+    const next = `${lossInput.value}${digit}`;
+    valueSetter.call(lossInput, next);
+    const tracked = lossInput as HTMLInputElement & {
+      _valueTracker?: { setValue: (value: string) => void };
+    };
+    tracked._valueTracker?.setValue(next.slice(0, -1));
+    lossInput.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+eq(lossInput.value, "500000", "typing the brought-forward loss does not double or revert");
+eq(donationInput.value, "", "the donation field does not take the loss keystrokes");
+eq(document.activeElement, lossInput, "the loss field keeps focus while it is typed");
+assert(
+  document.body.innerHTML.includes('data-itr14-assessed-loss="true"'),
+  "the working appears once the balance is typed",
+);
 
 console.log("acceptance wear-and-tear cents", schedule?.wearAndTearCents);
 console.log("tax-itr14 ok");

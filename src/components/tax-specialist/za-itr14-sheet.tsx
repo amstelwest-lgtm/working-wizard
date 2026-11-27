@@ -16,6 +16,7 @@ import {
   validTaxReference,
   type Irp6Client,
 } from "@/lib/tax-specialist/forms/irp6";
+import type { WearAsset, WearSection } from "@/lib/tax-specialist/forms/itr14-allowances";
 import {
   ITR14_FOOTER,
   ITR14_SECTIONS,
@@ -71,11 +72,12 @@ function AmountInput({
 }) {
   const [text, setText] = useState(centsText(value));
   const [bad, setBad] = useState(false);
+  const [focused, setFocused] = useState(false);
   useEffect(() => {
-    if (parseRandsToCents(text) !== value) setText(centsText(value));
-    // Follow a draft reload, not each keystroke.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
+    if (focused) return;
+    const next = centsText(value);
+    setText((current) => (parseRandsToCents(current) === value ? current : next));
+  }, [value, focused]);
   return (
     <span className="irp6-amount">
       <span aria-hidden="true">R</span>
@@ -88,6 +90,11 @@ function AmountInput({
         disabled={disabled}
         value={text}
         placeholder="0.00"
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          setText(centsText(parseRandsToCents(text)));
+        }}
         onChange={(event) => {
           const next = event.target.value;
           setText(next);
@@ -142,6 +149,13 @@ const scheduleTitle = {
   margin: "0 0 4px",
   color: "#102A43",
   fontSize: 15,
+} as const;
+
+const assetStyle = {
+  marginTop: 8,
+  padding: 8,
+  border: "1px solid #DBEAFE",
+  background: "#fff",
 } as const;
 
 const CLASSES: Array<{ value: Itr14CompanyClass; label: string }> = [
@@ -368,7 +382,11 @@ export function ZaItr14Sheet({
   const fieldRow = (line: Itr14Line | undefined, children?: ReactNode) => {
     if (!line) return null;
     return (
-      <tr data-itr14-field={line.id} data-itr14-missing={line.missing ? "true" : undefined}>
+      <tr
+        key={line.id}
+        data-itr14-field={line.id}
+        data-itr14-missing={line.missing ? "true" : undefined}
+      >
         <th scope="row">
           <span className="irp6-label">{line.label}</span>
           {line.note ? <span className="irp6-note">{line.note}</span> : null}
@@ -405,6 +423,7 @@ export function ZaItr14Sheet({
       line,
       editable ? (
         <AmountInput
+          key={id}
           id={`itr14-input-${id}`}
           label={label}
           value={value}
@@ -418,6 +437,29 @@ export function ZaItr14Sheet({
   const updateAdjustment = (index: number, partial: Partial<Itr14Adjustment>) => {
     patch(["adjustments"], {
       adjustments: inputs.adjustments.map((row, i) => (i === index ? { ...row, ...partial } : row)),
+    });
+  };
+
+  const blankAsset = (): WearAsset => ({
+    id: nextId("asset"),
+    description: "",
+    costCents: 0,
+    broughtIntoUse: "",
+    category: "",
+    section: "s11e",
+    privateUsePercent: 0,
+    newAndUnused: false,
+    smallItem: false,
+    additionCents: null,
+    additionDate: null,
+    disposalDate: null,
+    proceedsCents: null,
+    bookDepreciationCents: null,
+  });
+
+  const updateAsset = (id: string, partial: Partial<WearAsset>) => {
+    patch(["adjustments"], {
+      assets: inputs.assets.map((row) => (row.id === id ? { ...row, ...partial } : row)),
     });
   };
 
@@ -713,40 +755,255 @@ export function ZaItr14Sheet({
             {fieldRow(lineOf("donationDisallowed"))}
           </tbody>
         </table>
-        {sheet.wear && sheet.wear.rows.length ? (
-          <div data-itr14-wear="true" style={scheduleStyle}>
-            <h4 style={scheduleTitle}>Wear-and-tear schedule</h4>
-            <p className="irp6-note">{sheet.wear.notes[0]}</p>
-            <table className="irp6-table">
+        <div data-itr14-wear="true" style={scheduleStyle}>
+          <h4 style={scheduleTitle}>Wear-and-tear schedule</h4>
+          {sheet.wear?.rows.length ? (
+            <>
+              <p className="irp6-note">{sheet.wear.notes[0]}</p>
+              <table className="irp6-table">
+                <tbody>
+                  {sheet.wear.rows.map((row) => (
+                    <tr key={row.id}>
+                      <th scope="row">
+                        <span className="irp6-label">
+                          {row.description} ({row.sectionLabel})
+                        </span>
+                        <span className="irp6-note">{row.detail}</span>
+                      </th>
+                      <td className="irp6-value" data-itr14-wear-allowance={row.id}>
+                        {formatSampleCents(row.allowanceCents)}
+                      </td>
+                      <td className="irp6-source">
+                        {row.recoupmentCents
+                          ? `Recoupment ${formatSampleCents(row.recoupmentCents)}`
+                          : "No recoupment"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          ) : (
+            <table className="irp6-table" data-itr14-wear-blank="true">
               <tbody>
-                {sheet.wear.rows.map((row) => (
-                  <tr key={row.id}>
-                    <th scope="row">
-                      <span className="irp6-label">
-                        {row.description} ({row.sectionLabel})
-                      </span>
-                      <span className="irp6-note">{row.detail}</span>
-                    </th>
-                    <td className="irp6-value">{formatSampleCents(row.allowanceCents)}</td>
-                    <td className="irp6-source">
-                      {row.recoupmentCents
-                        ? `Recoupment ${formatSampleCents(row.recoupmentCents)}`
-                        : "No recoupment"}
-                    </td>
-                  </tr>
-                ))}
+                <tr>
+                  <th scope="row">Asset</th>
+                  <td className="irp6-value" data-itr14-wear-asset=""></td>
+                  <td className="irp6-source"></td>
+                </tr>
+                <tr>
+                  <th scope="row">Wear-and-tear allowance</th>
+                  <td className="irp6-value" data-itr14-wear-allowance=""></td>
+                  <td className="irp6-source">Blank until a register is entered</td>
+                </tr>
+                <tr>
+                  <th scope="row">Recoupment</th>
+                  <td className="irp6-value" data-itr14-wear-recoupment=""></td>
+                  <td className="irp6-source"></td>
+                </tr>
               </tbody>
             </table>
-          </div>
-        ) : null}
-        {sheet.assessedLoss ? (
+          )}
+          {(sheet.wear?.notes ?? []).slice(sheet.wear?.rows.length ? 1 : 0).map((note) => (
+            <p key={note} className="irp6-note">
+              {note}
+            </p>
+          ))}
+          {locked ? null : (
+            <div data-itr14-assets="true">
+              {inputs.assets.map((asset) => (
+                <fieldset key={asset.id} data-itr14-asset={asset.id} style={assetStyle}>
+                  <legend>{asset.description.trim() || "Asset"}</legend>
+                  <label>
+                    Description
+                    <input
+                      className="irp6-input"
+                      aria-label={`Asset ${asset.id} description`}
+                      value={asset.description}
+                      onChange={(event) =>
+                        updateAsset(asset.id, { description: event.target.value })
+                      }
+                    />
+                  </label>
+                  <AmountInput
+                    key={`${asset.id}-cost`}
+                    id={`itr14-asset-${asset.id}-cost`}
+                    label={`Asset ${asset.id} cost`}
+                    value={asset.description || asset.costCents ? asset.costCents : null}
+                    onChange={(cents) => updateAsset(asset.id, { costCents: cents ?? 0 })}
+                  />
+                  <label>
+                    Date brought into use
+                    <input
+                      className="irp6-input"
+                      type="date"
+                      aria-label={`Asset ${asset.id} date in use`}
+                      value={asset.broughtIntoUse}
+                      onChange={(event) =>
+                        updateAsset(asset.id, { broughtIntoUse: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Category
+                    <input
+                      className="irp6-input"
+                      aria-label={`Asset ${asset.id} category`}
+                      value={asset.category}
+                      onChange={(event) => updateAsset(asset.id, { category: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Section
+                    <select
+                      className="irp6-input"
+                      aria-label={`Asset ${asset.id} section`}
+                      value={asset.smallItem ? "small" : asset.section}
+                      onChange={(event) => {
+                        const picked = event.target.value;
+                        if (picked === "small") {
+                          updateAsset(asset.id, { section: "s11e", smallItem: true });
+                        } else {
+                          updateAsset(asset.id, {
+                            section: picked as WearSection,
+                            smallItem: false,
+                          });
+                        }
+                      }}
+                    >
+                      <option value="s11e">s11(e)</option>
+                      <option value="s12c">s12C</option>
+                      <option value="small">R7 000 or less</option>
+                    </select>
+                  </label>
+                  <label>
+                    Private use %
+                    <input
+                      className="irp6-input"
+                      inputMode="numeric"
+                      aria-label={`Asset ${asset.id} private use`}
+                      value={String(asset.privateUsePercent)}
+                      onChange={(event) => {
+                        const next = Number(event.target.value);
+                        updateAsset(asset.id, {
+                          privateUsePercent: Number.isInteger(next)
+                            ? next
+                            : asset.privateUsePercent,
+                        });
+                      }}
+                    />
+                  </label>
+                  {asset.section === "s12c" && !asset.smallItem ? (
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={asset.newAndUnused}
+                        onChange={(event) =>
+                          updateAsset(asset.id, { newAndUnused: event.target.checked })
+                        }
+                      />{" "}
+                      New and unused
+                    </label>
+                  ) : null}
+                  <AmountInput
+                    key={`${asset.id}-addition`}
+                    id={`itr14-asset-${asset.id}-addition`}
+                    label={`Asset ${asset.id} addition`}
+                    value={asset.additionCents}
+                    onChange={(cents) => updateAsset(asset.id, { additionCents: cents })}
+                  />
+                  <label>
+                    Addition date
+                    <input
+                      className="irp6-input"
+                      type="date"
+                      aria-label={`Asset ${asset.id} addition date`}
+                      value={asset.additionDate ?? ""}
+                      onChange={(event) =>
+                        updateAsset(asset.id, { additionDate: event.target.value || null })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Disposal date
+                    <input
+                      className="irp6-input"
+                      type="date"
+                      aria-label={`Asset ${asset.id} disposal date`}
+                      value={asset.disposalDate ?? ""}
+                      onChange={(event) =>
+                        updateAsset(asset.id, { disposalDate: event.target.value || null })
+                      }
+                    />
+                  </label>
+                  <AmountInput
+                    key={`${asset.id}-proceeds`}
+                    id={`itr14-asset-${asset.id}-proceeds`}
+                    label={`Asset ${asset.id} proceeds`}
+                    value={asset.proceedsCents}
+                    onChange={(cents) => updateAsset(asset.id, { proceedsCents: cents })}
+                  />
+                  <button
+                    type="button"
+                    className="irp6-button"
+                    data-itr14-remove-asset={asset.id}
+                    onClick={() =>
+                      patch(["adjustments"], {
+                        assets: inputs.assets.filter((row) => row.id !== asset.id),
+                      })
+                    }
+                  >
+                    Remove asset
+                  </button>
+                </fieldset>
+              ))}
+              <button
+                type="button"
+                className="irp6-button"
+                data-itr14-add-asset="true"
+                onClick={() => patch(["adjustments"], { assets: [...inputs.assets, blankAsset()] })}
+              >
+                Add asset
+              </button>
+            </div>
+          )}
+        </div>
+        {inputs.assessedLossBroughtForwardCents != null ? (
           <div data-itr14-assessed-loss="true" style={scheduleStyle}>
             <h4 style={scheduleTitle}>Assessed loss</h4>
-            <p className="irp6-note">{sheet.assessedLoss.note}</p>
+            <table className="irp6-table">
+              <tbody>
+                <tr>
+                  <th scope="row">Brought forward</th>
+                  <td className="irp6-value" data-itr14-loss-bf="">
+                    {formatSampleCents(inputs.assessedLossBroughtForwardCents)}
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Cap, greater of R1 000 000 and 80%</th>
+                  <td className="irp6-value" data-itr14-loss-cap="">
+                    {sheet.assessedLoss?.limitCents != null
+                      ? formatSampleCents(sheet.assessedLoss.limitCents)
+                      : ""}
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Set-off</th>
+                  <td className="irp6-value" data-itr14-loss-setoff="">
+                    {sheet.assessedLoss ? formatSampleCents(sheet.assessedLoss.setOffCents) : ""}
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Carried forward</th>
+                  <td className="irp6-value" data-itr14-loss-cf="">
+                    {sheet.assessedLoss ? formatSampleCents(sheet.assessedLoss.carriedCents) : ""}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
             <p className="irp6-note">
-              Set-off {formatSampleCents(sheet.assessedLoss.setOffCents)} of{" "}
-              {formatSampleCents(sheet.assessedLoss.broughtForwardCents)}. Carried forward{" "}
-              {formatSampleCents(sheet.assessedLoss.carriedCents)}.
+              {sheet.assessedLoss?.note ??
+                "Draft for review. The cap is worked out once the profit and the other adjustments are filled."}
             </p>
           </div>
         ) : null}

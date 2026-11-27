@@ -33,6 +33,8 @@ export type WearAsset = {
   privateUsePercent: number;
   /** s12C: new and unused is 40/20/20/20. Anything else is 20% a year. */
   newAndUnused: boolean;
+  /** Accountant marked the s11(e) small-item write-off. Cost of R7 000 or less is what makes it apply. */
+  smallItem?: boolean;
   additionCents: number | null;
   additionDate: string | null;
   disposalDate: string | null;
@@ -651,7 +653,7 @@ function parseSection(value: unknown): WearSection | null {
   const key = String(value ?? "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
-  if (key === "s11e" || key === "11e") return "s11e";
+  if (key === "s11e" || key === "11e" || key === "small") return "s11e";
   if (key === "s12c" || key === "12c") return "s12c";
   return null;
 }
@@ -694,6 +696,7 @@ function coerceAsset(value: unknown, index: number): WearAsset | null {
     section,
     privateUsePercent: privateUse ?? -1,
     newAndUnused: parseFlag(row.newAndUnused ?? row.newAndUnusedAsset),
+    smallItem: row.smallItem === true || row.section === "small",
     additionCents,
     additionDate: parseDate(row.additionDate),
     disposalDate: parseDate(row.disposalDate),
