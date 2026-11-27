@@ -16,7 +16,12 @@ import {
   validTaxReference,
   type Irp6Client,
 } from "@/lib/tax-specialist/forms/irp6";
-import type { WearAsset, WearSection } from "@/lib/tax-specialist/forms/itr14-allowances";
+import {
+  wearIssueField,
+  type WearAsset,
+  type WearSection,
+} from "@/lib/tax-specialist/forms/itr14-allowances";
+import { AssetDateInput } from "./asset-date-input";
 import {
   ITR14_FOOTER,
   ITR14_SECTIONS,
@@ -758,29 +763,45 @@ export function ZaItr14Sheet({
         </table>
         <div data-itr14-wear="true" style={scheduleStyle}>
           <h4 style={scheduleTitle}>Wear-and-tear schedule</h4>
-          {sheet.wear?.rows.length ? (
+          {inputs.assets.length ? (
             <>
-              <p className="irp6-note">{sheet.wear.notes[0]}</p>
+              {sheet.wear?.notes[0] && sheet.wear.rows.length ? (
+                <p className="irp6-note">{sheet.wear.notes[0]}</p>
+              ) : null}
               <table className="irp6-table">
                 <tbody>
-                  {sheet.wear.rows.map((row) => (
-                    <tr key={row.id}>
-                      <th scope="row">
-                        <span className="irp6-label">
-                          {row.description} ({row.sectionLabel})
-                        </span>
-                        <span className="irp6-note">{row.detail}</span>
-                      </th>
-                      <td className="irp6-value" data-itr14-wear-allowance={row.id}>
-                        {formatSampleCents(row.allowanceCents)}
-                      </td>
-                      <td className="irp6-source">
-                        {row.recoupmentCents
-                          ? `Recoupment ${formatSampleCents(row.recoupmentCents)}`
-                          : "No recoupment"}
-                      </td>
-                    </tr>
-                  ))}
+                  {inputs.assets.map((asset, index) => {
+                    const row = sheet.wear?.rows.find((line) => line.id === asset.id);
+                    const issue = sheet.wear?.issues.find((line) => line.id === asset.id);
+                    return (
+                      <tr key={asset.id} data-itr14-wear-row={asset.id}>
+                        <th scope="row">
+                          <span className="irp6-label">
+                            {row
+                              ? `${row.description} (${row.sectionLabel})`
+                              : `Asset ${index + 1}`}
+                          </span>
+                          {issue ? (
+                            <span className="irp6-note" data-itr14-asset-issue={asset.id}>
+                              {issue.message}
+                            </span>
+                          ) : row ? (
+                            <span className="irp6-note">{row.detail}</span>
+                          ) : null}
+                        </th>
+                        <td className="irp6-value" data-itr14-wear-allowance={row ? row.id : ""}>
+                          {row ? formatSampleCents(row.allowanceCents) : ""}
+                        </td>
+                        <td className="irp6-source">
+                          {row
+                            ? row.recoupmentCents
+                              ? `Recoupment ${formatSampleCents(row.recoupmentCents)}`
+                              : "No recoupment"
+                            : ""}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </>
@@ -812,152 +833,188 @@ export function ZaItr14Sheet({
           ))}
           {locked ? null : (
             <div data-itr14-assets="true">
-              {inputs.assets.map((asset) => (
-                <fieldset key={asset.id} data-itr14-asset={asset.id} style={assetStyle}>
-                  <legend>{asset.description.trim() || "Asset"}</legend>
-                  <label>
-                    Description
-                    <input
-                      className="irp6-input"
-                      aria-label={`Asset ${asset.id} description`}
-                      value={asset.description}
-                      onChange={(event) =>
-                        updateAsset(asset.id, { description: event.target.value })
-                      }
-                    />
-                  </label>
-                  <AmountInput
-                    key={`${asset.id}-cost`}
-                    id={`itr14-asset-${asset.id}-cost`}
-                    label={`Asset ${asset.id} cost`}
-                    value={asset.description || asset.costCents ? asset.costCents : null}
-                    onChange={(cents) => updateAsset(asset.id, { costCents: cents ?? 0 })}
-                  />
-                  <label>
-                    Date brought into use
-                    <input
-                      className="irp6-input"
-                      type="date"
-                      aria-label={`Asset ${asset.id} date in use`}
-                      value={asset.broughtIntoUse}
-                      onChange={(event) =>
-                        updateAsset(asset.id, { broughtIntoUse: event.target.value })
-                      }
-                    />
-                  </label>
-                  <label>
-                    Category
-                    <input
-                      className="irp6-input"
-                      aria-label={`Asset ${asset.id} category`}
-                      value={asset.category}
-                      onChange={(event) => updateAsset(asset.id, { category: event.target.value })}
-                    />
-                  </label>
-                  <label>
-                    Section
-                    <select
-                      className="irp6-input"
-                      aria-label={`Asset ${asset.id} section`}
-                      value={asset.smallItem ? "small" : asset.section}
-                      onChange={(event) => {
-                        const picked = event.target.value;
-                        if (picked === "small") {
-                          updateAsset(asset.id, { section: "s11e", smallItem: true });
-                        } else {
-                          updateAsset(asset.id, {
-                            section: picked as WearSection,
-                            smallItem: false,
-                          });
-                        }
-                      }}
-                    >
-                      <option value="s11e">s11(e)</option>
-                      <option value="s12c">s12C</option>
-                      <option value="small">R7 000 or less</option>
-                    </select>
-                  </label>
-                  <label>
-                    Private use %
-                    <input
-                      className="irp6-input"
-                      inputMode="numeric"
-                      aria-label={`Asset ${asset.id} private use`}
-                      value={String(asset.privateUsePercent)}
-                      onChange={(event) => {
-                        const next = Number(event.target.value);
-                        updateAsset(asset.id, {
-                          privateUsePercent: Number.isInteger(next)
-                            ? next
-                            : asset.privateUsePercent,
-                        });
-                      }}
-                    />
-                  </label>
-                  {asset.section === "s12c" && !asset.smallItem ? (
+              {inputs.assets.map((asset, index) => {
+                const issue = sheet.wear?.issues.find((row) => row.id === asset.id);
+                const issueOn = (field: string) =>
+                  issue && wearIssueField(issue.message) === field ? issue.message : "";
+                return (
+                  <fieldset key={asset.id} data-itr14-asset={asset.id} style={assetStyle}>
+                    <legend>Asset {index + 1}</legend>
                     <label>
+                      Description
                       <input
-                        type="checkbox"
-                        checked={asset.newAndUnused}
+                        className="irp6-input"
+                        aria-label="Description"
+                        value={asset.description}
                         onChange={(event) =>
-                          updateAsset(asset.id, { newAndUnused: event.target.checked })
+                          updateAsset(asset.id, { description: event.target.value })
                         }
-                      />{" "}
-                      New and unused
+                      />
+                      {issueOn("description") ? (
+                        <span className="irp6-field-error" data-asset-field-issue="description">
+                          {issueOn("description")}
+                        </span>
+                      ) : null}
                     </label>
-                  ) : null}
-                  <AmountInput
-                    key={`${asset.id}-addition`}
-                    id={`itr14-asset-${asset.id}-addition`}
-                    label={`Asset ${asset.id} addition`}
-                    value={asset.additionCents}
-                    onChange={(cents) => updateAsset(asset.id, { additionCents: cents })}
-                  />
-                  <label>
-                    Addition date
-                    <input
-                      className="irp6-input"
-                      type="date"
-                      aria-label={`Asset ${asset.id} addition date`}
+                    <label>
+                      Cost
+                      <AmountInput
+                        key={`${asset.id}-cost`}
+                        id={`itr14-asset-${asset.id}-cost`}
+                        label="Cost"
+                        value={asset.description || asset.costCents ? asset.costCents : null}
+                        onChange={(cents) => updateAsset(asset.id, { costCents: cents ?? 0 })}
+                      />
+                      {issueOn("cost") ? (
+                        <span className="irp6-field-error" data-asset-field-issue="cost">
+                          {issueOn("cost")}
+                        </span>
+                      ) : null}
+                    </label>
+                    <AssetDateInput
+                      id={`itr14-asset-${asset.id}-date`}
+                      label="Date brought into use"
+                      value={asset.broughtIntoUse}
+                      disabled={locked}
+                      onCommit={(iso) => updateAsset(asset.id, { broughtIntoUse: iso })}
+                    />
+                    {issueOn("date") ? (
+                      <span className="irp6-field-error" data-asset-field-issue="date">
+                        {issueOn("date")}
+                      </span>
+                    ) : null}
+                    <label>
+                      Category
+                      <input
+                        className="irp6-input"
+                        aria-label="Category"
+                        value={asset.category}
+                        onChange={(event) =>
+                          updateAsset(asset.id, { category: event.target.value })
+                        }
+                      />
+                      {issueOn("category") ? (
+                        <span className="irp6-field-error" data-asset-field-issue="category">
+                          {issueOn("category")}
+                        </span>
+                      ) : null}
+                    </label>
+                    <label>
+                      Section
+                      <select
+                        className="irp6-input"
+                        aria-label={`Asset ${asset.id} section`}
+                        value={asset.smallItem ? "small" : asset.section}
+                        onChange={(event) => {
+                          const picked = event.target.value;
+                          if (picked === "small") {
+                            updateAsset(asset.id, { section: "s11e", smallItem: true });
+                          } else {
+                            updateAsset(asset.id, {
+                              section: picked as WearSection,
+                              smallItem: false,
+                            });
+                          }
+                        }}
+                      >
+                        <option value="s11e">s11(e)</option>
+                        <option value="s12c">s12C</option>
+                        <option value="small">R7 000 or less</option>
+                      </select>
+                    </label>
+                    <label>
+                      Private use %
+                      <input
+                        className="irp6-input"
+                        inputMode="numeric"
+                        aria-label={`Asset ${asset.id} private use`}
+                        value={String(asset.privateUsePercent)}
+                        onChange={(event) => {
+                          const next = Number(event.target.value);
+                          updateAsset(asset.id, {
+                            privateUsePercent: Number.isInteger(next)
+                              ? next
+                              : asset.privateUsePercent,
+                          });
+                        }}
+                      />
+                    </label>
+                    {asset.section === "s12c" && !asset.smallItem ? (
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={asset.newAndUnused}
+                          onChange={(event) =>
+                            updateAsset(asset.id, { newAndUnused: event.target.checked })
+                          }
+                        />{" "}
+                        New and unused
+                      </label>
+                    ) : null}
+                    <label>
+                      Addition
+                      <AmountInput
+                        key={`${asset.id}-addition`}
+                        id={`itr14-asset-${asset.id}-addition`}
+                        label="Addition"
+                        value={asset.additionCents}
+                        onChange={(cents) => updateAsset(asset.id, { additionCents: cents })}
+                      />
+                    </label>
+                    <AssetDateInput
+                      id={`itr14-asset-${asset.id}-addition-date`}
+                      label="Addition date"
                       value={asset.additionDate ?? ""}
-                      onChange={(event) =>
-                        updateAsset(asset.id, { additionDate: event.target.value || null })
-                      }
+                      disabled={locked}
+                      onCommit={(iso) => updateAsset(asset.id, { additionDate: iso || null })}
                     />
-                  </label>
-                  <label>
-                    Disposal date
-                    <input
-                      className="irp6-input"
-                      type="date"
-                      aria-label={`Asset ${asset.id} disposal date`}
+                    {issueOn("addition") ? (
+                      <span className="irp6-field-error" data-asset-field-issue="addition">
+                        {issueOn("addition")}
+                      </span>
+                    ) : null}
+                    <AssetDateInput
+                      id={`itr14-asset-${asset.id}-disposal-date`}
+                      label="Disposal date"
                       value={asset.disposalDate ?? ""}
-                      onChange={(event) =>
-                        updateAsset(asset.id, { disposalDate: event.target.value || null })
-                      }
+                      disabled={locked}
+                      onCommit={(iso) => updateAsset(asset.id, { disposalDate: iso || null })}
                     />
-                  </label>
-                  <AmountInput
-                    key={`${asset.id}-proceeds`}
-                    id={`itr14-asset-${asset.id}-proceeds`}
-                    label={`Asset ${asset.id} proceeds`}
-                    value={asset.proceedsCents}
-                    onChange={(cents) => updateAsset(asset.id, { proceedsCents: cents })}
-                  />
-                  <button
-                    type="button"
-                    className="irp6-button"
-                    data-itr14-remove-asset={asset.id}
-                    onClick={() =>
-                      patch(["adjustments"], {
-                        assets: inputs.assets.filter((row) => row.id !== asset.id),
-                      })
-                    }
-                  >
-                    Remove asset
-                  </button>
-                </fieldset>
-              ))}
+                    {issueOn("disposal") ? (
+                      <span className="irp6-field-error" data-asset-field-issue="disposal">
+                        {issueOn("disposal")}
+                      </span>
+                    ) : null}
+                    <label>
+                      Proceeds
+                      <AmountInput
+                        key={`${asset.id}-proceeds`}
+                        id={`itr14-asset-${asset.id}-proceeds`}
+                        label="Proceeds"
+                        value={asset.proceedsCents}
+                        onChange={(cents) => updateAsset(asset.id, { proceedsCents: cents })}
+                      />
+                      {issueOn("proceeds") ? (
+                        <span className="irp6-field-error" data-asset-field-issue="proceeds">
+                          {issueOn("proceeds")}
+                        </span>
+                      ) : null}
+                    </label>
+                    <button
+                      type="button"
+                      className="irp6-button"
+                      data-itr14-remove-asset={asset.id}
+                      onClick={() =>
+                        patch(["adjustments"], {
+                          assets: inputs.assets.filter((row) => row.id !== asset.id),
+                        })
+                      }
+                    >
+                      Remove asset
+                    </button>
+                  </fieldset>
+                );
+              })}
               <button
                 type="button"
                 className="irp6-button"

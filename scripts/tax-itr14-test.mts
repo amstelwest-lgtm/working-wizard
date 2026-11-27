@@ -8,10 +8,12 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ZaItr14Sheet } from "../src/components/tax-specialist/za-itr14-sheet";
 import type { TaxFormDraft } from "../src/lib/tax-specialist/forms/drafts";
+import { validIsoDate } from "../src/components/tax-specialist/asset-date-input";
 import {
   ASSESSED_LOSS_FLOOR_CENTS,
   assessedLossWorking,
   importWearAssets,
+  wearIssueField,
   wearSchedule,
   type WearAsset,
 } from "../src/lib/tax-specialist/forms/itr14-allowances";
@@ -950,6 +952,41 @@ assert(
   "one asset renders on the schedule",
 );
 assert(laptopView.includes("R 12 000.00"), "the schedule shows that asset's wear-and-tear");
+assert(laptopView.includes("<legend>Asset 1</legend>"), "the asset legend is Asset 1");
+assert(!laptopView.includes("<legend>Laptop</legend>"), "the description is not the legend");
+assert(validIsoDate("2025-03-01"), "an ISO date is accepted");
+assert(!validIsoDate("06/06/12025"), "a half-typed year is not stored");
+assert(!validIsoDate("2025-02-31"), "an impossible day is not stored");
+assert(!validIsoDate(""), "clearing the date is blank, not a date");
+eq(wearIssueField("Category is not on Interpretation Note 47."), "category", "a category error sits on category");
+eq(wearIssueField("Date brought into use must be a real date."), "date", "a date error sits on the date");
+const oddAsset = {
+  ...fixture[0]!,
+  id: "odd",
+  description: "Time machine",
+  category: "Time machine",
+};
+const mixedSchedule = wearSchedule([fixture[0]!, oddAsset], "2025-03-01", "2026-02-28");
+eq(mixedSchedule?.rows.some((row) => row.id === "laptop"), true, "a valid asset row stays");
+eq(mixedSchedule?.issues.some((issue) => issue.id === "odd"), true, "an invalid asset stays on the schedule");
+eq(mixedSchedule?.rows.some((row) => row.id === "odd"), false, "an invalid asset is not given an allowance");
+const mixedView = renderSheet(
+  { ...base, assets: [fixture[0]!, oddAsset], wearAndTearCents: null, depreciationAddBackCents: null },
+  "mixed-assets",
+);
+assert(mixedView.includes('data-itr14-wear-row="laptop"'), "the complete asset row stays visible");
+assert(mixedView.includes('data-itr14-wear-row="odd"'), "the invalid asset row stays visible");
+assert(
+  mixedView.includes('data-asset-field-issue="category"'),
+  "the category message sits beside the category field",
+);
+assert(mixedView.includes("<legend>Asset 1</legend>"), "the first asset legend is static");
+assert(mixedView.includes("<legend>Asset 2</legend>"), "the second asset legend is static");
+const itr14SheetSrc = readFileSync("src/components/tax-specialist/za-itr14-sheet.tsx", "utf8");
+assert(itr14SheetSrc.includes("Asset {index + 1}"), "the legend source is Asset n");
+assert(!itr14SheetSrc.includes('type="date"'), "ITR14 asset dates use the shared text input");
+assert(itr14SheetSrc.includes("AssetDateInput"), "ITR14 uses the shared date input");
+assert(/\n\s+Cost\n/.test(itr14SheetSrc), "cost has a visible label");
 assert(
   laptopView.includes("From the asset register"),
   "the wear-and-tear line is the computed register total",

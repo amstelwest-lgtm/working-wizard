@@ -55,9 +55,13 @@ export type WearRow = {
   detail: string;
 };
 
+export type WearIssue = { id: string; message: string };
+
 export type WearSchedule = {
   draft: true;
   rows: WearRow[];
+  /** Rows that could not be computed. They stay on the schedule with a blank allowance. */
+  issues: WearIssue[];
   /** Null when nothing on the register could be computed. A blank register never reaches here. */
   wearAndTearCents: number | null;
   bookDepreciationCents: number | null;
@@ -580,11 +584,13 @@ export function wearSchedule(
   if (assets.length === 0) return null;
   if (!parseIso(yearStart) || !parseIso(yearEnd) || yearStart > yearEnd) return null;
   const rows: WearRow[] = [];
+  const issues: WearIssue[] = [];
   const notes: string[] = [];
   let book: number | null = null;
   for (const asset of assets) {
     const row = rowFor(asset, yearStart, yearEnd);
     if ("error" in row) {
+      issues.push({ id: asset.id, message: row.error });
       notes.push(`${asset.description.trim() || "Asset"}: ${row.error}`);
       continue;
     }
@@ -595,6 +601,7 @@ export function wearSchedule(
     return {
       draft: true,
       rows: [],
+      issues,
       wearAndTearCents: null,
       bookDepreciationCents: book,
       recoupmentCents: 0,
@@ -612,12 +619,29 @@ export function wearSchedule(
   return {
     draft: true,
     rows,
+    issues,
     wearAndTearCents,
     bookDepreciationCents: book,
     recoupmentCents,
     depreciationAddBackCents,
     notes,
   };
+}
+
+/** Which register field a validation sentence belongs beside. */
+export function wearIssueField(message: string): string {
+  const text = message.toLowerCase();
+  if (text.includes("proceeds")) return "proceeds";
+  if (text.includes("addition")) return "addition";
+  if (text.includes("disposal")) return "disposal";
+  if (text.includes("description")) return "description";
+  if (text.includes("cost")) return "cost";
+  if (text.includes("brought into use")) return "date";
+  if (text.includes("category") || text.includes("interpretation note")) return "category";
+  if (text.includes("private use")) return "private";
+  if (text.includes("section")) return "section";
+  if (text.includes("depreciation")) return "book";
+  return "description";
 }
 
 function text(value: unknown): string {

@@ -116,6 +116,8 @@ export type Itr12RentalPropertyResult = {
   allowableExpensesCents: number | null;
   netCents: number | null;
   note: string;
+  /** Named blanks. A blank field is not treated as zero. */
+  gaps: readonly { field: string; prompt: string }[];
 };
 
 export type Itr12RentalSchedule = {
@@ -328,6 +330,21 @@ export function businessSchedule(
 const RENTAL_NOTE =
   "Private-use percent applies to the expenses, including wear-and-tear. Rent received is the amount received. The percent is typed, not worked out.";
 
+/** Same sentence for every required rental figure. Blank stays blank until it is typed. */
+export const RENTAL_GAP_PROMPTS = {
+  rentReceivedCents: "Enter rent received (0 if none) to work out this net",
+  ratesCents: "Enter rates (0 if none) to work out this net",
+  interestCents: "Enter interest (0 if none) to work out this net",
+  insuranceCents: "Enter insurance (0 if none) to work out this net",
+  repairsCents: "Enter repairs (0 if none) to work out this net",
+  leviesCents: "Enter levies (0 if none) to work out this net",
+  agentFeesCents: "Enter agent fees (0 if none) to work out this net",
+  wearAndTearCents: "Enter wear-and-tear (0 if none) to work out this net",
+  privateUsePercent: "Enter private use % (0 if none) to work out this net",
+} as const;
+
+export type Itr12RentalGapField = keyof typeof RENTAL_GAP_PROMPTS;
+
 function propertyResult(
   property: Itr12RentalProperty,
   yearStart: string,
@@ -358,9 +375,16 @@ function propertyResult(
     allowableExpensesCents == null || !nonNegative(property.rentReceivedCents)
       ? null
       : property.rentReceivedCents - allowableExpensesCents;
+  const gaps = (Object.keys(RENTAL_GAP_PROMPTS) as Itr12RentalGapField[])
+    .filter((field) => {
+      if (field === "wearAndTearCents") return wear.cents == null;
+      if (field === "privateUsePercent") return !percentOk;
+      return !nonNegative(property[field]);
+    })
+    .map((field) => ({ field, prompt: RENTAL_GAP_PROMPTS[field] }));
   const note =
-    netCents == null || usePercent == null
-      ? "A figure is blank, so this net stays blank."
+    gaps.length > 0
+      ? gaps.map((gap) => gap.prompt).join(" ")
       : `Private use ${usePercent}%. Allowable expenses are ${100 - usePercent}% of the expenses.`;
   return {
     id: property.id,
@@ -378,6 +402,7 @@ function propertyResult(
     allowableExpensesCents,
     netCents,
     note,
+    gaps,
   };
 }
 
@@ -424,10 +449,14 @@ export function itr12DraftTaxableIncome(input: {
     };
   }
   if (input.rentals && input.rentals.totalNetCents == null) {
+    const prompts = input.rentals.properties.flatMap((property) =>
+      property.gaps.map((gap) => gap.prompt),
+    );
+    const named = prompts.length ? `${prompts.join(" ")} ` : "";
     return {
       cents: null,
       tie: null,
-      note: `The local rental schedule is incomplete, so this stays blank. ${tail}`,
+      note: `The local rental schedule is incomplete. ${named}So this stays blank. ${tail}`,
     };
   }
   if (input.capital?.incomplete) {
