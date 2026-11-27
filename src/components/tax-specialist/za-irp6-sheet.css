@@ -364,14 +364,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-
-.irp6 label:has(.irp6-amount) {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-}
+  margin-inline-start: 0.4em;
   width: 100%;
   max-width: 200px;
   color: #486581;
