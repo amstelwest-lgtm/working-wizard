@@ -8,7 +8,7 @@ import { MilonMark } from "@/components/pdf/glyphs";
 import { C } from "@/components/pdf/theme";
 import { zaToday } from "@/lib/tax-specialist/forms/irp6";
 import { ITR14_FOOTER, ITR14_SECTIONS, type Itr14Sheet } from "@/lib/tax-specialist/forms/itr14";
-import { formatSampleDate } from "@/lib/tax-specialist/sample-compute";
+import { formatSampleCents, formatSampleDate } from "@/lib/tax-specialist/sample-compute";
 
 Font.registerHyphenationCallback((word) => [word]);
 
@@ -62,6 +62,105 @@ const S = StyleSheet.create({
 
 function pdfText(value: string): string {
   return value.replace(/\u2212/g, "-").replace(/ō/g, "o");
+}
+
+function money(cents: number | null): string {
+  return cents == null ? "Blank" : pdfText(formatSampleCents(cents));
+}
+
+function WearSection({ sheet }: { sheet: Itr14Sheet }) {
+  const wear = sheet.wear;
+  return (
+    <View style={S.section}>
+      <Text style={S.sectionTitle}>Wear-and-tear schedule</Text>
+      {wear && wear.rows.length ? (
+        <>
+          {wear.notes.slice(0, 1).map((note) => (
+            <Text key={note} style={S.note}>
+              {pdfText(note)}
+            </Text>
+          ))}
+          {wear.rows.map((row) => (
+            <View key={row.id} style={S.row} wrap={false}>
+              <View style={S.label}>
+                <Text>
+                  {pdfText(row.description)} ({row.sectionLabel})
+                </Text>
+                <Text style={S.note}>{pdfText(row.detail)}</Text>
+              </View>
+              <Text style={S.value}>{money(row.allowanceCents)}</Text>
+              <Text style={S.source}>
+                {row.recoupmentCents ? `Recoupment ${money(row.recoupmentCents)}` : "No recoupment"}
+              </Text>
+            </View>
+          ))}
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Wear-and-tear allowance</Text>
+            <Text style={S.value}>{money(wear.wearAndTearCents)}</Text>
+            <Text style={S.source}>Fills the wear-and-tear line</Text>
+          </View>
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Depreciation add-back</Text>
+            <Text style={S.value}>{money(wear.depreciationAddBackCents)}</Text>
+            <Text style={S.source}>Book depreciation plus recoupment</Text>
+          </View>
+        </>
+      ) : (
+        <Text style={S.note}>
+          No asset register. Wear-and-tear and the depreciation add-back stay blank. A blank
+          register is not zero.
+        </Text>
+      )}
+    </View>
+  );
+}
+
+function LossSection({ sheet }: { sheet: Itr14Sheet }) {
+  const loss = sheet.assessedLoss;
+  return (
+    <View style={S.section}>
+      <Text style={S.sectionTitle}>Assessed loss</Text>
+      {loss ? (
+        <>
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Balance brought forward</Text>
+            <Text style={S.value}>{money(loss.broughtForwardCents)}</Text>
+            <Text style={S.source}>s20</Text>
+          </View>
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Taxable income before the set-off</Text>
+            <Text style={S.value}>{money(loss.taxableBeforeLossCents)}</Text>
+            <Text style={S.source}>Before the donation limit</Text>
+          </View>
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>80% of that income</Text>
+            <Text style={S.value}>{money(loss.eightyPercentCents)}</Text>
+            <Text style={S.source}>Ring-fence</Text>
+          </View>
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Greater of R1 000 000 and 80%</Text>
+            <Text style={S.value}>{money(loss.limitCents)}</Text>
+            <Text style={S.source}>From 31 March 2023</Text>
+          </View>
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Set-off this year</Text>
+            <Text style={S.value}>{money(loss.setOffCents)}</Text>
+            <Text style={S.source}>Draft for review</Text>
+          </View>
+          <View style={S.row} wrap={false}>
+            <Text style={S.label}>Carried forward</Text>
+            <Text style={S.value}>{money(loss.carriedCents)}</Text>
+            <Text style={S.source}>Not an assessment</Text>
+          </View>
+          <Text style={S.note}>{pdfText(loss.note)}</Text>
+        </>
+      ) : (
+        <Text style={S.note}>
+          Assessed loss brought forward is blank. It is not treated as zero.
+        </Text>
+      )}
+    </View>
+  );
 }
 
 export function Itr14PDF({
@@ -135,6 +234,8 @@ export function Itr14PDF({
             )}
           </View>
         ))}
+        <WearSection sheet={sheet} />
+        <LossSection sheet={sheet} />
         <View style={S.footer} fixed>
           <Text>{pdfText(ITR14_FOOTER)}</Text>
         </View>

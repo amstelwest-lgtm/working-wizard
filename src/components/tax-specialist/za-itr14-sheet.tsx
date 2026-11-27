@@ -42,7 +42,7 @@ import {
   type Itr14SectionId,
 } from "@/lib/tax-specialist/forms/itr14";
 import { saveCatalogDraft } from "@/lib/tax-specialist/forms/pipeline";
-import { formatSampleDate } from "@/lib/tax-specialist/sample-compute";
+import { formatSampleCents, formatSampleDate } from "@/lib/tax-specialist/sample-compute";
 import "./za-irp6-sheet.css";
 
 type Approvals = Partial<Record<Itr14SectionId, boolean>>;
@@ -129,6 +129,20 @@ function download(blob: Blob, name: string) {
 function nextId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
+
+const scheduleStyle = {
+  marginTop: 12,
+  background: "#fff",
+  border: "1px solid #DBEAFE",
+  borderLeft: "3px solid #0B5FFF",
+  padding: "10px 12px",
+} as const;
+
+const scheduleTitle = {
+  margin: "0 0 4px",
+  color: "#102A43",
+  fontSize: 15,
+} as const;
 
 const CLASSES: Array<{ value: Itr14CompanyClass; label: string }> = [
   { value: "", label: "Not confirmed" },
@@ -699,6 +713,43 @@ export function ZaItr14Sheet({
             {fieldRow(lineOf("donationDisallowed"))}
           </tbody>
         </table>
+        {sheet.wear && sheet.wear.rows.length ? (
+          <div data-itr14-wear="true" style={scheduleStyle}>
+            <h4 style={scheduleTitle}>Wear-and-tear schedule</h4>
+            <p className="irp6-note">{sheet.wear.notes[0]}</p>
+            <table className="irp6-table">
+              <tbody>
+                {sheet.wear.rows.map((row) => (
+                  <tr key={row.id}>
+                    <th scope="row">
+                      <span className="irp6-label">
+                        {row.description} ({row.sectionLabel})
+                      </span>
+                      <span className="irp6-note">{row.detail}</span>
+                    </th>
+                    <td className="irp6-value">{formatSampleCents(row.allowanceCents)}</td>
+                    <td className="irp6-source">
+                      {row.recoupmentCents
+                        ? `Recoupment ${formatSampleCents(row.recoupmentCents)}`
+                        : "No recoupment"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+        {sheet.assessedLoss ? (
+          <div data-itr14-assessed-loss="true" style={scheduleStyle}>
+            <h4 style={scheduleTitle}>Assessed loss</h4>
+            <p className="irp6-note">{sheet.assessedLoss.note}</p>
+            <p className="irp6-note">
+              Set-off {formatSampleCents(sheet.assessedLoss.setOffCents)} of{" "}
+              {formatSampleCents(sheet.assessedLoss.broughtForwardCents)}. Carried forward{" "}
+              {formatSampleCents(sheet.assessedLoss.carriedCents)}.
+            </p>
+          </div>
+        ) : null}
         <div className="irp6-adj-scroll">
           <table className="irp6-adj" data-itr14-adjustments="true">
             <thead>
