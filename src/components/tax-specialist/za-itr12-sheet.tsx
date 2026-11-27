@@ -53,7 +53,7 @@ import { assetFieldIssue } from "@/lib/tax-specialist/forms/itr14-allowances";
 import { NIL_CONFIRMED_NOTE } from "@/lib/tax-specialist/forms/nil-mark";
 import { saveCatalogDraft } from "@/lib/tax-specialist/forms/pipeline";
 import { AssetDateInput } from "./asset-date-input";
-import { NilBlanksControl } from "./nil-blanks-control";
+import { NilBlanksControl } from "./za-nil-blanks-control";
 import { CgtSection } from "./za-cgt-section";
 import "./za-irp6-sheet.css";
 
